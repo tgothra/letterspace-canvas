@@ -75,6 +75,12 @@ struct DocumentArea: View {
     private let collapsedHeaderHeight: CGFloat = 48
     
     private var currentOverlap: CGFloat {
+        if viewMode == .minimal {
+            return headerHeight - collapsedHeaderHeight + 460  // Show just the lip in minimal mode
+        }
+        if viewMode == .normal {
+            return 16  // Fully expanded in normal mode
+        }
         if !isHeaderExpanded {
             if headerImage != nil {
                 return headerHeight - collapsedHeaderHeight + 520
@@ -92,7 +98,20 @@ struct DocumentArea: View {
                 
                 HStack(spacing: 0) {
                     VStack(spacing: -currentOverlap) {
-                        headerView
+                        if viewMode != .focus {
+                            headerView
+                                .onChange(of: viewMode) { oldValue, newValue in
+                                    if newValue == .normal {
+                                        withAnimation(.spring(response: 0.3)) {
+                                            isHeaderExpanded = true
+                                        }
+                                    } else if newValue == .minimal {
+                                        withAnimation(.spring(response: 0.3)) {
+                                            isHeaderExpanded = false
+                                        }
+                                    }
+                                }
+                        }
                         documentContentView
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -100,7 +119,6 @@ struct DocumentArea: View {
                     .padding(.horizontal, 20)
                     .offset(x: isSidebarCollapsed ? 0 : -(sidebarWidth - collapsedSidebarWidth)/2)
                     
-                    // Custom Scroll Bar
                     CustomScrollBar(
                         scrollOffset: $scrollOffset,
                         documentHeight: $documentHeight,

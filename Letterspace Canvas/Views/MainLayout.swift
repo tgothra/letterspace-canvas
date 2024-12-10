@@ -311,12 +311,12 @@ struct MainLayout: View {
                                     withAnimation(.spring(response: 0.3)) {
                                         switch viewMode {
                                         case .normal:
-                                            viewMode = .focus
+                                            viewMode = .focus  // First click: hide everything
                                             isSidebarCollapsed = true
                                         case .focus:
-                                            viewMode = .minimal
+                                            viewMode = .minimal  // Second click: show lip
                                         case .minimal:
-                                            viewMode = .normal
+                                            viewMode = .normal  // Third click: show everything
                                             isSidebarCollapsed = false
                                         }
                                     }
@@ -351,11 +351,11 @@ struct MainLayout: View {
     private var viewModeIcon: String {
         switch viewMode {
         case .normal:
-            return "arrow.up.left.and.arrow.down.right"
+            return "arrow.up.left.and.arrow.down.right"  // Expand icon
         case .minimal:
-            return "arrow.down.forward.and.arrow.up.backward"
+            return "arrow.down.forward.and.arrow.up.backward"  // Mid state icon
         case .focus:
-            return "arrow.down.right.and.arrow.up.left"
+            return "arrow.down.right.and.arrow.up.left"  // Collapse icon
         }
     }
 }
