@@ -1,0 +1,25 @@
+/* Document header section */
+.document-header {
+    margin-bottom: 48px !important; /* Adjust space between header image and content */
+}
+
+/* Title styling */
+.document-title {
+    margin: 0 !important;
+    padding: 16px 24px !important; /* Add consistent padding */
+}
+
+/* Text block and placeholder styling */
+.editor-block,
+.paragraph-block,
+[data-placeholder="Start typing"] {
+    margin: 0 !important;
+    padding: 0 24px !important; /* Match the title's left padding */
+    line-height: 1.5;
+}
+
+/* Container adjustments */
+.editor-container {
+    margin: 0 !important;
+    padding: 0 !important;
+} 

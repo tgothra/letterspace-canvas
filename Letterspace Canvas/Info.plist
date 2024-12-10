@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>com.example.plain-text</string>
+			</array>
+			<key>NSUbiquitousDocumentUserActivityType</key>
+			<string>$(PRODUCT_BUNDLE_IDENTIFIER).exampledocument</string>
+		</dict>
+	</array>
+	<key>UIAppFonts</key>
+	<array>
+		<string>InterTight-Thin.ttf
+InterTight-ThinItalic.ttf
+InterTight-Light.ttf
+InterTight-LightItalic.ttf
+InterTight-Regular.ttf
+InterTight-Italic.ttf
+InterTight-Medium.ttf
+InterTight-MediumItalic.ttf
+InterTight-SemiBold.ttf
+InterTight-SemiBoldItalic.ttf
+InterTight-Bold.ttf
+InterTight-BoldItalic.ttf
+InterTight-ExtraBold.ttf
+InterTight-ExtraBoldItalic.ttf
+InterTight-Black.ttf
+InterTight-BlackItalic.ttf</string>
+		<string></string>
+	</array>
+	<key>CFBundleIdentifier</key>
+	<string></string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>LSApplicationCategoryType</key>
+	<string></string>
+	<key>CFBundleExecutable</key>
+	<string></string>
+	<key>UTImportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+				<string>public.content</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>Letterspace Document Element</string>
+			<key>UTTypeIdentifier</key>
+			<string>com.timothygothra.letterspace.documentElement</string>
+			<key>UTTypeTagSpecification</key>
+			<dict/>
+		</dict>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.plain-text</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>Example Text</string>
+			<key>UTTypeIdentifier</key>
+			<string>com.example.plain-text</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>exampletext</string>
+				</array>
+			</dict>
+		</dict>
+	</array>
+	<key>BranchStableTag</key>
+	<string>1.0.0-stable</string>
+</dict>
+</plist>
