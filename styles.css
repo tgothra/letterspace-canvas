@@ -23,3 +23,26 @@
     margin: 0 !important;
     padding: 0 !important;
 } 
+
+/* Hide elements in distraction-free mode */
+.distraction-free-mode .title-section,
+.distraction-free-mode .subtitle-section,
+.distraction-free-mode .document-header,
+.distraction-free-mode [data-element-type="title"],
+.distraction-free-mode [data-element-type="header"],
+.distraction-free-mode .separator-block {
+    display: none !important;
+}
+
+/* Adjust spacing in distraction-free mode */
+.distraction-free-mode .editor-container {
+    padding-top: 24px !important;
+}
+
+/* Hide specific SwiftUI views in distraction-free mode */
+.distraction-free-mode .document-title-view,
+.distraction-free-mode .header-image-section {
+    opacity: 0 !important;
+    height: 0 !important;
+    overflow: hidden !important;
+} 
