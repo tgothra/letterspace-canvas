@@ -1964,7 +1964,15 @@ struct MainLayout: View {
     let rightSidebarWidth: CGFloat = 240
     let settingsWidth: CGFloat = 220
     let collapsedWidth: CGFloat = 56
-    let floatingSidebarWidth: CGFloat = 80 // Define the floating sidebar width
+    // Responsive floating sidebar width based on iPad screen size
+    private var floatingSidebarWidth: CGFloat {
+        #if os(iOS)
+        let screenWidth = UIScreen.main.bounds.width
+        return screenWidth * 0.08 // 8% of screen width for responsive sidebar
+        #else
+        return 80 // Fixed width for macOS
+        #endif
+    }
     
     private var effectiveContentWidth: CGFloat {
         var width: CGFloat = 0
@@ -2453,13 +2461,7 @@ struct MainLayout: View {
     @ViewBuilder
     private var expandedFloatingNavigation: some View {
         floatingSidebarContent
-            .frame(width: {
-                #if os(iOS)
-                return UIScreen.main.bounds.width * 0.09
-                #else
-                return 105 // Fixed width for macOS
-                #endif
-            }())  // Responsive width for dashboard mode
+            .frame(width: floatingSidebarWidth)  // Use responsive sidebar width
             .scaleEffect(1.1)   // Subtle but noticeable scaling for dashboard
     }
     
@@ -3125,10 +3127,18 @@ struct MainLayout: View {
             if !viewMode.isDistractionFreeMode && (UIDevice.current.userInterfaceIdiom == .pad || (!isDocked && (showFloatingSidebar || isNavigationCollapsed))) {
                                 VStack(alignment: .leading) {
                 HStack {
-                        // Unified floating navigation with beautiful size transitions
+                        // Unified floating navigation with responsive size transitions
                         animatedFloatingNavigation
-                            .padding(.leading, shouldUseExpandedNavigation ? responsiveSize(base: 72, min: 40, max: 100) : 20)  // Consistent left padding
-                            .padding(.top, shouldUseExpandedNavigation ? responsiveSize(base: 300, min: 200, max: 400) : 20)  // Consistent top padding
+                            .padding(.leading, {
+                                // Responsive left padding based on screen width
+                                let screenWidth = UIScreen.main.bounds.width
+                                return shouldUseExpandedNavigation ? screenWidth * 0.065 : 20 // 6.5% of screen width when expanded
+                            }())
+                            .padding(.top, {
+                                // Responsive top padding based on screen height 
+                                let screenHeight = UIScreen.main.bounds.height
+                                return shouldUseExpandedNavigation ? screenHeight * 0.28 : 20 // 28% of screen height when expanded
+                            }())
                             .offset(x: (showFloatingSidebar && (shouldShowNavigationPanel || isManuallyShown)) ? 0 : -200) // Hide when viewing documents unless manually shown
                             .animation(.spring(response: showFloatingSidebar ? 0.6 : 2.5, dampingFraction: showFloatingSidebar ? 0.75 : 0.9), value: showFloatingSidebar)
                             .animation(.spring(response: 0.6, dampingFraction: 0.75), value: shouldShowNavigationPanel)
@@ -4021,7 +4031,10 @@ struct FloatingSidebarButton: View {
             #if os(macOS)
             return 40  // Keep macOS fixed - window-based, not screen-based
             #else
-            return responsiveSize(base: 72, min: 54, max: 84)  // Consistent button size across iPads
+            // Responsive button size based on screen width percentage
+            let screenWidth = UIScreen.main.bounds.width
+            let calculatedSize = screenWidth * 0.065 // 6.5% of screen width
+            return max(54, min(84, calculatedSize)) // Constrain between 54-84pt for usability
             #endif
         }()
         
