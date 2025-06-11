@@ -2084,14 +2084,30 @@ struct DashboardView: View {
         ZStack(alignment: .topTrailing) {
             // Main card content
             carouselSections[index].view
-                .frame(width: cardWidth, height: 450)
+                .frame(width: cardWidth, height: {
+                    // Responsive card height based on screen height for consistent proportions
+                    #if os(iOS)
+                    let screenHeight = UIScreen.main.bounds.height
+                    return screenHeight * 0.42 // 42% of screen height for consistent card proportions
+                    #else
+                    return 450 // Fixed height for macOS
+                    #endif
+                }())
                 .padding(.top, 0)
             
             // Reorder mode overlay
             if reorderMode && !isDragged {
                 RoundedRectangle(cornerRadius: 16)
                     .fill(Color.black.opacity(0.15))
-                    .frame(width: cardWidth, height: 450)
+                    .frame(width: cardWidth, height: {
+                        // Match the responsive card height
+                        #if os(iOS)
+                        let screenHeight = UIScreen.main.bounds.height
+                        return screenHeight * 0.42 // Same as card height
+                        #else
+                        return 450 // Fixed height for macOS
+                        #endif
+                    }())
             }
             
             // Reorder handle
