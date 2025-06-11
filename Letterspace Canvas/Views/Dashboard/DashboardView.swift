@@ -322,21 +322,32 @@ struct DashboardView: View {
     
     // Extracted computed property for the dashboard header (iPad version)
     private var iPadDashboardHeaderView: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Dashboard")
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundStyle(theme.primary.opacity(0.7))
-                    .padding(.bottom, 8)
-                
-                Text(getTimeBasedGreeting())
-                    .font(.custom("InterTight-Regular", size: responsiveSize(base: 60, min: 45, max: 75)))
-                    .tracking(0.5)
-                    .foregroundStyle(theme.primary)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
+        GeometryReader { geometry in
+            HStack {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Dashboard")
+                        .font(.system(size: {
+                            // Responsive dashboard title size
+                            let screenWidth = geometry.size.width
+                            return screenWidth * 0.022 // 2.2% of screen width
+                        }(), weight: .bold))
+                        .foregroundStyle(theme.primary.opacity(0.7))
+                        .padding(.bottom, 8)
+                    
+                    Text(getTimeBasedGreeting())
+                        .font(.custom("InterTight-Regular", size: {
+                            // Responsive greeting size based on screen width
+                            let screenWidth = geometry.size.width
+                            let calculatedSize = screenWidth * 0.065 // 6.5% of screen width
+                            return max(45, min(85, calculatedSize)) // Constrain between 45-85pt
+                        }()))
+                        .tracking(0.5)
+                        .foregroundStyle(theme.primary)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                }
+                Spacer()
             }
-            Spacer()
         }
         .padding(.top, -20)
         .padding(.horizontal, 8)
@@ -743,10 +754,14 @@ struct DashboardView: View {
             if isPortrait && isIPad {
                 // iPad Portrait: Special layout that respects navigation
                     VStack(alignment: .leading, spacing: 0) {
-                    // Header with padding for navigation
+                    // Header with responsive positioning for navigation
                     iPadDashboardHeaderView
                     .padding(.horizontal, 20)
-                        .padding(.top, 120)
+                        .padding(.top, {
+                            // Responsive header positioning based on percentage of screen height
+                            let screenHeight = geometry.size.height
+                            return screenHeight * 0.12 // 12% of screen height for header positioning
+                        }())
                         
                         // iPad Carousel for sections
                         iPadSectionCarousel
