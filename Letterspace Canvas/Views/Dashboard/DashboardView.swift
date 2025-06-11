@@ -772,7 +772,7 @@ struct DashboardView: View {
                         .padding(.top, {
                             // Responsive spacing based on percentage of screen height
                             let screenHeight = geometry.size.height
-                            return screenHeight * 0.035 // 3.5% of screen height for flexible spacing
+                            return screenHeight * 0.02 // 2% of screen height for tighter spacing
                         }())
                         .padding(.horizontal, 20) // Proper padding on iPad to show corner radius
                         .padding(.leading, {
@@ -1992,7 +1992,7 @@ struct DashboardView: View {
             #if os(iOS)
             let screenHeight = UIScreen.main.bounds.height
             let percentageHeight = screenHeight * 0.70 // 70% of screen height for more prominent carousel
-            return max(400, min(650, percentageHeight)) // Constrain between reasonable bounds
+            return max(400, percentageHeight) // Only minimum constraint to ensure usability
             #else
             return responsiveSize(base: 550, min: 400, max: 650) // macOS default
             #endif
