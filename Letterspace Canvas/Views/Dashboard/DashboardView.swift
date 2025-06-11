@@ -755,15 +755,9 @@ struct DashboardView: View {
                     // All Documents section - with responsive spacing and height for different iPad sizes
                         allDocumentsSectionView
                         .padding(.top, {
-                            // Responsive spacing based on iPad screen height
+                            // Responsive spacing based on percentage of screen height
                             let screenHeight = geometry.size.height
-                            if screenHeight > 1200 { // 13" iPad Pro
-                                return 40
-                            } else if screenHeight > 1000 { // 11" iPad
-                                return 25
-                            } else { // iPad Mini
-                                return 15
-                            }
+                            return screenHeight * 0.035 // 3.5% of screen height for flexible spacing
                         }())
                         .padding(.horizontal, 20) // Proper padding on iPad to show corner radius
                         .padding(.leading, {
@@ -1735,16 +1729,10 @@ struct DashboardView: View {
         ) // Fixed width constraint on iPad to ensure corners are visible, original width for other platforms
         .frame(height: isIPad ? nil : 400)
         .frame(maxHeight: isIPad ? {
-            // Create responsive max height for different iPad screen sizes
+            // Create responsive max height based on percentage of screen height
             #if os(iOS)
             let screenHeight = UIScreen.main.bounds.height
-            if screenHeight > 1200 { // 13" iPad Pro
-                return 500 // More space available
-            } else if screenHeight > 1000 { // 11" iPad
-                return 400 // Medium space
-            } else { // iPad Mini
-                return 320 // Less space available, prevent overlap
-            }
+            return screenHeight * 0.35 // 35% of screen height for content area
             #else
             return 400
             #endif
@@ -1985,16 +1973,11 @@ struct DashboardView: View {
             .gesture(reorderMode ? nil : carouselDragGesture(cardWidth: cardWidth, cardSpacing: cardSpacing))
         }
         .frame(height: {
-            // Responsive carousel height based on iPad screen size
+            // Responsive carousel height based on percentage of screen height
             #if os(iOS)
             let screenHeight = UIScreen.main.bounds.height
-            if screenHeight > 1200 { // 13" iPad Pro
-                return responsiveSize(base: 580, min: 450, max: 650) // Taller on large screen
-            } else if screenHeight > 1000 { // 11" iPad
-                return responsiveSize(base: 520, min: 400, max: 580) // Medium height
-            } else { // iPad Mini
-                return responsiveSize(base: 480, min: 350, max: 520) // Shorter on small screen
-            }
+            let percentageHeight = screenHeight * 0.45 // 45% of screen height for carousel
+            return max(400, min(650, percentageHeight)) // Constrain between reasonable bounds
             #else
             return responsiveSize(base: 550, min: 400, max: 650) // macOS default
             #endif
