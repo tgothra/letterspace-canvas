@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 import SwiftUI
 
@@ -169,9 +170,25 @@ class RichTextView: NSTextView {
         input.placeholderString = "Enter URL"
         alert.accessoryView = input
         
-        if alert.runModal() == .alertFirstButtonReturn,
-           let url = URL(string: input.stringValue) {
-            textStorage?.addAttribute(.link, value: url, range: range)
+        if alert.runModal() == .alertFirstButtonReturn {
+            var urlString = input.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            
+            // Don't proceed if the URL is empty
+            guard !urlString.isEmpty else { return }
+            
+            // Add "https://" if the URL doesn't already have a scheme
+            if !urlString.contains("://") {
+                // If it starts with "www." or has a domain suffix like ".com", ".org", etc.
+                // we'll assume it's a web URL and add https://
+                urlString = "https://" + urlString
+            }
+            
+            if let url = URL(string: urlString) {
+                textStorage?.addAttribute(.link, value: url, range: range)
+                // Also add underline and color styling for links
+                textStorage?.addAttribute(.underlineStyle, value: NSUnderlineStyle.single.rawValue, range: range)
+                textStorage?.addAttribute(.foregroundColor, value: NSColor.linkColor, range: range)
+            }
         }
     }
     
@@ -595,4 +612,5 @@ extension NSColor {
         let cgColor = color.cgColor ?? CGColor(gray: 0, alpha: 1)
         self.init(cgColor: cgColor)!
     }
-} 
+}
+#endif 

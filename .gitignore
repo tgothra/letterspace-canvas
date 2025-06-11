@@ -1,0 +1,96 @@
+# Xcode
+.DS_Store
+xcuserdata/
+*.xcscmblueprint
+*.xccheckout
+build/
+DerivedData/
+*.moved-aside
+*.pbxuser
+!default.pbxuser
+*.mode1v3
+!default.mode1v3
+*.mode2v3
+!default.mode2v3
+*.perspectivev3
+!default.perspectivev3
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+*.xcworkspace/xcuserdata/
+UserInterfaceState.xcuserstate
+xcschememanagement.plist
+
+# Backup files and temp work
+*.bak*
+*.backup*
+*.temp*
+*.old*
+*.new*
+*.fixed*
+*.broken*
+*.current*
+*_backup*
+*_temp*
+Backup-Files-*/
+DocumentEditor.o
+CustomTextEditor.o
+
+# Development files
+README_DEBUG.md
+*_Instructions.md
+*_IMPLEMENTATION*.md
+CLOUDKIT_SETUP.md
+CacheClearingTools.md
+*.patch
+*.txt
+temp_*
+test.swift
+fix_*.swift
+fix_*.py
+fix_*.sh
+clear_cache.swift
+debug_*.swift
+reset_*.swift
+force_*.swift
+enable_*.swift
+check_*.swift
+check_*.sh
+clean_build.sh
+organize_backups.sh
+*.css
+temp/
+backup/
+src/
+app/
+FixedImplementation/
+FixImplementation/
+Sources/
+
+# Swift Package Manager
+.build/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Thumbnails
+._*
+
+# Files that might appear in the root of a volume
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# Directories potentially created on remote AFP share
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk 

@@ -3,39 +3,35 @@ import SwiftUI
 struct DocumentFolderButton: View {
     let title: String
     let icon: String
+    let action: () -> Void
     @State private var isHovering = false
     @Environment(\.themeColors) var theme
     
     var body: some View {
-        Button(action: {}) {
+        Button(action: action) {
             HStack {
                 HStack(spacing: 12) {
                     Image(systemName: icon)
-                        .font(.system(size: 16, weight: .medium))
-                        .frame(width: 20, alignment: .center)
+                        .font(.system(size: 14))
+                        .frame(width: 16, alignment: .center)
                     Text(title)
-                        .font(.custom("InterTight-Medium", size: 16))
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.system(size: 14))
                 }
                 .padding(.horizontal, 16)
-                .padding(.vertical, 8)
+                .padding(.vertical, 6)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .background(
                     RoundedRectangle(cornerRadius: 8)
                         .fill(theme.surface)
                         .opacity(isHovering ? 1 : 0)
                 )
-                .foregroundStyle(theme.primary)
-                
-                Spacer()
+                .foregroundStyle(theme.secondary)
             }
             .padding(.horizontal, 16)
         }
         .buttonStyle(.plain)
         .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.1)) {
-                isHovering = hovering
-            }
+            isHovering = hovering
         }
     }
 } 

@@ -9,36 +9,39 @@ struct TitleBlockView: View {
     @State private var editedTitle: String = ""
     
     var body: some View {
-        CustomTextEditor(
-            text: Binding(
-                get: { NSAttributedString(string: title) },
-                set: { newValue in onUpdate(newValue.string) }
-            ),
-            isFocused: isSelected,
-            onSelectionChange: { _ in },
-            showToolbar: .constant(false)
-        )
-        .font(.system(size: 32, weight: .bold))
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 24)
-        .placeholder(when: title.isEmpty) {
-            Text("Untitled")
-                .font(.system(size: 32, weight: .bold))
-                .foregroundColor(.secondary)
-                .padding(.vertical, 24)
-        }
-    }
-}
+        ZStack(alignment: .leading) {
+            if title.isEmpty {
+                Text("Untitled")
+                    .font(.system(size: 32, weight: .bold))
+                    .foregroundColor(Color.gray.opacity(0.5))
+                    .padding(.vertical, 8)
+                    .allowsHitTesting(false)
+            }
 
-extension View {
-    func placeholder<Content: View>(
-        when shouldShow: Bool,
-        alignment: Alignment = .leading,
-        @ViewBuilder placeholder: () -> Content
-    ) -> some View {
-        ZStack(alignment: alignment) {
-            placeholder().opacity(shouldShow ? 1 : 0)
-            self
+            #if os(macOS)
+            CustomTextEditor(
+                text: Binding(
+                    get: { NSAttributedString(string: title) },
+                    set: { newValue in onUpdate(newValue.string) }
+                ),
+                isFocused: isSelected,
+                onSelectionChange: { _ in },
+                showToolbar: .constant(false)
+            )
+            .font(.system(size: 32, weight: .bold))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 24)
+            #elseif os(iOS)
+            TextEditor(text: Binding(
+                get: { title },
+                set: { newValue in onUpdate(newValue) }
+            ))
+            .font(.system(size: 32, weight: .bold))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 24)
+            .scrollContentBackground(.hidden)
+            .background(Color.clear)
+            #endif
         }
     }
 } 

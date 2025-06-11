@@ -25,6 +25,36 @@ extension Color {
             opacity: Double(a) / 255
         )
     }
+    
+    func toHex() -> String {
+        #if os(macOS)
+        let nsColor = NSColor(self)
+        guard let rgbColor = nsColor.usingColorSpace(.sRGB) else {
+            return "#000000"
+        }
+        
+        let red = Int(round(rgbColor.redComponent * 255))
+        let green = Int(round(rgbColor.greenComponent * 255))
+        let blue = Int(round(rgbColor.blueComponent * 255))
+        
+        return String(format: "#%02X%02X%02X", red, green, blue)
+        #elseif os(iOS)
+        var r: CGFloat = 0
+        var g: CGFloat = 0
+        var b: CGFloat = 0
+        var a: CGFloat = 0
+        guard UIColor(self).getRed(&r, green: &g, blue: &b, alpha: &a) else {
+            return "#000000"
+        }
+        let red = Int(round(r * 255))
+        let green = Int(round(g * 255))
+        let blue = Int(round(b * 255))
+        
+        return String(format: "#%02X%02X%02X", red, green, blue)
+        #else
+        return "#000000" // Placeholder for other platforms
+        #endif
+    }
 }
 
 extension Font {
@@ -67,7 +97,7 @@ extension Font {
 
 enum DesignSystem {
     enum Colors {
-        static let accent = Color(hex: "#3ee5a1")
+        static let accent = Color(hex: "#22c27d")
         
         struct ThemeColors {
             let background: Color
@@ -81,7 +111,7 @@ enum DesignSystem {
             let accent: Color
             
             static let dark = ThemeColors(
-                background: Color(.sRGB, red: 0.1, green: 0.1, blue: 0.1, opacity: 1.0),
+                background: Color(red: 0.11, green: 0.11, blue: 0.12),
                 surface: Color(.sRGB, red: 0.15, green: 0.15, blue: 0.15, opacity: 1.0),
                 primary: .white,
                 secondary: Color.white.opacity(0.7),
@@ -89,11 +119,11 @@ enum DesignSystem {
                 divider: Color.white.opacity(0.1),
                 button: Color(.sRGB, red: 0.15, green: 0.15, blue: 0.15, opacity: 1.0),
                 buttonHover: Color(.sRGB, red: 0.2, green: 0.2, blue: 0.2, opacity: 1.0),
-                accent: Color(hex: "#3ee5a1")
+                accent: Color(hex: "#22c27d")
             )
             
             static let light = ThemeColors(
-                background: Color(.sRGB, red: 0.98, green: 0.98, blue: 0.98, opacity: 1.0),
+                background: .white,
                 surface: Color(hex: "#f5f5f5"),
                 primary: Color(hex: "#1a1a1a"),
                 secondary: Color(hex: "#1a1a1a").opacity(0.7),
@@ -101,7 +131,7 @@ enum DesignSystem {
                 divider: Color.black.opacity(0.1),
                 button: Color(hex: "#0066FF"),
                 buttonHover: Color(hex: "#0052CC"),
-                accent: Color(hex: "#3ee5a1")
+                accent: Color(hex: "#22c27d")
             )
         }
     }
@@ -121,6 +151,10 @@ enum DesignSystem {
         
         static func bold(size: CGFloat) -> Font {
             .custom("InterTight-Bold", size: size)
+        }
+        
+        static func semibold(size: CGFloat) -> Font {
+            .custom("InterTight-SemiBold", size: size)
         }
         
         static func medium(size: CGFloat) -> Font {

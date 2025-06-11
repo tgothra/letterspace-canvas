@@ -1,6 +1,6 @@
+#if os(macOS)
 import SwiftUI
 import AppKit
-import Letterspace_Canvas
 
 struct InsertElementMenu: View {
     @Binding var isPresented: Bool
@@ -69,4 +69,5 @@ struct InsertElementMenu: View {
             .ignoresSafeArea()
         }
     }
-} 
+}
+#endif 

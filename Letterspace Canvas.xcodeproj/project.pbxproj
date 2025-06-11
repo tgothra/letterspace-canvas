@@ -6,10 +6,6 @@
 	objectVersion = 77;
 	objects = {
 
-/* Begin PBXBuildFile section */
-		D4EAC1552CFEB667006481B9 /* SwiftUIIntrospect in Frameworks */ = {isa = PBXBuildFile; productRef = D4EAC1542CFEB667006481B9 /* SwiftUIIntrospect */; };
-/* End PBXBuildFile section */
-
 /* Begin PBXContainerItemProxy section */
 		D49BE6122CF6A36000E57C24 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -39,6 +35,9 @@
 			membershipExceptions = (
 				Info.plist,
 			);
+			platformFiltersByRelativePath = {
+				iPadAppDelegate.swift = (ios, );
+			};
 			target = D49BE5FC2CF6A35E00E57C24 /* Letterspace Canvas */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -69,7 +68,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				D4EAC1552CFEB667006481B9 /* SwiftUIIntrospect in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -130,7 +128,6 @@
 			);
 			name = "Letterspace Canvas";
 			packageProductDependencies = (
-				D4EAC1542CFEB667006481B9 /* SwiftUIIntrospect */,
 			);
 			productName = "Letterspace Canvas";
 			productReference = D49BE5FD2CF6A35E00E57C24 /* Letterspace Canvas.app */;
@@ -630,14 +627,6 @@
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
-
-/* Begin XCSwiftPackageProductDependency section */
-		D4EAC1542CFEB667006481B9 /* SwiftUIIntrospect */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = D4EAC1532CFEB667006481B9 /* XCRemoteSwiftPackageReference "SwiftUI-Introspect" */;
-			productName = SwiftUIIntrospect;
-		};
-/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = D49BE5F52CF6A35E00E57C24 /* Project object */;
 }

@@ -15,6 +15,7 @@ enum ElementType: String, Codable {
     case signature
     case table
     case scripture
+    case subheader
     
     var description: String {
         switch self {
@@ -30,8 +31,14 @@ enum ElementType: String, Codable {
         case .title: return "Title"
         case .headerImage: return "Header Image"
         case .scripture: return "Bible verse"
+        case .subheader: return "Subheader"
         }
     }
+}
+
+extension NSAttributedString.Key {
+    static let widthControl = NSAttributedString.Key("widthControl")
+    static let isScriptureText = NSAttributedString.Key("isScriptureText")
 }
 
 struct DocumentElement: Identifiable, Codable, Transferable {
@@ -41,32 +48,131 @@ struct DocumentElement: Identifiable, Codable, Transferable {
     var placeholder: String
     var options: [String]
     var date: Date?
-    private var rtfData: Data?  // Store RTF data for attributed content
+    var rtfData: Data?
+    var isInline: Bool = false  // New property for inline attachments
+    var scriptureRanges: [[Int]] = []  // Array of [start, length] pairs for scripture ranges
     
     var attributedContent: NSAttributedString? {
         get {
             guard let data = rtfData else { return nil }
             do {
-                return try NSAttributedString(data: data,
-                                            options: [.documentType: NSAttributedString.DocumentType.rtf],
-                                            documentAttributes: nil)
+                #if os(macOS)
+                let docType = NSAttributedString.DocumentType.rtfd
+                #else
+                // If data was saved as .rtf on iOS, try to read as .rtf
+                // This assumes that if rtfData exists on iOS, it was saved via the RTF path.
+                let docType = NSAttributedString.DocumentType.rtf
+                #endif
+
+                let options: [NSAttributedString.DocumentReadingOptionKey: Any] = [
+                    .documentType: docType
+                ]
+                
+                let attributedString = try NSMutableAttributedString(data: data, options: options, documentAttributes: nil)
+                
+                // Preserve standard attributes from RTFD data, including .backgroundColor
+                // No custom conversion needed anymore
+                
+                // Enumerate to log attributes if needed for debugging
+                #if DEBUG
+                var foundBGColor = false
+                var foundLinks = false
+                attributedString.enumerateAttributes(in: NSRange(location: 0, length: attributedString.length), options: []) { attributes, range, _ in
+                    if attributes[.backgroundColor] != nil {
+                        foundBGColor = true
+                        print("🎨 Loaded .backgroundColor attribute from RTFD in range \(range)")
+                    }
+                    if attributes[.link] != nil {
+                        foundLinks = true
+                        print("🔗 Loaded .link attribute from RTFD in range \(range)")
+                    }
+                }
+                if !foundBGColor && attributedString.length > 0 {
+                    print("🎨 No .backgroundColor found when loading RTFD")
+                }
+                if !foundLinks && attributedString.length > 0 {
+                    print("🔗 No links found when loading RTFD")
+                }
+                #endif
+                
+                return attributedString // Return the string as loaded from RTFD
             } catch {
-                print("Error converting RTF data to NSAttributedString: \(error)")
+                print("Error converting RTFD data to NSAttributedString: \(error)")
                 return nil
             }
         }
         set {
             if let newValue = newValue {
                 do {
-                    rtfData = try newValue.data(from: NSRange(location: 0, length: newValue.length),
-                                              documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf])
-                } catch {
-                    print("Error converting NSAttributedString to RTF data: \(error)")
-                    rtfData = nil
+                    // Create a mutable copy to remove any custom attributes if they accidentally exist
+                    let mutableString = NSMutableAttributedString(attributedString: newValue)
+                    
+                    // Remove any stray customHighlight attributes - we only want standard ones
+                    mutableString.removeAttribute(NSAttributedString.Key("customHighlight"), 
+                                                    range: NSRange(location: 0, length: mutableString.length))
+                    
+                    #if DEBUG
+                    var highlightCount = 0
+                    var linkCount = 0
+                    mutableString.enumerateAttribute(.backgroundColor, in: NSRange(location: 0, length: mutableString.length)) { value, range, _ in
+                        #if os(macOS)
+                        if value is NSColor {
+                            highlightCount += 1
+                        }
+                        #elseif os(iOS)
+                        if value is UIColor {
+                            highlightCount += 1
+                        }
+                        #endif
+                    }
+                    mutableString.enumerateAttribute(.link, in: NSRange(location: 0, length: mutableString.length)) { value, range, _ in
+                        if value is URL {
+                            linkCount += 1
+                        }
+                    }
+                    print("📦 Saving document with \(highlightCount) standard .backgroundColor ranges and \(linkCount) links")
+                    #endif
+
+                    // Convert directly to RTFD data, which will store standard attributes like .backgroundColor and .link
+                    let documentAttributes: [NSAttributedString.DocumentAttributeKey: Any] = [
+                        .documentType: NSAttributedString.DocumentType.rtfd
+                    ]
+                    
+                    let attributedString = NSAttributedString(attributedString: mutableString)
+                    #if os(macOS)
+                    rtfData = attributedString.rtfd(from: NSRange(location: 0, length: mutableString.length), documentAttributes: documentAttributes)
+                    #else
+                    // Fallback for iOS: attempt to serialize to a simple RTF or plain text, or handle error
+                    // This will likely not preserve all attributes, especially images.
+                    // For now, let's try RTF as a fallback, though it's less rich than RTFD.
+                    // Or, if RTFD is critical, this path needs a proper iOS solution.
+                    do {
+                        rtfData = try attributedString.data(from: NSRange(location: 0, length: attributedString.length), documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf])
+                    } catch {
+                        print("Error serializing NSAttributedString to RTF on iOS: \(error)")
+                        // As a last resort, store plain text if RTF fails
+                        // rtfData = attributedString.string.data(using: .utf8) 
+                        // Or, better to leave rtfData nil if proper serialization fails
+                        rtfData = nil 
+                    }
+                    #endif
                 }
             } else {
                 rtfData = nil
             }
+        }
+    }
+    
+    var attributedString: NSAttributedString {
+        get {
+            if let attributedContent = attributedContent {
+                // Directly return the content loaded by the getter
+                // No need to convert RTFD data again or handle custom highlights here
+                return attributedContent
+            }
+            
+            // Fallback to plain text without any styling
+            return NSAttributedString(string: content)
         }
     }
     
@@ -77,6 +183,7 @@ struct DocumentElement: Identifiable, Codable, Transferable {
         self.placeholder = placeholder
         self.options = options
         self.rtfData = nil
+        self.isInline = false
     }
     
     // Transferable conformance
@@ -86,7 +193,7 @@ struct DocumentElement: Identifiable, Codable, Transferable {
     
     // Codable conformance
     enum CodingKeys: String, CodingKey {
-        case id, type, content, placeholder, options, date, rtfData
+        case id, type, content, placeholder, options, date, rtfData, isInline, scriptureRanges
     }
     
     init(from decoder: Decoder) throws {
@@ -98,6 +205,8 @@ struct DocumentElement: Identifiable, Codable, Transferable {
         options = try container.decode([String].self, forKey: .options)
         date = try container.decodeIfPresent(Date.self, forKey: .date)
         rtfData = try container.decodeIfPresent(Data.self, forKey: .rtfData)
+        isInline = try container.decodeIfPresent(Bool.self, forKey: .isInline) ?? false
+        scriptureRanges = try container.decodeIfPresent([[Int]].self, forKey: .scriptureRanges) ?? []
     }
     
     func encode(to encoder: Encoder) throws {
@@ -109,6 +218,8 @@ struct DocumentElement: Identifiable, Codable, Transferable {
         try container.encode(options, forKey: .options)
         try container.encode(date, forKey: .date)
         try container.encodeIfPresent(rtfData, forKey: .rtfData)
+        try container.encode(isInline, forKey: .isInline)
+        try container.encode(scriptureRanges, forKey: .scriptureRanges)
     }
 }
 

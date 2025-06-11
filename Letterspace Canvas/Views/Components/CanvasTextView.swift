@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 
 class CanvasTextView: NSTextView {
@@ -257,4 +258,5 @@ class CanvasTextView: NSTextView {
             path.stroke()
         }
     }
-} 
+}
+#endif 

@@ -118,6 +118,7 @@ private struct CanvasBlockView: View {
         HStack {
             switch block.type {
             case .text(let attributedString):
+                #if os(macOS)
                 CustomTextEditor(
                     text: Binding(
                         get: { attributedString },
@@ -137,6 +138,20 @@ private struct CanvasBlockView: View {
                         commandPosition = point
                     }
                 )
+                #elseif os(iOS)
+                // iOS fallback using TextEditor with string conversion
+                TextEditor(text: Binding(
+                    get: { attributedString.string },
+                    set: { newValue in
+                        let newAttributedString = NSAttributedString(string: newValue)
+                        canvas.updateText(newAttributedString, at: block.position)
+                    }
+                ))
+                .font(.body)
+                .onTapGesture {
+                    selectedElement = block.id
+                }
+                #endif
             case .element(let element):
                 DocumentElementView(
                     document: $document,

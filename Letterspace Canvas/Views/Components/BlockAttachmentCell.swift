@@ -1,5 +1,7 @@
+#if os(macOS)
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 class BlockAttachmentCell: NSTextAttachmentCell {
     let element: DocumentElement
@@ -63,54 +65,96 @@ class BlockAttachmentCell: NSTextAttachmentCell {
         // Create view based on element type
         switch element.type {
         case .textBlock:
-            let attributedString = NSAttributedString(
-                string: element.content,
-                attributes: [
-                    .font: NSFont.systemFont(ofSize: 16),
-                    .foregroundColor: NSColor.textColor
-                ]
-            )
             return AnyView(
-                CustomTextEditor(
-                    text: .constant(attributedString),
-                    isFocused: false,
-                    onSelectionChange: { _ in },
-                    showToolbar: .constant(false), onAtCommand: nil
-                )
+                Text(element.content)
+                    .padding()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.gray.opacity(0.1))
+                    .cornerRadius(8)
             )
             
         case .image:
-            return AnyView(
-                ImageBlockView(element: element)
-            )
+            // Get the document ID from the parent view or document context
+            if let textView = hostingView?.superview as? NSTextView,
+               let document = textView.window?.windowController?.document as? Letterspace_CanvasDocument {
+                return AnyView(
+                    ImageBlockView(
+                        element: element,
+                        documentId: document.id,
+                        onImageChange: { newImagePath in
+                            // Update the element's content
+                            if let textView = self.hostingView?.superview as? NSTextView,
+                               let textStorage = textView.textStorage {
+                                // Find this attachment in the text storage
+                                textStorage.enumerateAttribute(.attachment, in: NSRange(location: 0, length: textStorage.length)) { value, range, stop in
+                                    if let attachment = value as? NSTextAttachment,
+                                       attachment.attachmentCell === self {
+                                        // Create a new element with updated content
+                                        var updatedElement = self.element
+                                        updatedElement.content = newImagePath
+                                        
+                                        // Create a new attachment with the updated element
+                                        let newAttachment = NSTextAttachment()
+                                        let newCell = BlockAttachmentCell(element: updatedElement)
+                                        newAttachment.attachmentCell = newCell
+                                        
+                                        // Replace the old attachment
+                                        textStorage.beginEditing()
+                                        textStorage.replaceCharacters(in: range, with: NSAttributedString(attachment: newAttachment))
+                                        textStorage.endEditing()
+                                        
+                                        stop.pointee = true
+                                    }
+                                }
+                            }
+                        }
+                    )
+                )
+            } else {
+                print("Warning: Could not get document ID for image block")
+                return AnyView(
+                    ImageBlockView(element: element, documentId: "")
+                )
+            }
             
         case .scripture:
             return AnyView(
-                ScriptureBlock(
-                    document: .constant(Letterspace_CanvasDocument()),
-                    content: .constant(element.content),
-                    element: .constant(element)
-                )
+                Text("Scripture: \(element.content)")
+                    .padding()
+                    .background(Color.gray.opacity(0.1))
+                    .cornerRadius(8)
             )
             
         case .dropdown:
             return AnyView(
-                DropdownBlockView(element: element)
+                Text("Dropdown Option: \(element.content)")
+                    .padding()
+                    .background(Color.gray.opacity(0.1))
+                    .cornerRadius(8)
             )
             
         case .table:
             return AnyView(
-                TableEditor(content: .constant(element.content))
+                Text("Table: \(element.content)")
+                    .padding()
+                    .background(Color.gray.opacity(0.1))
+                    .cornerRadius(8)
             )
             
         case .chart:
             return AnyView(
-                ChartView(content: .constant(element.content))
+                Text("Chart: \(element.content)")
+                    .padding()
+                    .background(Color.gray.opacity(0.1))
+                    .cornerRadius(8)
             )
             
         case .signature:
             return AnyView(
-                SignaturePad(signature: .constant(element.content))
+                Text("Signature: \(element.content)")
+                    .padding()
+                    .background(Color.gray.opacity(0.1))
+                    .cornerRadius(8)
             )
             
         default:
@@ -118,6 +162,31 @@ class BlockAttachmentCell: NSTextAttachmentCell {
                 Text("Unsupported Block Type")
             )
         }
+    }
+    
+    private func createScriptureCard(from content: String) -> some View {
+        // Parse the content string (expected format: "reference|translation|text")
+        let components = content.split(separator: "|", maxSplits: 2).map(String.init)
+        let reference = components.count > 0 ? components[0] : ""
+        let translation = components.count > 1 ? components[1] : ""
+        let text = components.count > 2 ? components[2] : content
+        
+        return VStack(alignment: .leading, spacing: 8) {
+            Text(reference)
+                .font(.headline)
+            
+            if !translation.isEmpty {
+                Text(translation)
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            }
+            
+            Text(text)
+                .font(.body)
+        }
+        .padding()
+        .background(Color.gray.opacity(0.1))
+        .cornerRadius(8)
     }
     
     // MARK: - Height Management
@@ -129,7 +198,7 @@ class BlockAttachmentCell: NSTextAttachmentCell {
         case .image:
             return 200
         case .scripture:
-            return 150
+            return 120
         case .dropdown:
             return 44
         case .table:
@@ -150,7 +219,7 @@ class BlockAttachmentCell: NSTextAttachmentCell {
         case .image:
             return 100
         case .scripture:
-            return 100
+            return 80
         case .dropdown:
             return 44
         case .table:
@@ -176,23 +245,255 @@ class BlockAttachmentCell: NSTextAttachmentCell {
             return 400
         }
     }
+    
+    // Add handlers for delete and select
+    private func handleDelete() {
+        // Find the attachment range and remove it from the text view
+        if let textView = hostingView?.superview as? NSTextView,
+           let textStorage = textView.textStorage {
+            // Search for this attachment in the text storage
+            var attachmentRange = NSRange(location: NSNotFound, length: 0)
+            textStorage.enumerateAttribute(.attachment, in: NSRange(location: 0, length: textStorage.length)) { value, range, stop in
+                if let attachment = value as? NSTextAttachment,
+                   attachment.attachmentCell === self {
+                    attachmentRange = range
+                    stop.pointee = true
+                }
+            }
+            
+            if attachmentRange.location != NSNotFound {
+                textStorage.beginEditing()
+                textStorage.deleteCharacters(in: attachmentRange)
+                textStorage.endEditing()
+            }
+        }
+    }
+    
+    private func handleSelect() {
+        // Find the attachment range and select it in the text view
+        if let textView = hostingView?.superview as? NSTextView {
+            // Search for this attachment in the text storage
+            if let textStorage = textView.textStorage {
+                var attachmentRange = NSRange(location: NSNotFound, length: 0)
+                textStorage.enumerateAttribute(.attachment, in: NSRange(location: 0, length: textStorage.length)) { value, range, stop in
+                    if let attachment = value as? NSTextAttachment,
+                       attachment.attachmentCell === self {
+                        attachmentRange = range
+                        stop.pointee = true
+                    }
+                }
+                
+                if attachmentRange.location != NSNotFound {
+                    textView.setSelectedRange(attachmentRange)
+                }
+            }
+        }
+    }
 }
 
 // MARK: - Helper Views
 
 struct ImageBlockView: View {
     let element: DocumentElement
+    let documentId: String
+    var onImageChange: ((String) -> Void)?
+    @State private var isHovering = false
+    
+    private func saveImage(_ image: NSImage) -> String? {
+        let fileName = UUID().uuidString + ".png"
+        
+        if let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+            let documentPath = documentsPath.appendingPathComponent(documentId)
+            let imagesPath = documentPath.appendingPathComponent("Images")
+            
+            do {
+                try FileManager.default.createDirectory(at: documentPath, withIntermediateDirectories: true, attributes: nil)
+                try FileManager.default.createDirectory(at: imagesPath, withIntermediateDirectories: true, attributes: nil)
+                let fileURL = imagesPath.appendingPathComponent(fileName)
+                
+                if let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+                    let imageRep = NSBitmapImageRep(cgImage: cgImage)
+                    if let imageData = imageRep.representation(using: .png, properties: [:]) {
+                        try imageData.write(to: fileURL)
+                        return fileName
+                    }
+                }
+            } catch {
+                print("Error saving image: \(error)")
+            }
+        }
+        return nil
+    }
+    
+    private func handleImageSelection(url: URL) {
+        if let image = NSImage(contentsOf: url) {
+            if let savedPath = saveImage(image) {
+                onImageChange?(savedPath)
+            }
+        }
+    }
+    
+    private func debugImageInfo(imageName: String, imageUrl: URL) {
+        print("Attempting to load image:")
+        print("Image name: \(imageName)")
+        print("Full URL: \(imageUrl)")
+        print("Document ID: \(documentId)")
+        if FileManager.default.fileExists(atPath: imageUrl.path) {
+            print("Image file exists at path")
+        } else {
+            print("Image file does not exist at path")
+        }
+    }
+    
+    private var optionsMenu: some View {
+        Menu {
+            if element.content.isEmpty {
+                Button {
+                    let panel = NSOpenPanel()
+                    panel.allowsMultipleSelection = false
+                    panel.canChooseDirectories = false
+                    panel.canChooseFiles = true
+                    panel.allowedContentTypes = [UTType.image]
+                    
+                    if panel.runModal() == .OK {
+                        if let url = panel.url {
+                            handleImageSelection(url: url)
+                        }
+                    }
+                } label: {
+                    Label("Add Image", systemImage: "plus")
+                }
+            } else {
+                Button {
+                    let panel = NSOpenPanel()
+                    panel.allowsMultipleSelection = false
+                    panel.canChooseDirectories = false
+                    panel.canChooseFiles = true
+                    panel.allowedContentTypes = [UTType.image]
+                    
+                    if panel.runModal() == .OK {
+                        if let url = panel.url {
+                            // Delete old image first
+                            if let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+                                let documentPath = documentsPath.appendingPathComponent(documentId)
+                                let imagesPath = documentPath.appendingPathComponent("Images")
+                                let oldImageUrl = imagesPath.appendingPathComponent(element.content)
+                                try? FileManager.default.removeItem(at: oldImageUrl)
+                            }
+                            handleImageSelection(url: url)
+                        }
+                    }
+                } label: {
+                    Label("Replace Image", systemImage: "photo")
+                }
+                
+                Button {
+                    if let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+                        let documentPath = documentsPath.appendingPathComponent(documentId)
+                        let imagesPath = documentPath.appendingPathComponent("Images")
+                        let imageUrl = imagesPath.appendingPathComponent(element.content)
+                        
+                        let savePanel = NSSavePanel()
+                        savePanel.allowedContentTypes = [UTType.image]
+                        savePanel.nameFieldStringValue = element.content
+                        
+                        if savePanel.runModal() == .OK {
+                            if let destinationURL = savePanel.url {
+                                try? FileManager.default.copyItem(at: imageUrl, to: destinationURL)
+                            }
+                        }
+                    }
+                } label: {
+                    Label("Download Image", systemImage: "square.and.arrow.down")
+                }
+                
+                Divider()
+                
+                Button(role: .destructive) {
+                    if let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+                        let documentPath = documentsPath.appendingPathComponent(documentId)
+                        let imagesPath = documentPath.appendingPathComponent("Images")
+                        let imageUrl = imagesPath.appendingPathComponent(element.content)
+                        try? FileManager.default.removeItem(at: imageUrl)
+                        onImageChange?("")
+                    }
+                } label: {
+                    Label("Delete Image", systemImage: "trash")
+                }
+            }
+        } label: {
+            Circle()
+                .fill(Color(.sRGB, white: 0.3, opacity: 0.4))
+                .overlay(
+                    Circle()
+                        .stroke(Color.white.opacity(0.15), lineWidth: 1.5)
+                )
+                .frame(width: 32, height: 32)
+                .overlay {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(Color(.sRGB, white: 0.95, opacity: 1))
+                }
+        }
+        .buttonStyle(.plain)
+        .opacity(isHovering ? 1 : 0)
+        .animation(.easeInOut(duration: 0.2), value: isHovering)
+    }
     
     var body: some View {
-        if let imageName = element.content.isEmpty ? nil : element.content,
-           let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
-            let imagesPath = documentsPath.appendingPathComponent("Images")
-            let imageUrl = imagesPath.appendingPathComponent(imageName)
-            if let nsImage = NSImage(contentsOf: imageUrl) {
-                Image(nsImage: nsImage)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .transition(.opacity.combined(with: .scale))
+        if element.content.isEmpty {
+            ZStack(alignment: .bottomTrailing) {
+                Button {
+                    let panel = NSOpenPanel()
+                    panel.allowsMultipleSelection = false
+                    panel.canChooseDirectories = false
+                    panel.canChooseFiles = true
+                    panel.allowedContentTypes = [UTType.image]
+                    
+                    if panel.runModal() == .OK {
+                        if let url = panel.url {
+                            handleImageSelection(url: url)
+                        }
+                    }
+                } label: {
+                    Rectangle()
+                        .fill(Color.gray.opacity(0.2))
+                }
+                .buttonStyle(.plain)
+                
+                optionsMenu
+                    .padding(.trailing, 16)
+                    .padding(.bottom, 16)
+            }
+            .onHover { hovering in
+                isHovering = hovering
+            }
+        } else {
+            ZStack(alignment: .bottomTrailing) {
+                Button {
+                    let panel = NSOpenPanel()
+                    panel.allowsMultipleSelection = false
+                    panel.canChooseDirectories = false
+                    panel.canChooseFiles = true
+                    panel.allowedContentTypes = [UTType.image]
+                    
+                    if panel.runModal() == .OK {
+                        if let url = panel.url {
+                            handleImageSelection(url: url)
+                        }
+                    }
+                } label: {
+                    Rectangle()
+                        .fill(Color.gray.opacity(0.2))
+                }
+                .buttonStyle(.plain)
+                
+                optionsMenu
+                    .padding(.trailing, 16)
+                    .padding(.bottom, 16)
+            }
+            .onHover { hovering in
+                isHovering = hovering
             }
         }
     }
@@ -203,8 +504,12 @@ struct DropdownBlockView: View {
     
     var body: some View {
         Menu {
-            ForEach(element.options, id: \.self) { option in
-                Button(option) { }
+            ForEach(["Option 1", "Option 2", "Option 3"], id: \.self) { option in
+                Button {
+                    // Action would go here
+                } label: {
+                    Text(option)
+                }
             }
         } label: {
             HStack {
@@ -214,6 +519,6 @@ struct DropdownBlockView: View {
             }
             .padding()
         }
-        .transition(.opacity.combined(with: .move(edge: .top)))
     }
-} 
+}
+#endif 

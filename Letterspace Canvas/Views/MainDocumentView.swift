@@ -5,7 +5,6 @@ struct MainDocumentView: View {
     @State private var activeToolbarId: UUID?
     
     var body: some View {
-        MainLayout(document: $document)
-            .environment(\.sharedToolbarState, $activeToolbarId)
+        MainLayout(document: $document, activeToolbarId: $activeToolbarId)
     }
 } 

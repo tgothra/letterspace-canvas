@@ -1,3 +1,4 @@
+#if os(macOS)
 import SwiftUI
 import AppKit
 
@@ -29,4 +30,5 @@ struct HoverInsertButton: View {
         .contentShape(Circle())
         .allowsHitTesting(true)
     }
-} 
+}
+#endif 

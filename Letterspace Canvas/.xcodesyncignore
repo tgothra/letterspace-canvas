@@ -1,0 +1,10 @@
+*.bak
+*.backup
+*.original
+*.temp
+*.old
+*.broken
+*~
+.DS_Store
+*.swp
+*.swo 

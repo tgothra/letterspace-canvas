@@ -1,5 +1,6 @@
 import SwiftUI
 
+#if os(macOS)
 struct BlockResizeHandle: View {
     let position: ResizePosition
     @Binding var height: CGFloat
@@ -102,4 +103,5 @@ struct ResizableBlock<Content: View>: View {
             }
         }
     }
-} 
+}
+#endif 

@@ -1,5 +1,10 @@
 import Foundation
 import SwiftUI
+#if os(macOS)
+import AppKit
+#elseif os(iOS)
+import UIKit
+#endif
 
 // Represents a block in the continuous canvas
 enum CanvasBlockType: Equatable {
@@ -81,6 +86,7 @@ class DocumentCanvas: ObservableObject {
             .enumerated()
             .map { index, element in
                 if element.type == .textBlock {
+                    #if os(macOS)
                     return CanvasBlock(
                         type: .text(NSAttributedString(
                             string: element.content,
@@ -91,6 +97,21 @@ class DocumentCanvas: ObservableObject {
                         )),
                         position: index
                     )
+                    #elseif os(iOS)
+                    return CanvasBlock(
+                        type: .text(NSAttributedString(
+                            string: element.content,
+                            attributes: [
+                                .font: UIFont.systemFont(ofSize: 16),
+                                .foregroundColor: UIColor.label
+                            ]
+                        )),
+                        position: index
+                    )
+                    #else
+                    // Fallback for other platforms or return a default CanvasBlock
+                    return CanvasBlock(type: .text(NSAttributedString(string: element.content)), position: index) // Basic fallback
+                    #endif
                 } else {
                     return CanvasBlock(
                         type: .element(element),
