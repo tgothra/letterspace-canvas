@@ -754,14 +754,10 @@ struct DashboardView: View {
             if isPortrait && isIPad {
                 // iPad Portrait: Special layout that respects navigation
                     VStack(alignment: .leading, spacing: 0) {
-                    // Header with responsive positioning for navigation
+                    // Header with fixed positioning for navigation consistency
                     iPadDashboardHeaderView
                     .padding(.horizontal, 20)
-                        .padding(.top, {
-                            // Responsive header positioning based on percentage of screen height
-                            let screenHeight = geometry.size.height
-                            return screenHeight * 0.08 // 8% of screen height for more consistent positioning
-                        }())
+                        .padding(.top, 60) // Fixed 60pt for consistent header positioning across all iPads
                         
                         // iPad Carousel for sections
                         iPadSectionCarousel
@@ -769,11 +765,7 @@ struct DashboardView: View {
                         
                     // All Documents section - with responsive spacing and height for different iPad sizes
                         allDocumentsSectionView
-                        .padding(.top, {
-                            // Responsive spacing based on percentage of screen height
-                            let screenHeight = geometry.size.height
-                            return screenHeight * 0.005 // 0.5% of screen height for minimal spacing
-                        }())
+                        .padding(.top, 8) // Fixed 8pt for minimal, consistent spacing between carousel and All Documents
                         .padding(.horizontal, 20) // Proper padding on iPad to show corner radius
                         .padding(.leading, {
                                     #if os(macOS)
@@ -1988,11 +1980,16 @@ struct DashboardView: View {
             .gesture(reorderMode ? nil : carouselDragGesture(cardWidth: cardWidth, cardSpacing: cardSpacing))
         }
         .frame(height: {
-            // Responsive carousel height based on percentage of screen height
+            // Consistent carousel height based on iPad screen sizes
             #if os(iOS)
             let screenHeight = UIScreen.main.bounds.height
-            let percentageHeight = screenHeight * 0.60 // 60% of screen height for balanced carousel prominence
-            return max(400, percentageHeight) // Only minimum constraint to ensure usability
+            if screenHeight > 1200 { // 13" iPad Pro
+                return 500 // Larger carousel for bigger screen
+            } else if screenHeight > 1000 { // 11" iPad 
+                return 450 // Medium carousel
+            } else { // iPad Mini
+                return 400 // Smaller carousel for smaller screen
+            }
             #else
             return responsiveSize(base: 550, min: 400, max: 650) // macOS default
             #endif
@@ -2085,10 +2082,16 @@ struct DashboardView: View {
             // Main card content
             carouselSections[index].view
                 .frame(width: cardWidth, height: {
-                    // Responsive card height based on screen height for consistent proportions
+                    // Match the consistent card height
                     #if os(iOS)
                     let screenHeight = UIScreen.main.bounds.height
-                    return screenHeight * 0.42 // 42% of screen height for consistent card proportions
+                    if screenHeight > 1200 { // 13" iPad Pro
+                        return 400 // Match card height
+                    } else if screenHeight > 1000 { // 11" iPad 
+                        return 360 // Match card height
+                    } else { // iPad Mini
+                        return 320 // Match card height
+                    }
                     #else
                     return 450 // Fixed height for macOS
                     #endif
@@ -2100,10 +2103,16 @@ struct DashboardView: View {
                 RoundedRectangle(cornerRadius: 16)
                     .fill(Color.black.opacity(0.15))
                     .frame(width: cardWidth, height: {
-                        // Match the responsive card height
+                        // Match the consistent card height
                         #if os(iOS)
                         let screenHeight = UIScreen.main.bounds.height
-                        return screenHeight * 0.42 // Same as card height
+                        if screenHeight > 1200 { // 13" iPad Pro
+                            return 400 // Match card height
+                        } else if screenHeight > 1000 { // 11" iPad 
+                            return 360 // Match card height
+                        } else { // iPad Mini
+                            return 320 // Match card height
+                        }
                         #else
                         return 450 // Fixed height for macOS
                         #endif
