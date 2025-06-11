@@ -1991,8 +1991,8 @@ struct DashboardView: View {
             // Responsive carousel height based on percentage of screen height
             #if os(iOS)
             let screenHeight = UIScreen.main.bounds.height
-            let percentageHeight = screenHeight * 0.45 // 45% of screen height for carousel
-            return max(400, min(650, percentageHeight)) // Constrain between reasonable bounds
+            let percentageHeight = screenHeight * 0.30 // 30% of screen height for carousel
+            return max(350, min(500, percentageHeight)) // Constrain between reasonable bounds
             #else
             return responsiveSize(base: 550, min: 400, max: 650) // macOS default
             #endif
