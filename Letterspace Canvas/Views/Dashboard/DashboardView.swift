@@ -752,9 +752,19 @@ struct DashboardView: View {
                         iPadSectionCarousel
                         .padding(.horizontal, 20)
                         
-                    // All Documents section - centered with proper margins for corner visibility
+                    // All Documents section - with responsive spacing and height for different iPad sizes
                         allDocumentsSectionView
-                        .padding(.top, 20)
+                        .padding(.top, {
+                            // Responsive spacing based on iPad screen height
+                            let screenHeight = geometry.size.height
+                            if screenHeight > 1200 { // 13" iPad Pro
+                                return 40
+                            } else if screenHeight > 1000 { // 11" iPad
+                                return 25
+                            } else { // iPad Mini
+                                return 15
+                            }
+                        }())
                         .padding(.horizontal, 20) // Proper padding on iPad to show corner radius
                         .padding(.leading, {
                                     #if os(macOS)
@@ -1724,7 +1734,21 @@ struct DashboardView: View {
             maxWidth: isIPad ? 1200 : 1600
         ) // Fixed width constraint on iPad to ensure corners are visible, original width for other platforms
         .frame(height: isIPad ? nil : 400)
-        .frame(maxHeight: isIPad ? .infinity : 400) // Allow it to fill available space on iPad
+        .frame(maxHeight: isIPad ? {
+            // Create responsive max height for different iPad screen sizes
+            #if os(iOS)
+            let screenHeight = UIScreen.main.bounds.height
+            if screenHeight > 1200 { // 13" iPad Pro
+                return 500 // More space available
+            } else if screenHeight > 1000 { // 11" iPad
+                return 400 // Medium space
+            } else { // iPad Mini
+                return 320 // Less space available, prevent overlap
+            }
+            #else
+            return 400
+            #endif
+        }() : 400) // Responsive max height for iPad sizes to prevent overlap
         .blur(radius: isSchedulerExpanded || isPinnedExpanded || isWIPExpanded ? 3 : 0)
         .opacity(isSchedulerExpanded || isPinnedExpanded || isWIPExpanded ? 0.7 : 1.0)
         .onChange(of: selectedAllDocuments) { newSelection in
@@ -1960,7 +1984,21 @@ struct DashboardView: View {
             // Only apply carousel gesture when not in reorder mode
             .gesture(reorderMode ? nil : carouselDragGesture(cardWidth: cardWidth, cardSpacing: cardSpacing))
         }
-        .frame(height: responsiveSize(base: 550, min: 400, max: 650))
+        .frame(height: {
+            // Responsive carousel height based on iPad screen size
+            #if os(iOS)
+            let screenHeight = UIScreen.main.bounds.height
+            if screenHeight > 1200 { // 13" iPad Pro
+                return responsiveSize(base: 580, min: 450, max: 650) // Taller on large screen
+            } else if screenHeight > 1000 { // 11" iPad
+                return responsiveSize(base: 520, min: 400, max: 580) // Medium height
+            } else { // iPad Mini
+                return responsiveSize(base: 480, min: 350, max: 520) // Shorter on small screen
+            }
+            #else
+            return responsiveSize(base: 550, min: 400, max: 650) // macOS default
+            #endif
+        }())
     }
     
     // Calculate effective index during drag (where cards will end up)
