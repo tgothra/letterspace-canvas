@@ -118,7 +118,7 @@ internal struct SermonCalendar: View {
     var body: some View {
         // Remove the outer ZStack for modal presentation
         // The main view is now just the VStack
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: isCarouselMode ? 6 : 0) {  // Match spacing with other carousel sections
             // Header with title only (year picker moved to month row)
             HStack(spacing: 8) {
                 Image(systemName: "calendar.badge.plus")
@@ -166,8 +166,8 @@ internal struct SermonCalendar: View {
                 }
             }
             .padding(.horizontal, isCarouselMode ? carouselHeaderPadding : 12)
-            .padding(.top, isCarouselMode ? 12 : 20)
-            .padding(.bottom, isCarouselMode ? 8 : 16)
+            .padding(.top, isCarouselMode ? 20 : 20)  // Use consistent top padding for carousel alignment
+            .padding(.bottom, isCarouselMode ? 0 : 16)  // Remove bottom padding in carousel mode for consistent alignment
             
             Divider()
                 .padding(.horizontal, 12)

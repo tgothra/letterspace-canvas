@@ -322,34 +322,39 @@ struct DashboardView: View {
     
     // Extracted computed property for the dashboard header (iPad version)
     private var iPadDashboardHeaderView: some View {
-        GeometryReader { geometry in
-            HStack {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Dashboard")
-                        .font(.system(size: {
-                            // Responsive dashboard title size
-                            let screenWidth = geometry.size.width
-                            return screenWidth * 0.022 // 2.2% of screen width
-                        }(), weight: .bold))
-                        .foregroundStyle(theme.primary.opacity(0.7))
-                        .padding(.bottom, 8)
-                    
-                    Text(getTimeBasedGreeting())
-                        .font(.custom("InterTight-Regular", size: {
-                            // Responsive greeting size based on screen width
-                            let screenWidth = geometry.size.width
-                            let calculatedSize = screenWidth * 0.065 // 6.5% of screen width
-                            return max(45, min(85, calculatedSize)) // Constrain between 45-85pt
-                        }()))
-                        .tracking(0.5)
-                        .foregroundStyle(theme.primary)
-                        .lineLimit(2)
-                        .multilineTextAlignment(.leading)
-                }
-                Spacer()
+        HStack {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Dashboard")
+                    .font(.system(size: {
+                        // Responsive dashboard title size using screen bounds
+                        #if os(iOS)
+                        let screenWidth = UIScreen.main.bounds.width
+                        return screenWidth * 0.022 // 2.2% of screen width
+                        #else
+                        return 18
+                        #endif
+                    }(), weight: .bold))
+                    .foregroundStyle(theme.primary.opacity(0.7))
+                    .padding(.bottom, 2)
+                
+                Text(getTimeBasedGreeting())
+                    .font(.custom("InterTight-Regular", size: {
+                        // Responsive greeting size using screen bounds
+                        #if os(iOS)
+                        let screenWidth = UIScreen.main.bounds.width
+                        let calculatedSize = screenWidth * 0.065 // 6.5% of screen width
+                        return max(45, min(85, calculatedSize)) // Constrain between 45-85pt
+                        #else
+                        return 52
+                        #endif
+                    }()))
+                    .tracking(0.5)
+                    .foregroundStyle(theme.primary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
             }
+            Spacer()
         }
-        .padding(.top, -20)
         .padding(.horizontal, 8)
         // Apply blur effect when DocumentDetailsCard or calendar modal is shown
         .blur(radius: showDetailsCard || calendarModalData != nil ? 3 : 0)
@@ -754,29 +759,38 @@ struct DashboardView: View {
             if isPortrait && isIPad {
                 // iPad Portrait: Special layout that respects navigation
                     VStack(alignment: .leading, spacing: 0) {
-                    // Header with fixed positioning for navigation consistency
+                    // Header with responsive positioning for navigation
                     iPadDashboardHeaderView
                     .padding(.horizontal, 20)
-                        .padding(.top, 60) // Fixed 60pt for consistent header positioning across all iPads
+                        .padding(.top, {
+                            // Responsive header positioning based on percentage of screen height
+                            let screenHeight = geometry.size.height
+                            return screenHeight * 0.10 // Increased from 9% to 10% to bring header down a little more
+                        }())
                         
                         // iPad Carousel for sections
                         iPadSectionCarousel
                         .padding(.horizontal, 20)
+                        .padding(.top, {
+                            // Position carousel higher up on screen
+                            let screenHeight = geometry.size.height
+                            return screenHeight * 0.05 // Position at 5% from top
+                        }())
                         
                     // All Documents section - with responsive spacing and height for different iPad sizes
                         allDocumentsSectionView
-                        .padding(.top, 8) // Fixed 8pt for minimal, consistent spacing between carousel and All Documents
+                        .padding(.top, 40) // Add space between carousel and All Documents
                         .padding(.horizontal, 20) // Proper padding on iPad to show corner radius
                         .padding(.leading, {
                                     #if os(macOS)
                                     return 24 // Fixed alignment with carousel sections on macOS
                                     #else
-                                    return shouldAddNavigationPadding ? responsiveSize(base: 180, min: 120, max: 240) : responsiveSize(base: 36, min: 20, max: 50)
+                                    return shouldAddNavigationPadding ? responsiveSize(base: 160, min: 100, max: 220) : responsiveSize(base: 16, min: 0, max: 30)
                                     #endif
-                                }()) // Platform-specific alignment
+                                }()) // Platform-specific alignment - reduced to extend width to the left
                         .animation(.spring(response: 0.6, dampingFraction: 0.75), value: showFloatingSidebar)
                         
-                    Spacer(minLength: 0)
+                    // Remove Spacer to let All Documents fill remaining space
                     }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -824,7 +838,9 @@ struct DashboardView: View {
                                 #if os(macOS)
                                 return 290 // Reduced by 10 points to bring sections closer to All Documents
                                 #else
-                                return 260 // Original spacing for iOS
+                                // Responsive spacing for iOS/iPad - eliminating spacer for iPad
+                                let screenHeight = UIScreen.main.bounds.height
+                                return screenHeight * 0.01 // Minimal spacing to eliminate gap
                                 #endif
                             }()) // Platform-specific spacing
                             allDocumentsSectionView
@@ -841,7 +857,13 @@ struct DashboardView: View {
                         // Top containers (top layer)
                         VStack(spacing: 0) {
                             topContainers
-                                .padding(.top, 30) // Increased positive padding to create more space below greeting
+                                .padding(.top, {
+                                    #if os(iOS)
+                                    return -10  // Negative padding to bring carousel much closer to greeting
+                                    #else
+                                    return 30  // Keep original spacing on macOS
+                                    #endif
+                                }())
                             Spacer()
                         }
                     }
@@ -1720,7 +1742,6 @@ struct DashboardView: View {
                 .frame(maxHeight: isIPad ? .infinity : 435) // Allow it to fill available space on iPad
             }
             .padding(.horizontal, isIPad ? 20 : 16) // Add breathing room on the sides
-            .padding(.bottom, isIPad ? 20 : 16) // Add breathing room at the bottom
             #endif
         }
         .glassmorphismBackground(cornerRadius: 12)
@@ -1731,19 +1752,12 @@ struct DashboardView: View {
             x: 0,
             y: 1
         )
+
         .frame(
             maxWidth: isIPad ? 1200 : 1600
         ) // Fixed width constraint on iPad to ensure corners are visible, original width for other platforms
         .frame(height: isIPad ? nil : 400)
-        .frame(maxHeight: isIPad ? {
-            // Create responsive max height based on percentage of screen height
-            #if os(iOS)
-            let screenHeight = UIScreen.main.bounds.height
-            return screenHeight * 0.35 // 35% of screen height for content area
-            #else
-            return 400
-            #endif
-        }() : 400) // Responsive max height for iPad sizes to prevent overlap
+        .frame(maxHeight: isIPad ? .infinity : 400) // Allow All Documents to fill remaining space on iPad
         .blur(radius: isSchedulerExpanded || isPinnedExpanded || isWIPExpanded ? 3 : 0)
         .opacity(isSchedulerExpanded || isPinnedExpanded || isWIPExpanded ? 0.7 : 1.0)
         .onChange(of: selectedAllDocuments) { newSelection in
@@ -1949,8 +1963,15 @@ struct DashboardView: View {
     // iPad Carousel Component
     private var iPadSectionCarousel: some View {
         GeometryReader { geometry in
-            let cardWidth = geometry.size.width * 0.6
-            let cardSpacing: CGFloat = 40
+            let screenWidth = geometry.size.width
+            let allDocumentsLeftPadding: CGFloat = shouldAddNavigationPadding ? 
+                responsiveSize(base: 160, min: 100, max: 220) : 
+                responsiveSize(base: 16, min: 0, max: 30)
+            let allDocumentsLeftEdge = allDocumentsLeftPadding + 20
+            let cardWidth: CGFloat = shouldAddNavigationPadding ? 
+                (screenWidth - allDocumentsLeftEdge) * 0.8 : 
+                screenWidth * 0.75
+            let cardSpacing: CGFloat = 60
             let totalWidth = geometry.size.width
             let shadowPadding: CGFloat = 40
             
@@ -1980,20 +2001,16 @@ struct DashboardView: View {
             .gesture(reorderMode ? nil : carouselDragGesture(cardWidth: cardWidth, cardSpacing: cardSpacing))
         }
         .frame(height: {
-            // Consistent carousel height based on iPad screen sizes
+            // Responsive carousel height based on percentage of screen height
             #if os(iOS)
             let screenHeight = UIScreen.main.bounds.height
-            if screenHeight > 1200 { // 13" iPad Pro
-                return 500 // Larger carousel for bigger screen
-            } else if screenHeight > 1000 { // 11" iPad 
-                return 450 // Medium carousel
-            } else { // iPad Mini
-                return 400 // Smaller carousel for smaller screen
-            }
+            return screenHeight * 0.30 // Match exactly the card height (30%)
             #else
             return responsiveSize(base: 550, min: 400, max: 650) // macOS default
             #endif
         }())
+        .animation(.spring(response: 0.6, dampingFraction: 0.75), value: showFloatingSidebar)
+
     }
     
     // Calculate effective index during drag (where cards will end up)
@@ -2041,30 +2058,58 @@ struct DashboardView: View {
             
             if index == draggedCardIndex {
                 // Dragged card follows finger with constraints
-                let basePosition = startX + CGFloat(index) * (reorderCardWidth + reorderSpacing) + reorderCardWidth / 2
-                let constrainedX = max(startX + reorderCardWidth / 2, 
-                                     min(startX + totalCardsWidth - reorderCardWidth / 2, 
+                let basePosition = startX + CGFloat(index) * (reorderCardWidth + reorderSpacing)
+                let constrainedX = max(startX, 
+                                     min(startX + totalCardsWidth - reorderCardWidth, 
                                          basePosition + draggedCardOffset.width))
+                #if os(iOS)
+                let screenHeight = UIScreen.main.bounds.height
+                #else
+                let screenHeight: CGFloat = 800 // Default for macOS
+                #endif
                 return CGPoint(
                     x: constrainedX,
-                    y: 280 + draggedCardOffset.height * 0.2 // Limit vertical movement
+                    y: (screenHeight * 0.30) / 2 + draggedCardOffset.height * 0.2 // Position at half the card height
                 )
             } else {
                 // Other cards slide to their effective positions smoothly
                 let effectiveIndex = effectiveCardIndex(for: index)
-                let xPosition = startX + CGFloat(effectiveIndex) * (reorderCardWidth + reorderSpacing) + reorderCardWidth / 2
+                let xPosition = startX + CGFloat(effectiveIndex) * (reorderCardWidth + reorderSpacing)
+                #if os(iOS)
+                let screenHeight = UIScreen.main.bounds.height
+                #else
+                let screenHeight: CGFloat = 800 // Default for macOS
+                #endif
                 return CGPoint(
                     x: xPosition,
-                    y: 280
+                    y: (screenHeight * 0.30) / 2 // Position at half the card height
                 )
             }
         } else {
-            // Normal carousel mode - only show center card prominently
+            // Normal carousel mode - different positioning based on navigation state
             let offsetFromCenter = CGFloat(index - selectedCarouselIndex)
             let xOffset = offsetFromCenter * (cardWidth + cardSpacing)
+            
+            let centerX: CGFloat
+            if shouldAddNavigationPadding {
+                // Navigation visible: align left edge of centered card with All Documents
+                let allDocumentsLeftPadding: CGFloat = responsiveSize(base: 160, min: 100, max: 220)
+                let allDocumentsLeftEdge = allDocumentsLeftPadding + 20 // Add the horizontal padding from All Documents
+                // Account for the carousel container's shadowPadding (40pt) that shifts everything right
+                let centeredCardLeftEdge = allDocumentsLeftEdge - shadowPadding
+                centerX = centeredCardLeftEdge + (cardWidth / 2) + xOffset + dragOffset + 12 // Move 12pt to the right
+            } else {
+                // Navigation hidden: center the cards in the available space
+                centerX = totalWidth / 2 + xOffset + dragOffset - 30 // Move 30pt to the left when centered
+            }
+            #if os(iOS)
+            let screenHeight = UIScreen.main.bounds.height
+            #else
+            let screenHeight: CGFloat = 800 // Default for macOS
+            #endif
             return CGPoint(
-                x: (totalWidth - shadowPadding * 2) / 2 + xOffset + shadowPadding - 60 + dragOffset,
-                y: 280
+                x: centerX,
+                y: (screenHeight * 0.30) / 2 // Position at half the card height
             )
         }
     }
@@ -2074,47 +2119,38 @@ struct DashboardView: View {
     private func carouselCard(for index: Int, cardWidth: CGFloat, cardSpacing: CGFloat, totalWidth: CGFloat, shadowPadding: CGFloat) -> some View {
         let isCenter = index == selectedCarouselIndex
         let isDragged = index == draggedCardIndex
+        // Make the focused card wider for better centering
+        let adjustedCardWidth = isCenter ? cardWidth * 1.1 : cardWidth // 10% wider when focused
         // In reorder mode, make cards much smaller so all are visible
         let cardScale: CGFloat = reorderMode ? (isDragged ? 0.65 : 0.6) : 1.0 // 60% size for overview, 65% for dragged
         let cardOpacity: Double = reorderMode ? (isDragged ? 1.0 : 0.8) : (isCenter ? 1.0 : 0.8)
+        let position = cardPosition(for: index, cardWidth: cardWidth, cardSpacing: cardSpacing, totalWidth: totalWidth, shadowPadding: shadowPadding)
         
         ZStack(alignment: .topTrailing) {
             // Main card content
             carouselSections[index].view
-                .frame(width: cardWidth, height: {
-                    // Match the consistent card height
+                .frame(width: adjustedCardWidth, height: {
+                    // Responsive card height based on screen height - reduced to be less tall
                     #if os(iOS)
                     let screenHeight = UIScreen.main.bounds.height
-                    if screenHeight > 1200 { // 13" iPad Pro
-                        return 400 // Match card height
-                    } else if screenHeight > 1000 { // 11" iPad 
-                        return 360 // Match card height
-                    } else { // iPad Mini
-                        return 320 // Match card height
-                    }
+                    return screenHeight * 0.30 // Reduced from 36% to 30% of screen height for shorter cards
                     #else
-                    return 450 // Fixed height for macOS
+                    return 380 // Reduced from 450 to 380 for macOS
                     #endif
-                }())
-                .padding(.top, 0)
+                }(), alignment: .top)  // Force top alignment for consistent header positioning
+                .clipped()  // Clip content that overflows the frame
             
             // Reorder mode overlay
             if reorderMode && !isDragged {
                 RoundedRectangle(cornerRadius: 16)
                     .fill(Color.black.opacity(0.15))
-                    .frame(width: cardWidth, height: {
-                        // Match the consistent card height
+                    .frame(width: adjustedCardWidth, height: {
+                        // Match the reduced responsive card height
                         #if os(iOS)
                         let screenHeight = UIScreen.main.bounds.height
-                        if screenHeight > 1200 { // 13" iPad Pro
-                            return 400 // Match card height
-                        } else if screenHeight > 1000 { // 11" iPad 
-                            return 360 // Match card height
-                        } else { // iPad Mini
-                            return 320 // Match card height
-                        }
+                        return screenHeight * 0.30 // Match the reduced card height
                         #else
-                        return 450 // Fixed height for macOS
+                        return 380 // Match the reduced macOS height
                         #endif
                     }())
             }
@@ -2122,21 +2158,22 @@ struct DashboardView: View {
             // Reorder handle
             reorderHandle(for: index, isCenter: isCenter)
         }
+        .frame(width: adjustedCardWidth)  // Ensure card maintains its adjusted width
         .background(cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .shadow(color: cardShadowColor, radius: isDragged ? 20 : (reorderMode ? 8 : 12), x: 0, y: isDragged ? 8 : 4)
         .scaleEffect(cardScale) // Apply scale first
         .opacity(cardOpacity) // Then opacity
-        .position(cardPosition(for: index, cardWidth: cardWidth, cardSpacing: cardSpacing, totalWidth: totalWidth, shadowPadding: shadowPadding))
+        .position(x: position.x, y: position.y)  // Use position instead of offset for more precise control
         .zIndex(isDragged ? 1000 : Double(index))
         .onTapGesture {
             if reorderMode {
                 // In reorder mode, tapping a card exits reorder mode
                 print("🔄 Exiting reorder mode via card tap")
-                    withAnimation(.interactiveSpring(response: 0.3, dampingFraction: 0.8, blendDuration: 0)) {
+                withAnimation(.interactiveSpring(response: 0.3, dampingFraction: 0.8, blendDuration: 0)) {
                     reorderMode = false
                     draggedCardIndex = nil
-                        draggedCardOffset = .zero
+                    draggedCardOffset = .zero
                 }
             } else if !isCenter {
                 withAnimation(.interactiveSpring(response: 0.4, dampingFraction: 0.85, blendDuration: 0)) {
@@ -2613,7 +2650,7 @@ class DashboardViewModel: ObservableObject {
 struct CarouselHeaderStyling: ViewModifier {
     private var iconSize: CGFloat {
         #if os(iOS)
-        return UIScreen.main.bounds.width * 0.014
+        return 14 // Fixed size for consistent alignment across iPad sizes
         #else
         return 14 // Fixed size for macOS
         #endif
@@ -2621,7 +2658,7 @@ struct CarouselHeaderStyling: ViewModifier {
     
     private var headerPadding: CGFloat {
         #if os(iOS)
-        return UIScreen.main.bounds.width * 0.011
+        return 12 // Fixed padding for consistent alignment across iPad sizes
         #else
         return 11 // Fixed size for macOS
         #endif
@@ -2632,14 +2669,14 @@ struct CarouselHeaderStyling: ViewModifier {
             .environment(\.carouselHeaderFont, .custom("InterTight-Medium", size: content.responsiveSize(base: 21, min: 18, max: 26)))
             .environment(\.carouselIconSize, {
                 #if os(iOS)
-                return UIScreen.main.bounds.width * 0.014
+                return 14 // Fixed size for consistent alignment across iPad sizes
                 #else
                 return 14 // Fixed size for macOS
                 #endif
             }())
             .environment(\.carouselHeaderPadding, {
                 #if os(iOS)
-                return UIScreen.main.bounds.width * 0.011
+                return 12 // Fixed padding for consistent alignment across iPad sizes
                 #else
                 return 11 // Fixed size for macOS
                 #endif

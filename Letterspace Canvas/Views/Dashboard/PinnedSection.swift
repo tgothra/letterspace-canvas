@@ -76,6 +76,7 @@ struct PinnedSection: View {
                 }
             }
             .padding(.leading, isCarouselMode ? carouselHeaderPadding : 4)
+            .padding(.top, isCarouselMode ? 20 : 0)  // Add consistent top padding for carousel alignment
             
             // Add divider
             Rectangle()

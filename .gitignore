@@ -69,7 +69,7 @@ FixImplementation/
 Sources/
 
 # Swift Package Manager
-.build/
+.build/ 
 
 # macOS
 .DS_Store

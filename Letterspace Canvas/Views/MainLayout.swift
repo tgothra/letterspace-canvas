@@ -2446,7 +2446,7 @@ struct MainLayout: View {
     
     // Dynamic corner radius for navigation - consistent across all iPad sizes
     private var navigationCornerRadius: CGFloat {
-        return responsiveSize(base: shouldUseExpandedNavigation ? 32 : 24, min: 20, max: 36)
+        return responsiveSize(base: shouldUseExpandedNavigation ? 40 : 32, min: 28, max: 44)
     }
     
     // Compact floating navigation for document mode (current implementation)
@@ -2482,9 +2482,9 @@ struct MainLayout: View {
         VStack(alignment: .center, spacing: 0) {
             // Removed header section - no spacers or extra content
             
-            VStack(spacing: shouldUseExpandedNavigation ? 12 : 6) {  // Reduced spacing between sections 
+            VStack(spacing: shouldUseExpandedNavigation ? 4 : 2) {  // Minimal spacing between sections 
                 // Top buttons section
-                VStack(spacing: shouldUseExpandedNavigation ? 10 : 6) {  // Reduced spacing between buttons
+                VStack(spacing: shouldUseExpandedNavigation ? 3 : 2) {  // Minimal spacing between buttons
                     FloatingSidebarButton(
                         icon: "rectangle.3.group",
                         title: "Dashboard",
@@ -2722,7 +2722,7 @@ struct MainLayout: View {
                     .padding(.vertical, 8)  // Match other separators
                 
                 // Bottom buttons section
-                VStack(spacing: shouldUseExpandedNavigation ? 22 : 12) {  // Increased spacing when expanded
+                VStack(spacing: shouldUseExpandedNavigation ? 6 : 4) {  // Minimal spacing when expanded
                     FloatingSidebarButton(
                         icon: isDarkMode ? "sun.max.fill" : "moon.fill",
                         title: "Toggle Dark Mode",
@@ -3130,9 +3130,11 @@ struct MainLayout: View {
                         // Unified floating navigation with responsive size transitions
                         animatedFloatingNavigation
                             .padding(.leading, {
-                                // Responsive left padding based on screen width
+                                // Center between screen edge and All Documents section
                                 let screenWidth = UIScreen.main.bounds.width
-                                return shouldUseExpandedNavigation ? screenWidth * 0.065 : 20 // 6.5% of screen width when expanded
+                                let allDocumentsLeftEdge = screenWidth * 0.065 // Approximate left edge of All Documents (based on padding)
+                                let centerPoint = allDocumentsLeftEdge / 2 // Center between screen edge and All Documents
+                                return shouldUseExpandedNavigation ? centerPoint : 20
                             }())
                             .padding(.top, {
                                 // Responsive top padding based on screen height 
@@ -3552,7 +3554,7 @@ struct MainLayout: View {
     private var dockedSidebarContent: some View {
         VStack(spacing: 0) {
             // Move top buttons down - add more top padding
-            VStack(spacing: 24) {  // Increased spacing from 16 to 24 for more space between top icons
+            VStack(spacing: 16) {  // Reduced spacing from 24 to 16 to fit all icons
                 FloatingSidebarButton(
                     icon: "rectangle.3.group",
                     title: "Dashboard",
@@ -3831,7 +3833,7 @@ struct MainLayout: View {
                 )
             }
             .padding(.horizontal, 8)
-            .padding(.bottom, 120)  // Reduced from 24 to 120 to move buttons up and align dock button with All Documents bottom
+            .padding(.bottom, 60)  // Reduced from 120 to 60 to ensure arrow button is visible
         }
         .frame(width: floatingSidebarWidth)
         .frame(maxHeight: .infinity)
@@ -4022,7 +4024,7 @@ struct FloatingSidebarButton: View {
             }
         } else {
             Image(systemName: icon)
-                .font(.system(size: responsiveSize(base: 26, min: 20, max: 32)))  // Consistent icon size
+                .font(.system(size: responsiveSize(base: 22, min: 18, max: 28)))  // Smaller icon size
         }
     }
     
@@ -4033,8 +4035,8 @@ struct FloatingSidebarButton: View {
             #else
             // Responsive button size based on screen width percentage
             let screenWidth = UIScreen.main.bounds.width
-            let calculatedSize = screenWidth * 0.065 // 6.5% of screen width
-            return max(54, min(84, calculatedSize)) // Constrain between 54-84pt for usability
+            let calculatedSize = screenWidth * 0.055 // 5.5% of screen width (reduced from 6.5%)
+            return max(48, min(72, calculatedSize)) // Constrain between 48-72pt for more compact design
             #endif
         }()
         
