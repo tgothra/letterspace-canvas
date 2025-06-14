@@ -171,7 +171,7 @@ internal struct SermonCalendar: View {
             
             Divider()
                 .padding(.horizontal, 12)
-                .padding(.bottom, 4) // Reduced from 8 to 4
+                .padding(.vertical, isCarouselMode ? 8 : 4) // Increased carousel padding for more space between header and separator
             
             // Month slider with year picker as first item
             VStack(alignment: .leading, spacing: 0) {
@@ -503,12 +503,33 @@ internal struct SermonCalendar: View {
             setTransitioning(false)
             NotificationCenter.default.removeObserver(self)
         }
+        // Add tap gesture to clear selection when tapping on empty space (iPad only)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            #if os(iOS)
+            if UIDevice.current.userInterfaceIdiom == .pad && selectedDocumentId != nil {
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    selectedDocumentId = nil
+                }
+            }
+            #endif
+        }
         .onChange(of: selectedSchedules) { newValue in
             if isEditMode && newValue.isEmpty {
                 withAnimation(.easeInOut(duration: 0.2)) {
                     isEditMode = false
                 }
             }
+        }
+        // Listen for clear selection notifications
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ClearDocumentSelections"))) { _ in
+            #if os(iOS)
+            if UIDevice.current.userInterfaceIdiom == .pad && selectedDocumentId != nil {
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    selectedDocumentId = nil
+                }
+            }
+            #endif
         }
         // Add selection UI as overlay so it doesn't push content up
         .overlay(alignment: .bottom) {

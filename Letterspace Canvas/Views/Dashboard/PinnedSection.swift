@@ -82,7 +82,7 @@ struct PinnedSection: View {
             Rectangle()
                 .fill(.separator)
                 .frame(height: 1)
-                .padding(.vertical, isCarouselMode ? 2 : 4) // Reduced padding for carousel mode
+                .padding(.vertical, isCarouselMode ? 8 : 4) // Increased carousel padding from 2 to 8 for more space
             
             ScrollView(.vertical, showsIndicators: true) {
                 GeometryReader { proxy in
@@ -198,6 +198,17 @@ struct PinnedSection: View {
             }
         }
         #endif
+        // Add tap gesture to clear selection when tapping on empty space (iPad only)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            #if os(iOS)
+            if UIDevice.current.userInterfaceIdiom == .pad && selectedDocumentId != nil {
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    selectedDocumentId = nil
+                }
+            }
+            #endif
+        }
         // Add automatic exit from edit mode when all items are deselected
         .onChange(of: selectedItems) { newValue in
             if isEditMode && newValue.isEmpty {
@@ -205,6 +216,16 @@ struct PinnedSection: View {
                     isEditMode = false
                 }
             }
+        }
+        // Listen for clear selection notifications
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ClearDocumentSelections"))) { _ in
+            #if os(iOS)
+            if UIDevice.current.userInterfaceIdiom == .pad && selectedDocumentId != nil {
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    selectedDocumentId = nil
+                }
+            }
+            #endif
         }
         // Add selection UI as overlay so it doesn't push content up
         .overlay(alignment: .bottom) {

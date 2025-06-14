@@ -2934,9 +2934,6 @@ struct MainLayout: View {
                                     isSearchActive: $isSearchActive,
                                     shouldPauseHover: isSearchActive
                                 )
-                                #if os(iOS)
-                                .padding(.top, UIDevice.current.userInterfaceIdiom == .pad ? UIScreen.main.bounds.height * 0.05 : 0) // Responsive top padding for iPad
-                                #endif
                                 .id(document.id)
                                 .transition(.asymmetric(
                                     insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .center)),

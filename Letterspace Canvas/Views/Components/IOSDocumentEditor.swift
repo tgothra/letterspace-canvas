@@ -25,9 +25,9 @@ struct IOSDocumentEditor: View {
                             .focused($isFocused)
                             .scrollContentBackground(.hidden) // Hide default background
                             .background(Color.clear)
-                            .frame(minHeight: max(400, geometry.size.height))
+                            .frame(minHeight: geometry.size.height) // Fill entire available height
                             .padding(.horizontal, 24)
-                            .padding(.vertical, 16)
+                            .padding(.top, 16) // Only top padding to avoid bottom gap
                             .onChange(of: textContent) { _, newValue in
                                 // Update document content when text changes
                                 updateDocumentContent(newValue)

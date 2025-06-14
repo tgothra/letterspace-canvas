@@ -360,6 +360,27 @@ struct DocumentArea: View {
                 tapAgainPopupOverlay
             }
         } // End of main ZStack
+        // Add card styling for iPad at the container level to fill entire area
+        #if os(iOS)
+        .background(
+            Group {
+                if UIDevice.current.userInterfaceIdiom == .pad {
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(colorScheme == .dark ? Color(.sRGB, white: 0.08) : Color(.sRGB, white: 0.98))
+                } else {
+                    Color.clear
+                }
+            }
+        )
+        .cornerRadius(UIDevice.current.userInterfaceIdiom == .pad ? 16 : 0)
+        .shadow(
+            color: UIDevice.current.userInterfaceIdiom == .pad ? 
+                (colorScheme == .dark ? .black.opacity(0.25) : .black.opacity(0.12)) : .clear,
+            radius: UIDevice.current.userInterfaceIdiom == .pad ? 12 : 0,
+            x: 0,
+            y: UIDevice.current.userInterfaceIdiom == .pad ? 4 : 0
+        )
+        #endif
         .onAppear { handleOnAppear(geo: geo) }
         .onChange(of: document.isHeaderExpanded) { oldValue, newValue in
             handleHeaderExpandedChange(oldValue: oldValue, newValue: newValue)
@@ -415,7 +436,7 @@ struct DocumentArea: View {
             // Document content always appears below the header (no overlapping)
             AnimatedDocumentContainer(document: $document) {
                             documentContentView
-                                .frame(minHeight: geo.size.height - 24)
+                                .frame(minHeight: geo.size.height)
             }
             // Only add padding when a header exists or is enabled
             .padding(.top, (headerImage != nil || isHeaderExpanded) ? 8 : 0)
@@ -423,7 +444,7 @@ struct DocumentArea: View {
                         .frame(width: paperWidth)
             // Remove overall animation on currentOverlap to prevent animating document title
             // when header is toggled (this was causing sliding effect)
-            .padding(.top, (headerImage != nil || isHeaderExpanded) ? 24 : 8)
+            .padding(.top, (headerImage != nil || isHeaderExpanded) ? 24 : 0)
                         .opacity(isDocumentVisible ? 1 : 0)
                         .offset(y: isDocumentVisible ? 0 : 20)
                     }
@@ -1686,9 +1707,16 @@ struct DocumentArea: View {
             }
             .frame(maxWidth: .infinity)
             
-            // Add extra space at bottom to ensure scrollbar is contained
+            // Add extra space at bottom to ensure scrollbar is contained (only on non-iPad)
+            #if os(iOS)
+            if UIDevice.current.userInterfaceIdiom != .pad {
+                Spacer()
+                    .frame(height: 16)
+            }
+            #else
             Spacer()
                 .frame(height: 16)
+            #endif
         }
         .frame(width: paperWidth)
         .clipShape(TopRoundedRectangle(radius: 12))

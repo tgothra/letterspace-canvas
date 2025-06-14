@@ -275,6 +275,16 @@ struct DashboardView: View {
         UserDefaults.standard.synchronize()
     }
     
+    private func clearAllDocumentSelections() {
+        // Clear selections in all carousel sections
+        // Note: Each section manages its own selectedDocumentId state
+        // We need to send a notification to clear all selections
+        NotificationCenter.default.post(
+            name: NSNotification.Name("ClearDocumentSelections"),
+            object: nil
+        )
+    }
+    
     private func getTimeBasedGreeting() -> String {
         let hour = Calendar.current.component(.hour, from: Date())
         let firstName = UserProfileManager.shared.userProfile.firstName.isEmpty ? "Friend" : UserProfileManager.shared.userProfile.firstName
@@ -1976,20 +1986,28 @@ struct DashboardView: View {
             let shadowPadding: CGFloat = 40
             
             ZStack {
-                // Background tap area to exit reorder mode
-                if reorderMode {
-                    Color.clear
-                        .contentShape(Rectangle())
-                        .onTapGesture {
+                // Background tap area to exit reorder mode or clear document selections
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        if reorderMode {
                             print("🔄 Exiting reorder mode via background tap")
                             withAnimation(.interactiveSpring(response: 0.3, dampingFraction: 0.8, blendDuration: 0)) {
                                 reorderMode = false
                                 draggedCardIndex = nil
                                 draggedCardOffset = .zero
                             }
+                        } else {
+                            // Clear any document selections in carousel cards (iPad only)
+                            #if os(iOS)
+                            if UIDevice.current.userInterfaceIdiom == .pad {
+                                // Clear selections in all carousel sections
+                                clearAllDocumentSelections()
+                            }
+                            #endif
                         }
-                        .zIndex(-1) // Behind the cards
-                }
+                    }
+                    .zIndex(-1) // Behind the cards
                 
                 ForEach(0..<carouselSections.count, id: \.self) { index in
                     carouselCard(for: index, cardWidth: cardWidth, cardSpacing: cardSpacing, totalWidth: totalWidth, shadowPadding: shadowPadding)
