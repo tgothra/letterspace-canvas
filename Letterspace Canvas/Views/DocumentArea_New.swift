@@ -113,31 +113,47 @@ struct DocumentArea_New: View {
     }
     
     // MARK: - Header Image Section
+    @ViewBuilder
     private var headerImageSection: some View {
-        Group {
-            if let headerImage = headerImage {
-                // Actual image
-                #if os(macOS)
-                Image(nsImage: headerImage)
-                #elseif os(iOS)
-                Image(uiImage: headerImage)
-                #endif
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: paperWidth, height: calculatedHeaderImageHeight)
-                    .clipped()
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .onAppear {
-                        headerImageHeight = calculatedHeaderImageHeight
+        if let headerImage = headerImage {
+            // Actual image
+            #if os(macOS)
+            Image(nsImage: headerImage)
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+                .frame(width: paperWidth, height: calculatedHeaderImageHeight)
+                .clipped()
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .onAppear {
+                    headerImageHeight = calculatedHeaderImageHeight
+                }
+                .contextMenu {
+                    Button("Change Image") {
+                        isShowingImagePicker = true
                     }
-                    .contextMenu {
-                        Button("Change Image") {
-                            isShowingImagePicker = true
-                        }
-                        Button("Remove Image", role: .destructive) {
-                            removeHeaderImage()
-                        }
+                    Button("Remove Image", role: .destructive) {
+                        removeHeaderImage()
                     }
+                }
+            #elseif os(iOS)
+            Image(uiImage: headerImage)
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+                .frame(width: paperWidth, height: calculatedHeaderImageHeight)
+                .clipped()
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .onAppear {
+                    headerImageHeight = calculatedHeaderImageHeight
+                }
+                .contextMenu {
+                    Button("Change Image") {
+                        isShowingImagePicker = true
+                    }
+                    Button("Remove Image", role: .destructive) {
+                        removeHeaderImage()
+                    }
+                }
+            #endif
             } else {
                 // Placeholder
                 RoundedRectangle(cornerRadius: 12)
@@ -169,21 +185,28 @@ struct DocumentArea_New: View {
     }
     
     // MARK: - Sticky Header
+    @ViewBuilder
     private var stickyHeader: some View {
         ZStack {
             // Blurred background
             if let headerImage = headerImage {
                 #if os(macOS)
                 Image(nsImage: headerImage)
-                #elseif os(iOS)
-                Image(uiImage: headerImage)
-                #endif
                     .resizable()
                     .aspectRatio(contentMode: .fill)
                     .frame(height: collapsedHeaderHeight)
                     .blur(radius: 20)
                     .overlay(Color.black.opacity(0.4))
                     .clipped()
+                #elseif os(iOS)
+                Image(uiImage: headerImage)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(height: collapsedHeaderHeight)
+                    .blur(radius: 20)
+                    .overlay(Color.black.opacity(0.4))
+                    .clipped()
+                #endif
             }
             
             // Content

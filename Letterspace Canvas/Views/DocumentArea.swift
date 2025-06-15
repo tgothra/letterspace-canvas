@@ -8,13 +8,7 @@ import UIKit // For UIImage
 import UniformTypeIdentifiers
 import UserNotifications
 
-// Preference key for tracking scroll offset
-struct ScrollOffsetPreferenceKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
-    }
-}
+
 
 #if os(macOS)
 struct ScrollGestureHandler: NSViewRepresentable {
@@ -287,15 +281,13 @@ struct DocumentArea: View {
     @State private var isInitialAppearance = true // New state for tracking initial load
     @State private var elementsReady = false // New state to track when all elements are ready
     @State private var isScrollingToSearchResult = false // Add missing state variable
+    @State private var showTapAgainPopup: Bool = false
+    @State private var hasShownTapAgainPopup: Bool = false
     
     // New states for scroll-based header behavior
     @State private var scrollOffset: CGFloat = 0
     @State private var headerSticky: Bool = false
     @State private var headerImageHeight: CGFloat = 400
-    
-    // Remove tap-related states
-    // @State private var showTapAgainPopup: Bool = false
-    // @State private var hasShownTapAgainPopup: Bool = false
     
     // Remove unused state variables
     private let sidebarWidth: CGFloat = 220
@@ -2083,23 +2075,31 @@ struct DocumentArea: View {
     }
     
     // New header image view (inline with content)
+    @ViewBuilder
     private var headerImageView: some View {
-        Group {
-            if let headerImage = headerImage {
-                // Actual image
-                #if os(macOS)
-                Image(nsImage: headerImage)
-                #elseif os(iOS)
-                Image(uiImage: headerImage)
-                #endif
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: paperWidth, height: calculatedHeaderImageHeight)
-                    .clipped()
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .onAppear {
-                        headerImageHeight = calculatedHeaderImageHeight
-                    }
+        if let headerImage = headerImage {
+            // Actual image
+            #if os(macOS)
+            Image(nsImage: headerImage)
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+                .frame(width: paperWidth, height: calculatedHeaderImageHeight)
+                .clipped()
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .onAppear {
+                    headerImageHeight = calculatedHeaderImageHeight
+                }
+            #elseif os(iOS)
+            Image(uiImage: headerImage)
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+                .frame(width: paperWidth, height: calculatedHeaderImageHeight)
+                .clipped()
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .onAppear {
+                    headerImageHeight = calculatedHeaderImageHeight
+                }
+            #endif
             } else {
                 // Placeholder
                 RoundedRectangle(cornerRadius: 12)
@@ -2129,21 +2129,28 @@ struct DocumentArea: View {
     }
     
     // Sticky header view (shows when scrolled)
+    @ViewBuilder
     private var stickyHeaderView: some View {
         ZStack {
             // Blurred background
             if let headerImage = headerImage {
                 #if os(macOS)
                 Image(nsImage: headerImage)
-                #elseif os(iOS)
-                Image(uiImage: headerImage)
-                #endif
                     .resizable()
                     .aspectRatio(contentMode: .fill)
                     .frame(height: collapsedHeaderHeight)
                     .blur(radius: 8)
                     .overlay(Color.black.opacity(0.3))
                     .clipped()
+                #elseif os(iOS)
+                Image(uiImage: headerImage)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(height: collapsedHeaderHeight)
+                    .blur(radius: 8)
+                    .overlay(Color.black.opacity(0.3))
+                    .clipped()
+                #endif
             }
             
             // Title overlay
