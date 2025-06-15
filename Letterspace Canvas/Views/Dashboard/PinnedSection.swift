@@ -33,13 +33,17 @@ struct PinnedSection: View {
     }
     
     var body: some View {
-        VStack(alignment: .leading, spacing: isCarouselMode ? 6 : 12) {  // Reduced spacing for carousel mode
+        let spacing = isCarouselMode ? 6.0 : 12.0
+        let iconSize = isCarouselMode ? carouselIconSize : 14.0
+        let headerFont = isCarouselMode ? carouselHeaderFont : Font.custom("InterTight-Medium", size: 16)
+        
+        VStack(alignment: .leading, spacing: spacing) {  // Reduced spacing for carousel mode
             HStack(spacing: 8) {
                 Image(systemName: "pin.fill")
-                    .font(.system(size: isCarouselMode ? carouselIconSize : 14))
+                    .font(.system(size: iconSize))
                     .foregroundStyle(theme.primary)
                 Text("Pinned")
-                    .font(isCarouselMode ? carouselHeaderFont : .custom("InterTight-Medium", size: 16))
+                    .font(headerFont)
                     .foregroundStyle(theme.primary)
 
                 Spacer() // Push button to the right
