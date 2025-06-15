@@ -341,26 +341,26 @@ struct DocumentArea: View {
     
     // Break out main container into a separate method
     private func documentContainer(geo: GeometryProxy) -> some View {
-            ZStack {
+        ZStack {
             // Background with tap gesture
             backgroundView
             
             #if os(macOS)
-            // Scroll gesture handler
-            ScrollGestureHandler { deltaY in handleScroll(deltaY) }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // Scroll gesture handler - removed since we're using ScrollView
+            // ScrollGestureHandler { deltaY in handleScroll(deltaY) }
+            //     .frame(maxWidth: .infinity, maxHeight: .infinity)
             #endif
             
             // Main document content
             documentHStack(geo: geo)
             
-            // Tooltip overlay
-            tooltipOverlay
+            // Tooltip overlay - removed since we don't need tap instructions
+            // tooltipOverlay
             
-            // "Tap again to edit" popup overlay
-            if showTapAgainPopup {
-                tapAgainPopupOverlay
-            }
+            // "Tap again to edit" popup overlay - removed
+            // if showTapAgainPopup {
+            //     tapAgainPopupOverlay
+            // }
         } // End of main ZStack
         // Add card styling for iPad at the container level to fill entire area
         #if os(iOS)
@@ -476,15 +476,17 @@ struct DocumentArea: View {
         HStack(spacing: 12) {
             // Small thumbnail of header image
             if let headerImage = headerImage {
-                #if os(macOS)
-                Image(nsImage: headerImage)
-                #else
-                Image(uiImage: headerImage)
-                #endif
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: 40, height: 40)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                Group {
+                    #if os(macOS)
+                    Image(nsImage: headerImage)
+                    #else
+                    Image(uiImage: headerImage)
+                    #endif
+                }
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+                .frame(width: 40, height: 40)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
             }
             
             // Title and subtitle
@@ -519,82 +521,6 @@ struct DocumentArea: View {
         static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
             value = nextValue()
         }
-    }
-    
-    // Tooltip overlay
-    private var tooltipOverlay: some View {
-                VStack {
-            if showTooltip && headerImage != nil && isImageExpanded && !hasShownTooltip {
-                            Text("Tap image to hide")
-                    .font(.system(size: 14, weight: .medium))
-                                .foregroundColor(.white)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                                .background(
-                                    Capsule()
-                            .fill(Color.black.opacity(0.7))
-                            .shadow(color: Color.black.opacity(0.3), radius: 4, x: 0, y: 2)
-                                )
-                    .transition(.opacity)
-            }
-            Spacer()
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .padding(.top, (headerImage != nil || isHeaderExpanded) ? 35 : 20)
-    }
-    
-    // "Tap again to edit" popup overlay
-    private var tapAgainPopupOverlay: some View {
-        ZStack {
-            // Fixed position container that appears in the same place regardless of header state
-            VStack {
-                Spacer()
-                    .frame(height: 350) // Fixed distance from top of document
-                
-                tapAgainPopupContent
-                
-                Spacer()
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .clipped(antialiased: false)
-        .allowsHitTesting(false)
-        .transition(.opacity)
-        .animation(.easeInOut(duration: 0.3))
-        .zIndex(9999)
-    }
-    
-    // Content of the "Tap again to edit" popup
-    private var tapAgainPopupContent: some View {
-        VStack(spacing: 10) { // Reduced spacing from 12 to 10
-            // Line 1: Animated swipe icon with "Swipe to read" text
-            HStack(spacing: 6) { // Reduced spacing from 8 to 6
-                // Animated swipe icon
-                SwipeAnimationView()
-                
-                Text("Swipe to read")
-                    .font(.system(size: 14, weight: .medium)) // Reduced from 15 to 14
-                                .foregroundColor(.white)
-            }
-            
-            // Line 2: "Tap again to edit" text with animated tap icon
-            HStack(spacing: 6) { // Reduced spacing from 8 to 6
-                // Animated tap icon
-                TapAnimationView()
-                
-                Text("Tap again to edit")
-                    .font(.system(size: 14, weight: .medium)) // Reduced from 15 to 14
-                    .foregroundColor(.white)
-            }
-        }
-        .padding(.horizontal, 16) // Reduced from 20 to 16
-        .padding(.vertical, 12) // Reduced from 14 to 12
-                                .background(
-            RoundedRectangle(cornerRadius: 10) // Reduced from 12 to 10
-                .fill(Color.black.opacity(0.8))
-                .shadow(color: Color.black.opacity(0.4), radius: 5, x: 0, y: 3)
-        )
-        .scaleEffect(1.0) // Removed the scale effect entirely (was 1.1)
     }
     
     // Handle image import result
@@ -1033,23 +959,18 @@ struct DocumentArea: View {
     
     // Handle onDisappear event
     private func handleOnDisappear() {
-                // Clear text selection and toolbar when navigating away
-                #if os(macOS)
-                if let window = NSApp.keyWindow {
-                    // Clear any text selection
-                    if let textView = window.firstResponder as? NSTextView {
-                        textView.selectedRange = NSRange(location: 0, length: 0)
-                    }
-                    // Clear focus to hide toolbar
-                    window.makeFirstResponder(nil)
-                }
-                #endif
-                // Reset editor focused state
-                isEditorFocused = false
+        // Clear any focus when document is closed
+        #if os(macOS)
+        if let window = NSApp.keyWindow {
+            window.makeFirstResponder(nil)
+        }
+        #endif
+        // Reset editor focused state
+        isEditorFocused = false
         
-        // Reset popup state
-        hasShownTapAgainPopup = false
-        showTapAgainPopup = false
+        // Reset popup state - removed since we don't have popups anymore
+        // hasShownTapAgainPopup = false
+        // showTapAgainPopup = false
         
         // CRITICAL FIX: If header is expanded but no actual image exists, reset to text-only
         if isHeaderExpanded && !hasActualHeaderImage() {
@@ -1218,8 +1139,8 @@ struct DocumentArea: View {
             }
             
             // Reset popup state for new document
-            hasShownTapAgainPopup = false
-            showTapAgainPopup = false
+            // hasShownTapAgainPopup = false
+            // showTapAgainPopup = false
         }
     }
     
