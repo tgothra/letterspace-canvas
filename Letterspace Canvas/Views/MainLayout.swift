@@ -2918,7 +2918,7 @@ struct MainLayout: View {
             // .frame(maxWidth: .infinity) // Already applied by parent ZStack
             // .frame(maxHeight: dashboardGeo.size.height) // Use available height
                             } else {
-                                DocumentArea(
+                                DocumentArea_New(
                                     document: $document,
                                     isHeaderExpanded: $isHeaderExpanded,
                                     isSubtitleVisible: Binding(

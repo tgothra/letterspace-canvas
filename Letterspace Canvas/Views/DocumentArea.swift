@@ -8,6 +8,14 @@ import UIKit // For UIImage
 import UniformTypeIdentifiers
 import UserNotifications
 
+// Preference key for tracking scroll offset
+struct ScrollOffsetPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
 #if os(macOS)
 struct ScrollGestureHandler: NSViewRepresentable {
     var onScroll: (CGFloat) -> Void
@@ -279,8 +287,15 @@ struct DocumentArea: View {
     @State private var isInitialAppearance = true // New state for tracking initial load
     @State private var elementsReady = false // New state to track when all elements are ready
     @State private var isScrollingToSearchResult = false // Add missing state variable
-    @State private var showTapAgainPopup: Bool = false
-    @State private var hasShownTapAgainPopup: Bool = false
+    
+    // New states for scroll-based header behavior
+    @State private var scrollOffset: CGFloat = 0
+    @State private var headerSticky: Bool = false
+    @State private var headerImageHeight: CGFloat = 400
+    
+    // Remove tap-related states
+    // @State private var showTapAgainPopup: Bool = false
+    // @State private var hasShownTapAgainPopup: Bool = false
     
     // Remove unused state variables
     private let sidebarWidth: CGFloat = 220
@@ -299,7 +314,7 @@ struct DocumentArea: View {
         800  // Fixed width 
     }
     
-    private var headerImageHeight: CGFloat {
+    private var calculatedHeaderImageHeight: CGFloat {
         if let headerImage = headerImage {
             let size = headerImage.size
             let aspectRatio = size.height / size.width
@@ -323,10 +338,24 @@ struct DocumentArea: View {
         return isEditorFocused ? 16 : 16
     }
     
+    // Calculate if header should be sticky based on scroll position
+    private var shouldShowStickyHeader: Bool {
+        // Header becomes sticky when its bottom edge reaches the top of viewport
+        return scrollOffset > headerImageHeight - collapsedHeaderHeight
+    }
+    
     var body: some View {
         GeometryReader { geo in
-            // Main container for all document UI
-            documentContainer(geo: geo)
+            ZStack(alignment: .top) {
+                // Main scrollable document content
+                documentScrollView(geo: geo)
+                
+                // Sticky header overlay (only shows when scrolled past header)
+                if shouldShowStickyHeader && headerImage != nil && isHeaderExpanded {
+                    stickyHeaderView
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
+            }
         }
         .fileImporter(
             isPresented: $isShowingImagePicker,
@@ -337,30 +366,37 @@ struct DocumentArea: View {
         }
     }
     
-    // Break out main container into a separate method
-    private func documentContainer(geo: GeometryProxy) -> some View {
-            ZStack {
-            // Background with tap gesture
-            backgroundView
-            
-            #if os(macOS)
-            // Scroll gesture handler
-            ScrollGestureHandler { deltaY in handleScroll(deltaY) }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            #endif
-            
-            // Main document content
-            documentHStack(geo: geo)
-            
-            // Tooltip overlay
-            tooltipOverlay
-            
-            // "Tap again to edit" popup overlay
-            if showTapAgainPopup {
-                tapAgainPopupOverlay
+    // New scrollable document view
+    private func documentScrollView(geo: GeometryProxy) -> some View {
+        ScrollViewReader { scrollProxy in
+            ScrollView(.vertical, showsIndicators: true) {
+                VStack(spacing: 0) {
+                    // Track scroll offset
+                    GeometryReader { scrollGeo in
+                        Color.clear
+                            .preference(key: ScrollOffsetPreferenceKey.self, 
+                                      value: -scrollGeo.frame(in: .named("scroll")).minY)
+                    }
+                    .frame(height: 0)
+                    
+                    // Header image (part of scrollable content)
+                    if isHeaderExpanded && (headerImage != nil || isHeaderExpanded) {
+                        headerImageView
+                            .id("header")
+                    }
+                    
+                    // Document content
+                    documentContentStack(geo: geo)
+                }
             }
-        } // End of main ZStack
-        // Add card styling for iPad at the container level to fill entire area
+            .coordinateSpace(name: "scroll")
+            .onPreferenceChange(ScrollOffsetPreferenceKey.self) { value in
+                withAnimation(.interactiveSpring(response: 0.3, dampingFraction: 0.8)) {
+                    scrollOffset = value
+                }
+            }
+        }
+        // Add card styling for iPad at the container level
         #if os(iOS)
         .background(
             Group {
@@ -381,17 +417,40 @@ struct DocumentArea: View {
             y: UIDevice.current.userInterfaceIdiom == .pad ? 4 : 0
         )
         #endif
+    }
+    
+    // Document content stack (title, subtitle, editor)
+    private func documentContentStack(geo: GeometryProxy) -> some View {
+        VStack(spacing: 0) {
+            // Background
+            backgroundView
+            
+            // Title section
+            if isTitleVisible {
+                documentTitleView
+            }
+            
+            // Main document content
+            documentHStack(geo: geo)
+                .padding(.top, 8)
+        }
+        .frame(width: paperWidth)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(colorScheme == .dark ? Color(.sRGB, white: 0.12) : .white)
+                .shadow(
+                    color: Color.black.opacity(colorScheme == .dark ? 0.5 : 0.04),
+                    radius: 8,
+                    x: 0,
+                    y: 2
+                )
+        )
         .onAppear { handleOnAppear(geo: geo) }
         .onChange(of: document.isHeaderExpanded) { oldValue, newValue in
             handleHeaderExpandedChange(oldValue: oldValue, newValue: newValue)
         }
         .onChange(of: isHeaderExpanded) { _, newValue in
             handleIsHeaderExpandedChange(newValue: newValue)
-        }
-        .onDisappear { handleOnDisappear() }
-        .onAppear { setupEventObservers() }
-        .onChange(of: document.id) { oldValue, newValue in
-            handleDocumentIdChange(oldValue: oldValue, newValue: newValue) 
         }
     }
     
@@ -423,31 +482,19 @@ struct DocumentArea: View {
         .frame(maxWidth: .infinity) // Ensure HStack takes max width
     }
     
-    // Document vertical content stack
+    // Document vertical content stack - simplified without header
     private func documentVStack(geo: GeometryProxy) -> some View {
-                        VStack(spacing: 0) {
-            // Header section is ONLY rendered when there's actually a header image
-            // or when header is explicitly enabled (even without an image)
-            if viewMode != .focus && !isDistractionFreeMode && (headerImage != nil || isHeaderExpanded) {
-                                headerView
-                    .transition(createHeaderTransition())
-            }
-            
-            // Document content always appears below the header (no overlapping)
+        VStack(spacing: 0) {
+            // Document content
             AnimatedDocumentContainer(document: $document) {
-                            documentContentView
-                                .frame(minHeight: geo.size.height)
+                documentContentView
+                    .frame(minHeight: geo.size.height)
             }
-            // Only add padding when a header exists or is enabled
-            .padding(.top, (headerImage != nil || isHeaderExpanded) ? 8 : 0)
-                        }
-                        .frame(width: paperWidth)
-            // Remove overall animation on currentOverlap to prevent animating document title
-            // when header is toggled (this was causing sliding effect)
-            .padding(.top, (headerImage != nil || isHeaderExpanded) ? 24 : 0)
-                        .opacity(isDocumentVisible ? 1 : 0)
-                        .offset(y: isDocumentVisible ? 0 : 20)
-                    }
+        }
+        .frame(width: paperWidth)
+        .opacity(isDocumentVisible ? 1 : 0)
+        .offset(y: isDocumentVisible ? 0 : 20)
+    }
                 
     // Tooltip overlay
     private var tooltipOverlay: some View {
@@ -2033,6 +2080,97 @@ struct DocumentArea: View {
         // Check if all content arrays are empty or only have default elements
         return document.elements.isEmpty || 
                (document.elements.count <= 1 && document.elements.first?.type == .textBlock && document.elements.first?.content.isEmpty == true)
+    }
+    
+    // New header image view (inline with content)
+    private var headerImageView: some View {
+        Group {
+            if let headerImage = headerImage {
+                // Actual image
+                #if os(macOS)
+                Image(nsImage: headerImage)
+                #elseif os(iOS)
+                Image(uiImage: headerImage)
+                #endif
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: paperWidth, height: calculatedHeaderImageHeight)
+                    .clipped()
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .onAppear {
+                        headerImageHeight = calculatedHeaderImageHeight
+                    }
+            } else {
+                // Placeholder
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(colorScheme == .dark ? 
+                        Color(.sRGB, red: 0.15, green: 0.15, blue: 0.15) : 
+                        Color(.sRGB, red: 0.95, green: 0.95, blue: 0.95))
+                    .frame(width: paperWidth, height: 300)
+                    .overlay(
+                        VStack {
+                            Image(systemName: "photo")
+                                .font(.system(size: 48))
+                                .foregroundColor(colorScheme == .dark ? .white.opacity(0.2) : .black.opacity(0.2))
+                                .padding(.bottom, 8)
+                            
+                            Text("Add Header Image")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(colorScheme == .dark ? .white.opacity(0.2) : .black.opacity(0.2))
+                        }
+                    )
+                    .onTapGesture {
+                        isShowingImagePicker = true
+                    }
+            }
+        }
+        .padding(.horizontal, 24)
+        .padding(.vertical, 16)
+    }
+    
+    // Sticky header view (shows when scrolled)
+    private var stickyHeaderView: some View {
+        ZStack {
+            // Blurred background
+            if let headerImage = headerImage {
+                #if os(macOS)
+                Image(nsImage: headerImage)
+                #elseif os(iOS)
+                Image(uiImage: headerImage)
+                #endif
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(height: collapsedHeaderHeight)
+                    .blur(radius: 8)
+                    .overlay(Color.black.opacity(0.3))
+                    .clipped()
+            }
+            
+            // Title overlay
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(document.title.isEmpty ? "Untitled" : document.title)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                    
+                    if !document.subtitle.isEmpty {
+                        Text(document.subtitle)
+                            .font(.system(size: 12, weight: .regular))
+                            .foregroundColor(.white.opacity(0.8))
+                            .lineLimit(1)
+                    }
+                }
+                Spacer()
+            }
+            .padding(.horizontal, 20)
+        }
+        .frame(height: collapsedHeaderHeight)
+        .frame(maxWidth: .infinity)
+        .background(
+            Rectangle()
+                .fill(.ultraThinMaterial)
+        )
     }
 }
 
