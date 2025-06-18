@@ -279,6 +279,7 @@ struct DocumentArea: View {
     @State private var isInitialAppearance = true // New state for tracking initial load
     @State private var elementsReady = false // New state to track when all elements are ready
     @State private var isScrollingToSearchResult = false // Add missing state variable
+    @State private var isSidebarVisible = false // State for sidebar visibility toggle
     
     // Remove unused state variables
     private let sidebarWidth: CGFloat = 220
@@ -289,6 +290,13 @@ struct DocumentArea: View {
     // Add new state for scroll-based header behavior
     @State private var scrollOffset: CGFloat = 0
     @State private var headerSticky: Bool = false
+    
+    // New states for floating header
+    @State private var lastScrollOffset: CGFloat = 0
+    @State private var showFloatingHeader: Bool = false // Always start hidden
+    @State private var scrollThreshold: CGFloat = 200 // Show after scrolling past this point
+    
+    @StateObject private var keyboard = KeyboardObserver()
     
     private var currentOverlap: CGFloat {
         if viewMode == .minimal || !isHeaderExpanded {
@@ -332,16 +340,23 @@ struct DocumentArea: View {
         }
         .fileImporter(
             isPresented: $isShowingImagePicker,
-            allowedContentTypes: [UTType.image],
+            allowedContentTypes: [.image, .jpeg, .png, .heic, .gif],
             allowsMultipleSelection: false
         ) { result in
-            handleImageImport(result: result)
+            print("📸 Image picker result: \(result)")
+            // Ensure picker is dismissed first
+            isShowingImagePicker = false
+            
+            // Handle result after a slight delay to avoid presentation conflicts
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                handleImageImport(result: result)
+            }
         }
     }
     
     // Break out main container into a separate method
     private func documentContainer(geo: GeometryProxy) -> some View {
-        ZStack {
+            ZStack {
             // Background with tap gesture
             backgroundView
             
@@ -429,42 +444,64 @@ struct DocumentArea: View {
     private func documentVStack(geo: GeometryProxy) -> some View {
         ScrollViewReader { scrollProxy in
             ScrollView(.vertical, showsIndicators: true) {
-                VStack(spacing: 0) {
+                                                VStack(spacing: 0) {
                     // Header is now INSIDE the scroll view
-                    if viewMode != .focus && !isDistractionFreeMode && (headerImage != nil || isHeaderExpanded) {
-                        headerView
+            if viewMode != .focus && !isDistractionFreeMode && (headerImage != nil || isHeaderExpanded) {
+                                headerView
                             .id("header")
-                            .background(
-                                GeometryReader { headerGeo in
-                                    Color.clear
-                                        .preference(key: HeaderOffsetKey.self, 
-                                                  value: headerGeo.frame(in: .named("scroll")).maxY)
-                                }
-                            )
+                            
+                            // Trigger after header image
+                            Rectangle()
+                                .fill(Color.clear)
+                                .frame(height: 1)
+                                .id("trigger")
+                                .background(
+                                    GeometryReader { triggerGeo in
+                                        Color.clear
+                                            .onChange(of: triggerGeo.frame(in: .named("scroll")).minY) { oldValue, newValue in
+                                                withAnimation(.easeInOut(duration: 0.3)) {
+                                                    // Show floating header when trigger is completely off screen (Y < -10 for buffer)
+                                                    // Hide when trigger is visible again (Y >= -10)
+                                                    let shouldShow = newValue < -10
+                                                    showFloatingHeader = shouldShow
+                                                    scrollOffset = newValue
+                                                    print("📍 Trigger Y: \(newValue), shouldShow: \(shouldShow)")
+                                                }
+                                            }
+                                    }
+                                )
                     }
                     
-                    // Document content
-                    AnimatedDocumentContainer(document: $document) {
-                        documentContentView
-                            .frame(minHeight: geo.size.height)
-                    }
-                }
-                .frame(width: paperWidth)
+                    // Document content - no minimum height constraint
+            AnimatedDocumentContainer(document: $document) {
+                            documentContentView
+            }
+                        }
+                        .frame(width: paperWidth)
             }
             .coordinateSpace(name: "scroll")
-            .onPreferenceChange(HeaderOffsetKey.self) { offset in
-                // When header bottom reaches top (offset <= 0), make it sticky
-                withAnimation(.easeInOut(duration: 0.3)) {
-                    headerSticky = offset <= 0
-                    scrollOffset = offset
-                }
-            }
+            // Add extra padding only when keyboard is visible
+            .padding(.bottom, keyboard.height > 0 ? keyboard.height + 20 : 0)
+            .animation(.easeOut, value: keyboard.height)
         }
         .overlay(alignment: .top) {
-            // Sticky header when scrolled
-            if headerSticky && headerImage != nil {
+            // Show floating header when scrolled past threshold
+            if showFloatingHeader {
+                floatingHeaderView
+                    .transition(.asymmetric(
+                        insertion: .move(edge: .top).combined(with: .opacity),
+                        removal: .move(edge: .top).combined(with: .opacity)
+                    ))
+                    .onAppear { print("🎯 Floating header appeared in overlay") }
+                    .onDisappear { print("🎯 Floating header disappeared from overlay") }
+            }
+            
+            // Show collapsed header with image thumbnail only when header is completely off screen and has image
+            else if headerSticky && headerImage != nil {
                 collapsedHeaderView
                     .transition(.move(edge: .top).combined(with: .opacity))
+                    .onAppear { print("🖼️ Collapsed header appeared in overlay") }
+                    .onDisappear { print("🖼️ Collapsed header disappeared from overlay") }
             }
         }
         .opacity(isDocumentVisible ? 1 : 0)
@@ -476,17 +513,19 @@ struct DocumentArea: View {
         HStack(spacing: 12) {
             // Small thumbnail of header image
             if let headerImage = headerImage {
-                Group {
-                    #if os(macOS)
-                    Image(nsImage: headerImage)
-                    #else
-                    Image(uiImage: headerImage)
-                    #endif
-                }
-                .resizable()
-                .aspectRatio(contentMode: .fill)
-                .frame(width: 40, height: 40)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+                #if os(macOS)
+                Image(nsImage: headerImage)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: 40, height: 40)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                #else
+                Image(uiImage: headerImage)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: 40, height: 40)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                #endif
             }
             
             // Title and subtitle
@@ -508,15 +547,79 @@ struct DocumentArea: View {
         .padding(.horizontal, 24)
         .padding(.vertical, 8)
         .frame(width: paperWidth)
-        .background(
+                                .background(
             Rectangle()
                 .fill(colorScheme == .dark ? Color(.sRGB, white: 0.12) : .white)
                 .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
         )
     }
     
+    // New floating header view for document navigation
+    private var floatingHeaderView: some View {
+        HStack(spacing: 16) {
+            // Back button or menu icon
+            Button(action: {
+                // Navigate back or show menu
+                isSidebarVisible.toggle()
+            }) {
+                Image(systemName: "line.horizontal.3")
+                    .font(.system(size: 20, weight: .medium))
+                    .foregroundColor(colorScheme == .dark ? .white : .black)
+            }
+            .buttonStyle(.plain)
+            
+            // Title
+            Text(document.title.isEmpty ? "Untitled" : document.title)
+                .font(.system(size: 16, weight: .medium))
+                .lineLimit(1)
+            
+            Spacer()
+            
+            // Optional: Add more actions here (share, bookmark, etc.)
+            #if os(iOS)
+            Button(action: {
+                // Dismiss keyboard
+                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+            }) {
+                Image(systemName: "keyboard.chevron.compact.down")
+                    .font(.system(size: 18))
+                    .foregroundColor(colorScheme == .dark ? .white : .black)
+            }
+            .buttonStyle(.plain)
+            #endif
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+        .background(
+            // Floating appearance with blur
+            ZStack {
+                #if os(iOS)
+                // iOS: Use system material
+                Rectangle()
+                    .fill(.regularMaterial)
+                #else
+                // macOS: Use semi-transparent background
+                Rectangle()
+                    .fill(colorScheme == .dark ? Color(.sRGB, white: 0.15, opacity: 0.95) : Color(.sRGB, white: 1, opacity: 0.95))
+                #endif
+            }
+            .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: 2)
+            .cornerRadius(12)
+        )
+        .frame(maxWidth: paperWidth)
+        .padding(.top, 8) // Add some top padding so it doesn't touch the very top
+    }
+    
     // Add preference key for tracking header position
     struct HeaderOffsetKey: PreferenceKey {
+        static var defaultValue: CGFloat = 0
+        static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+            value = nextValue()
+        }
+    }
+    
+    // Add preference key for tracking divider position
+    struct DividerOffsetKey: PreferenceKey {
         static var defaultValue: CGFloat = 0
         static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
             value = nextValue()
@@ -960,13 +1063,13 @@ struct DocumentArea: View {
     // Handle onDisappear event
     private func handleOnDisappear() {
         // Clear any focus when document is closed
-        #if os(macOS)
-        if let window = NSApp.keyWindow {
-            window.makeFirstResponder(nil)
-        }
-        #endif
-        // Reset editor focused state
-        isEditorFocused = false
+                #if os(macOS)
+                if let window = NSApp.keyWindow {
+                    window.makeFirstResponder(nil)
+                }
+                #endif
+                // Reset editor focused state
+                isEditorFocused = false
         
         // Reset popup state - removed since we don't have popups anymore
         // hasShownTapAgainPopup = false
@@ -1148,28 +1251,43 @@ struct DocumentArea: View {
         Group {
             // Only create the HeaderImageSection if we have a header image OR isHeaderExpanded is true
             if headerImage != nil || isHeaderExpanded {
-                HeaderImageSection(
-                    isExpanded: $isImageExpanded,
-                    headerImage: $headerImage,
-                    isShowingImagePicker: $isShowingImagePicker,
-                    document: $document,
-                    viewMode: $viewMode,
-                    colorScheme: colorScheme,
-                    paperWidth: paperWidth,
-                    isHeaderSectionActive: $isHeaderSectionActive,
-                    isHeaderExpanded: $isHeaderExpanded,
-                    isEditorFocused: $isEditorFocused,
-                    onClick: {
-                        // No click handling needed for scroll-based behavior
-                    },
-                    isTitleVisible: $isTitleVisible,
-                    showTooltip: $showTooltip,
-                    hasShownTooltip: $hasShownTooltip,
-                    hasShownRevealTooltip: $hasShownRevealTooltip
-                )
-                .buttonStyle(.plain)
-                .drawingGroup() // Add hardware acceleration for smoother transitions
-                .padding(.top, 24)
+                VStack(spacing: 0) {
+                    HeaderImageSection(
+                        isExpanded: $isImageExpanded,
+                        headerImage: $headerImage,
+                        isShowingImagePicker: $isShowingImagePicker,
+                        document: $document,
+                        viewMode: $viewMode,
+                        colorScheme: colorScheme,
+                        paperWidth: paperWidth,
+                        isHeaderSectionActive: $isHeaderSectionActive,
+                        isHeaderExpanded: $isHeaderExpanded,
+                        isEditorFocused: $isEditorFocused,
+                        onClick: {
+                            // No click handling needed for scroll-based behavior
+                        },
+                        isTitleVisible: $isTitleVisible,
+                        showTooltip: $showTooltip,
+                        hasShownTooltip: $hasShownTooltip,
+                        hasShownRevealTooltip: $hasShownRevealTooltip
+                    )
+                    .buttonStyle(.plain)
+                    .drawingGroup() // Add hardware acceleration for smoother transitions
+                    .padding(.top, 24)
+                    
+                    // Add an invisible tracking element at the bottom of header
+                    Rectangle()
+                        .fill(Color.clear)
+                        .frame(height: 1)
+                        .background(
+                            GeometryReader { headerBottomGeo in
+                                Color.blue.opacity(0.3) // Make it visible for debugging
+                                    .preference(key: DividerOffsetKey.self, 
+                                              value: headerBottomGeo.frame(in: .named("scroll")).minY)
+                                    .onAppear { print("📍 Header bottom tracker appeared") }
+                            }
+                        )
+                }
                 // Simplified transition
                 .transition(.opacity.combined(with: .scale(scale: 0.98)))
             } else {
@@ -1196,6 +1314,35 @@ struct DocumentArea: View {
                         // Apply specific top/bottom padding
                         .padding(.top, isDistractionFreeMode ? 16 : 24)
                         .padding(.bottom, 12) // Reduced bottom padding to 12
+                        .background(
+                            GeometryReader { dividerGeo in
+                                Color.clear
+                                    .preference(key: DividerOffsetKey.self, 
+                                              value: dividerGeo.frame(in: .named("scroll")).minY)
+                                    .onAppear { print("📍 Divider tracker appeared") }
+                            }
+                        )
+                    
+                    // Trigger after red divider for no-header-image case
+                    Rectangle()
+                        .fill(Color.clear)
+                        .frame(height: 1)
+                        .id("trigger")
+                        .background(
+                            GeometryReader { triggerGeo in
+                                Color.clear
+                                    .onChange(of: triggerGeo.frame(in: .named("scroll")).minY) { oldValue, newValue in
+                                        withAnimation(.easeInOut(duration: 0.3)) {
+                                            // Show floating header when trigger is completely off screen (Y < -10 for buffer)
+                                            // Hide when trigger is visible again (Y >= -10)
+                                            let shouldShow = newValue < -10
+                                            showFloatingHeader = shouldShow
+                                            scrollOffset = newValue
+                                            print("📍 Trigger Y: \(newValue), shouldShow: \(shouldShow)")
+                                        }
+                                    }
+                            }
+                        )
                 }
                 // IMPORTANT: Use an identity transition for removal to make title disappear immediately
                 // without any animation when toggling header on
@@ -1240,49 +1387,26 @@ struct DocumentArea: View {
                     .frame(height: 8)
             }
             
-            // Document editor wrapped in a container for proper padding and constraints
-            VStack(alignment: .leading, spacing: 0) {
+            // Document editor - let it expand naturally with small minimum
                 #if os(macOS)
                 // Using DocumentEditorView for the main content area on macOS
                 DocumentEditorView(document: $document, selectedBlock: .constant(nil))
                     .allowsHitTesting(!isAnimatingHeaderCollapse)
-                    .overlay(
-                        GeometryReader { geometry in
-                            Color.clear // Use Color.clear for geometry reading
-                                .onAppear {
-                                    viewportHeight = geometry.size.height
-                                }
-                                .onChange(of: geometry.size.height) { _, newHeight in
-                                    viewportHeight = newHeight
-                                }
-                        }
-                    )
-                    // Removed all tap overlay code - no longer needed for scroll-based header
+                .frame(width: paperWidth)
+                .frame(minHeight: 300) // Small minimum height to ensure visibility
+                // Removed all tap overlay code - no longer needed for scroll-based header
                 #elseif os(iOS)
                 // iOS: SwiftUI-based text editor optimized for touch
                 IOSDocumentEditor(document: $document)
                     .allowsHitTesting(!isAnimatingHeaderCollapse)
-                    .overlay(
-                        GeometryReader { geometry in
-                            Color.clear // Use Color.clear for geometry reading
-                                .onAppear {
-                                    viewportHeight = geometry.size.height
-                                }
-                                .onChange(of: geometry.size.height) { _, newHeight in
-                                    viewportHeight = newHeight
-                                }
-                        }
-                    )
-                    // Removed all tap overlay code - no longer needed for scroll-based header
+                .frame(minHeight: 300)
                 #endif
-            }
-            .frame(maxWidth: .infinity)
             
             // Add extra space at bottom to ensure scrollbar is contained (only on non-iPad)
             #if os(iOS)
             if UIDevice.current.userInterfaceIdiom != .pad {
-                Spacer()
-                    .frame(height: 16)
+            Spacer()
+                .frame(height: 16)
             }
             #else
             Spacer()
@@ -1301,7 +1425,6 @@ struct DocumentArea: View {
                     y: 2
                 )
         )
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         // Use animation with value-based modifiers instead of deprecated ones
         // Add a global tap gesture recognizer for the entire document content area
         .contentShape(Rectangle())

@@ -12,69 +12,45 @@ struct IOSDocumentEditor: View {
     @State private var refreshTimer: Timer?
     
     var body: some View {
-        VStack(spacing: 0) {
-            // Main text editing area
-            GeometryReader { geometry in
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
-                        // Text editor
-                        TextEditor(text: $textContent)
-                            .font(.system(size: 16, weight: .regular))
-                            .lineSpacing(4)
-                            .foregroundColor(colorScheme == .dark ? .white : .black)
-                            .focused($isFocused)
-                            .scrollContentBackground(.hidden) // Hide default background
-                            .background(Color.clear)
-                            .frame(minHeight: geometry.size.height) // Fill entire available height
-                            .padding(.horizontal, 24)
-                            .padding(.top, 16) // Only top padding to avoid bottom gap
-                            .onChange(of: textContent) { _, newValue in
-                                // Update document content when text changes
-                                updateDocumentContent(newValue)
-                            }
-                    }
-                }
-                .scrollDismissesKeyboard(.interactively)
+        CustomIOSTextEditor(text: $textContent)
+            .focused($isFocused)
+            .onChange(of: textContent) { _, newValue in
+                updateDocumentContent(newValue)
             }
-        }
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(colorScheme == .dark ? Color(.sRGB, white: 0.08) : Color(.sRGB, white: 0.98))
-        )
-        .onAppear {
-            loadDocumentContent()
-            // Temporarily disable file monitoring to prevent SIGTERM issues
-            // startFileMonitoring()
-            startPeriodicRefresh()
-        }
-        .onDisappear {
-            // stopFileMonitoring()
-            stopPeriodicRefresh()
-        }
-        .onChange(of: document.id) { _, _ in
-            // Reload content when document changes (e.g., via iCloud sync)
-            loadDocumentContent()
-            // stopFileMonitoring()
-            stopPeriodicRefresh()
-            // startFileMonitoring()
-            startPeriodicRefresh()
-        }
-        .onChange(of: document.modifiedAt) { _, _ in
-            // Reload content when document is modified externally (e.g., from macOS)
-            if document.modifiedAt != lastKnownModifiedDate {
-                print("🔄 External document change detected, reloading content...")
+            .onAppear {
                 loadDocumentContent()
-                lastKnownModifiedDate = document.modifiedAt
+                // Temporarily disable file monitoring to prevent SIGTERM issues
+                // startFileMonitoring()
+                startPeriodicRefresh()
             }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
-            // Refresh when app becomes active (user switches back from macOS)
-            checkForExternalChanges()
-        }
-        .onTapGesture {
-            // Focus the text editor when tapped
-            isFocused = true
-        }
+            .onDisappear {
+                // stopFileMonitoring()
+                stopPeriodicRefresh()
+            }
+            .onChange(of: document.id) { _, _ in
+                // Reload content when document changes (e.g., via iCloud sync)
+                loadDocumentContent()
+                // stopFileMonitoring()
+                stopPeriodicRefresh()
+                // startFileMonitoring()
+                startPeriodicRefresh()
+            }
+            .onChange(of: document.modifiedAt) { _, _ in
+                // Reload content when document is modified externally (e.g., from macOS)
+                if document.modifiedAt != lastKnownModifiedDate {
+                    print("🔄 External document change detected, reloading content...")
+                    loadDocumentContent()
+                    lastKnownModifiedDate = document.modifiedAt
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+                // Refresh when app becomes active (user switches back from macOS)
+                checkForExternalChanges()
+            }
+            .onTapGesture {
+                // Focus the text editor when tapped
+                isFocused = true
+            }
     }
     
     private func loadDocumentContent() {
@@ -306,4 +282,48 @@ class DocumentFileMonitor {
     IOSDocumentEditor(document: .constant(Letterspace_CanvasDocument()))
         .padding()
 }
+
+// MARK: - Custom Text Editor for Dynamic Height
+struct CustomIOSTextEditor: UIViewRepresentable {
+    @Binding var text: String
+
+    func makeUIView(context: Context) -> UITextView {
+        let textView = UITextView()
+        textView.isScrollEnabled = false
+        textView.isEditable = true
+        textView.isUserInteractionEnabled = true
+        textView.font = .systemFont(ofSize: 16)
+        textView.backgroundColor = .clear
+        textView.delegate = context.coordinator
+        return textView
+    }
+
+    func updateUIView(_ uiView: UITextView, context: Context) {
+        if uiView.text != text {
+            uiView.text = text
+        }
+        // We need to notify SwiftUI about the size change.
+        DispatchQueue.main.async {
+            uiView.invalidateIntrinsicContentSize()
+        }
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+
+    class Coordinator: NSObject, UITextViewDelegate {
+        var parent: CustomIOSTextEditor
+
+        init(_ parent: CustomIOSTextEditor) {
+            self.parent = parent
+        }
+
+        func textViewDidChange(_ textView: UITextView) {
+            // Update the binding when text changes
+            parent.text = textView.text
+        }
+    }
+}
+
 #endif 

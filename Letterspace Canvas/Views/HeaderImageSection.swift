@@ -68,13 +68,13 @@ struct HeaderImageSection: View {
         } else { // Header FEATURE is ON
             ZStack {
                 // Simply display the header image or placeholder
-                if let headerImage = headerImage { // Actual image EXISTS
-                    expandedHeaderView(headerImage)
+                    if let headerImage = headerImage { // Actual image EXISTS
+                            expandedHeaderView(headerImage)
                 } else { // Show placeholder
-                    placeholderImageView
+                            placeholderImageView
                         .onTapGesture {
                             isShowingImagePicker = true
-                        }
+                    }
                 }
                 
                 // Loading indicator
@@ -169,7 +169,7 @@ struct HeaderImageSection: View {
     @ViewBuilder
     private var placeholderImageView: some View {
         // This is shown when headerImage is nil but isExpanded is true
-                            Rectangle()
+                    Rectangle()
                                 .fill(colorScheme == .dark ? Color(.sRGB, red: 0.15, green: 0.15, blue: 0.15, opacity: 1.0) : Color(.sRGB, red: 0.95, green: 0.95, blue: 0.95, opacity: 1.0))
                                 .frame(maxWidth: paperWidth)
             // The height might need to be dynamic based on viewMode or a fixed value for placeholder
@@ -181,7 +181,7 @@ struct HeaderImageSection: View {
                                 ))
             .animation(.easeInOut(duration: 0.35), value: isExpanded) // Make sure this animation is desired here
                                 .drawingGroup()
-                                .overlay(
+                .overlay(
                                     Button(action: {
                     // Action to show the image picker
                                         withAnimation(.easeInOut(duration: 0.35)) {
@@ -197,7 +197,7 @@ struct HeaderImageSection: View {
                                             Text("Add Header Image")
                                                 .font(.system(size: 16, weight: .medium))
                                                 .foregroundColor(colorScheme == .dark ? .white.opacity(0.2) : .black.opacity(0.2))
-                                        }
+            }
                     .contentShape(Rectangle()) // Ensure the whole area is tappable
                                     }
                                     .buttonStyle(.plain)
@@ -277,43 +277,127 @@ struct HeaderImageSection: View {
                                             .transition(.opacity.combined(with: .scale(scale: 0.95)))
                                         }
     
-    // MARK: - Placeholder Image View
-    @ViewBuilder
-    private var placeholderImageView: some View {
-        // This is shown when headerImage is nil but isExpanded is true
-                            Rectangle()
-                                .fill(colorScheme == .dark ? Color(.sRGB, red: 0.15, green: 0.15, blue: 0.15, opacity: 1.0) : Color(.sRGB, red: 0.95, green: 0.95, blue: 0.95, opacity: 1.0))
-                                .frame(maxWidth: paperWidth)
-            // The height might need to be dynamic based on viewMode or a fixed value for placeholder
-            .frame(height: viewMode == .minimal ? 160 : 300) // Adjusted height for placeholder
-                                .clipShape(RoundedRectangle(cornerRadius: 12))
-                                .transition(.asymmetric(
-                                    insertion: .opacity.combined(with: .move(edge: .top).combined(with: .scale(scale: 0.98))),
-                                    removal: .opacity.combined(with: .move(edge: .top).combined(with: .scale(scale: 0.98)))
-                                ))
-            .animation(.easeInOut(duration: 0.35), value: isExpanded) // Make sure this animation is desired here
-                                .drawingGroup()
-                                .overlay(
-                                    Button(action: {
-                    // Action to show the image picker
-                                        withAnimation(.easeInOut(duration: 0.35)) {
-                                            isShowingImagePicker = true
+    // MARK: - Helper Functions
+    
+    private func handleImageSelection(url: URL) {
+        guard url.startAccessingSecurityScopedResource() else {
+            print("Failed to access the selected file")
+            return
+        }
+        defer { url.stopAccessingSecurityScopedResource() }
+        
+        #if os(macOS)
+        if let image = NSImage(contentsOf: url) {
+            // Save the image to the Images directory
+            let fileName = UUID().uuidString + ".png"
+            if let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+                let documentPath = documentsPath.appendingPathComponent("\(document.id)")
+                let imagesPath = documentPath.appendingPathComponent("Images")
+                
+                do {
+                    try FileManager.default.createDirectory(at: documentPath, withIntermediateDirectories: true, attributes: nil)
+                    try FileManager.default.createDirectory(at: imagesPath, withIntermediateDirectories: true, attributes: nil)
+                    let fileURL = imagesPath.appendingPathComponent(fileName)
+                    
+                    if let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+                        let imageRep = NSBitmapImageRep(cgImage: cgImage)
+                        if let imageData = imageRep.representation(using: .png, properties: [:]) {
+                            try imageData.write(to: fileURL)
+                            
+                            // Update document with new image path
+                            if var headerElement = document.elements.first(where: { $0.type == .headerImage }) {
+                                headerElement.content = fileName
+                                if let index = document.elements.firstIndex(where: { $0.type == .headerImage }) {
+                                    document.elements[index] = headerElement
+                                }
+                            } else {
+                                let headerElement = DocumentElement(type: .headerImage, content: fileName)
+                                document.elements.insert(headerElement, at: 0)
+                            }
+                            
+                            // Save document after adding image
+                            document.save()
+                            
+                            // Update UI state
+                            withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                                self.headerImage = image
+                                self.isExpanded = true
+                            }
+                        }
+                    }
+                } catch {
+                    print("Error saving header image: \(error)")
+                }
+            }
+        }
+        #elseif os(iOS)
+        // iOS implementation would go here
+        #endif
+    }
+    
+    private func loadHeaderImageIfNeeded() {
+        // Check if we have a header element with content
+        if let headerElement = document.elements.first(where: { $0.type == .headerImage }),
+           !headerElement.content.isEmpty,
+           let appDirectory = Letterspace_CanvasDocument.getAppDocumentsDirectory() {
+            
+            let documentPath = appDirectory.appendingPathComponent("\(document.id)")
+            let imagesPath = documentPath.appendingPathComponent("Images")
+            let imageUrl = imagesPath.appendingPathComponent(headerElement.content)
+            
+            // Check if image file exists
+            guard FileManager.default.fileExists(atPath: imageUrl.path) else {
+                print("Header image file not found: \(imageUrl.path)")
+                headerImage = nil
+                return
+            }
+            
+            #if os(macOS)
+            if let image = NSImage(contentsOf: imageUrl) {
+                ImageCache.shared.setImage(image, for: headerElement.content)
+                ImageCache.shared.setImage(image, for: "\(document.id)_\(headerElement.content)")
+                headerImage = image
+            }
+            #elseif os(iOS)
+            if let image = UIImage(contentsOfFile: imageUrl.path) {
+                headerImage = image
+            }
+            #endif
+        } else {
+            headerImage = nil
+        }
+    }
+    
+    private func removeHeaderImage() {
+        // Remove the header image element from the document
+        if let index = document.elements.firstIndex(where: { $0.type == .headerImage }) {
+            let headerElement = document.elements[index]
+            
+            // Delete the image file if it exists
+            if !headerElement.content.isEmpty,
+               let appDirectory = Letterspace_CanvasDocument.getAppDocumentsDirectory() {
+                let documentPath = appDirectory.appendingPathComponent("\(document.id)")
+                let imagesPath = documentPath.appendingPathComponent("Images")
+                let imageUrl = imagesPath.appendingPathComponent(headerElement.content)
+                
+                try? FileManager.default.removeItem(at: imageUrl)
+                
+                // Remove from image cache
+                ImageCache.shared.removeImage(for: headerElement.content)
+                ImageCache.shared.removeImage(for: "\(document.id)_\(headerElement.content)")
                                         }
-                                    }) {
-                                        VStack {
-                                            Image(systemName: "photo")
-                                                .font(.system(size: 48))
-                                                .foregroundColor(colorScheme == .dark ? .white.opacity(0.2) : .black.opacity(0.2))
-                                                .padding(.bottom, 8)
-                                            
-                                            Text("Add Header Image")
-                                                .font(.system(size: 16, weight: .medium))
-                                                .foregroundColor(colorScheme == .dark ? .white.opacity(0.2) : .black.opacity(0.2))
-                                        }
-                    .contentShape(Rectangle()) // Ensure the whole area is tappable
-                                    }
-                                    .buttonStyle(.plain)
-                                )
+            
+            // Remove the element from the document
+            document.elements.remove(at: index)
+            
+            // Clear the UI state
+            headerImage = nil
+            
+            // Save the document
+            document.save()
+            
+            print("Header image removed successfully")
+        }
     }
 
     // MARK: - Collapsed Placeholder View
