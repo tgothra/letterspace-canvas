@@ -1,4 +1,3 @@
-#if os(iOS)
 import SwiftUI
 import Combine
 
@@ -8,6 +7,7 @@ final class KeyboardObserver: ObservableObject {
     private var cancellable: AnyCancellable?
 
     init() {
+        #if os(iOS)
         let keyboardWillShow = NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)
             .compactMap { $0.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect }
             .map { $0.height }
@@ -18,6 +18,7 @@ final class KeyboardObserver: ObservableObject {
         cancellable = Publishers.Merge(keyboardWillShow, keyboardWillHide)
             .subscribe(on: DispatchQueue.main)
             .assign(to: \.height, on: self)
+        #endif
+        // On macOS, height remains 0 (no keyboard)
     }
-}
-#endif 
+} 

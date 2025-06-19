@@ -34,9 +34,6 @@ struct HeaderImageSection: View {
     @State private var isHoveringX = false
     @State private var isHoveringHeader = false
     @Binding var isTitleVisible: Bool
-    @Binding var showTooltip: Bool
-    @Binding var hasShownTooltip: Bool
-    @Binding var hasShownRevealTooltip: Bool
     @State private var isImageLoading = false
     @State private var placeholderOpacity: Double = 0.0
     #if os(macOS)
@@ -100,22 +97,7 @@ struct HeaderImageSection: View {
                 headerImage = nil
                 loadHeaderImageIfNeeded()
             }
-            .sheet(isPresented: $isShowingImagePicker) {
-                #if os(macOS)
-                SimpleMacOSFilePicker(
-                    isPresented: $isShowingImagePicker,
-                    allowedContentTypes: [UTType.image],
-                    onFilePicked: { url in
-                        handleImageSelection(url: url)
-                    },
-                    onCancel: {
-                        // Just close the picker
-                    }
-                )
-                #elseif os(iOS)
-                EmptyView() // Placeholder for iOS image picker
-                #endif
-            }
+
         }
     }
 
@@ -279,61 +261,7 @@ struct HeaderImageSection: View {
     
     // MARK: - Helper Functions
     
-    private func handleImageSelection(url: URL) {
-        guard url.startAccessingSecurityScopedResource() else {
-            print("Failed to access the selected file")
-            return
-        }
-        defer { url.stopAccessingSecurityScopedResource() }
-        
-        #if os(macOS)
-        if let image = NSImage(contentsOf: url) {
-            // Save the image to the Images directory
-            let fileName = UUID().uuidString + ".png"
-            if let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
-                let documentPath = documentsPath.appendingPathComponent("\(document.id)")
-                let imagesPath = documentPath.appendingPathComponent("Images")
-                
-                do {
-                    try FileManager.default.createDirectory(at: documentPath, withIntermediateDirectories: true, attributes: nil)
-                    try FileManager.default.createDirectory(at: imagesPath, withIntermediateDirectories: true, attributes: nil)
-                    let fileURL = imagesPath.appendingPathComponent(fileName)
-                    
-                    if let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) {
-                        let imageRep = NSBitmapImageRep(cgImage: cgImage)
-                        if let imageData = imageRep.representation(using: .png, properties: [:]) {
-                            try imageData.write(to: fileURL)
-                            
-                            // Update document with new image path
-                            if var headerElement = document.elements.first(where: { $0.type == .headerImage }) {
-                                headerElement.content = fileName
-                                if let index = document.elements.firstIndex(where: { $0.type == .headerImage }) {
-                                    document.elements[index] = headerElement
-                                }
-                            } else {
-                                let headerElement = DocumentElement(type: .headerImage, content: fileName)
-                                document.elements.insert(headerElement, at: 0)
-                            }
-                            
-                            // Save document after adding image
-                            document.save()
-                            
-                            // Update UI state
-                            withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
-                                self.headerImage = image
-                                self.isExpanded = true
-                            }
-                        }
-                    }
-                } catch {
-                    print("Error saving header image: \(error)")
-                }
-            }
-        }
-        #elseif os(iOS)
-        // iOS implementation would go here
-        #endif
-    }
+
     
     private func loadHeaderImageIfNeeded() {
         // Check if we have a header element with content
@@ -452,69 +380,7 @@ struct HeaderImageSection: View {
     }
 }
 
-#if os(macOS)
-struct SimpleMacOSFilePicker: NSViewRepresentable {
-    @Binding var isPresented: Bool
-    let allowedContentTypes: [UTType]
-    let onFilePicked: (URL) -> Void
-    let onCancel: (() -> Void)?
 
-    func makeNSView(context: Context) -> NSView {
-        let view = NSView() // Dummy view
-        return view
-    }
-
-    func updateNSView(_ nsView: NSView, context: Context) {
-        // This needs to be triggered carefully to avoid multiple presentations
-        // Typically, this logic is better outside updateNSView or controlled by a separate state.
-        // For simplicity in this context, we'll attempt to show it if isPresented is true
-        // and the panel isn't already up (which is hard to check from here directly).
-        // A better approach for production would be a more robust coordinator pattern.
-
-        // Guard against re-presenting if already handled by a previous update cycle
-        if isPresented && context.coordinator.panelPresentedThisUpdateCycle == false {
-            context.coordinator.panelPresentedThisUpdateCycle = true // Mark as presented for this cycle
-            
-            DispatchQueue.main.async { // Ensure panel is presented on the main thread
-                let panel = NSOpenPanel()
-                panel.allowsMultipleSelection = false
-                panel.canChooseDirectories = false
-                panel.canChooseFiles = true
-                panel.allowedContentTypes = allowedContentTypes
-                
-                // If we present it modally, it blocks.
-                // If we need it non-modal, it requires more complex handling.
-                // For a sheet-like behavior, modal is usually expected.
-                if panel.runModal() == .OK, let url = panel.url {
-                    onFilePicked(url)
-                } else {
-                    onCancel?()
-                }
-                // Reset presentation state binding
-                self.isPresented = false
-                // Allow panel to be presented again in future update cycles
-                context.coordinator.panelPresentedThisUpdateCycle = false
-            }
-        } else if !isPresented {
-            // If isPresented becomes false, ensure we reset the cycle guard
-             context.coordinator.panelPresentedThisUpdateCycle = false
-        }
-    }
-    
-    func makeCoordinator() -> Coordinator {
-        Coordinator(self)
-                            }
-
-    class Coordinator: NSObject {
-        var parent: SimpleMacOSFilePicker
-        var panelPresentedThisUpdateCycle: Bool = false // Guard
-
-        init(_ parent: SimpleMacOSFilePicker) {
-            self.parent = parent
-            }
-        }
-    }
-#endif
 
 // Custom button style to prevent flash effect
 struct NoFlashButtonStyle: ButtonStyle {
