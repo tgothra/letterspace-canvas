@@ -185,7 +185,8 @@ extension DocumentTextView {
 
     // MARK: - Setup
     func setup() { // Made it internal access
-        print("🔧 Starting DocumentTextView setup")
+        // PERFORMANCE: Reduce excessive logging
+        // print("🔧 Starting DocumentTextView setup")
         
         // Set up placeholder text
         let style = NSMutableParagraphStyle()
@@ -219,12 +220,27 @@ extension DocumentTextView {
             textContainer.lineFragmentPadding = 0
         }
         
-        // Important: Configure layout manager for better scrolling performance
+        // PERFORMANCE: Configure layout manager for optimal scrolling performance
         if let layoutManager = layoutManager {
             layoutManager.showsInvisibleCharacters = false
             layoutManager.showsControlCharacters = false
+            // CRITICAL: Disable non-contiguous layout for smoother scrolling
             layoutManager.allowsNonContiguousLayout = false
-            layoutManager.backgroundLayoutEnabled = true
+            // Enable background layout for better performance
+            layoutManager.backgroundLayoutEnabled = false // Changed to false for better real-time performance
+            
+            // PERFORMANCE: Configure for better text rendering
+            if #available(macOS 10.15, *) {
+                layoutManager.limitsLayoutForSuspiciousContents = false
+            }
+        }
+        
+        // PERFORMANCE: Configure text container for better performance
+        if let textContainer = textContainer {
+            textContainer.widthTracksTextView = false
+            textContainer.heightTracksTextView = false
+            textContainer.maximumNumberOfLines = 0
+            textContainer.lineBreakMode = .byWordWrapping
         }
         
         // Set up default paragraph style with zero indentation
@@ -248,7 +264,7 @@ extension DocumentTextView {
         
         // Enable formatting toolbar
         setupFormattingToolbar() // This method needs to be accessible
-        print("✅ Formatting toolbar has been set up")
+        // print("✅ Formatting toolbar has been set up")
         
         // Set up keyboard shortcuts
         // setupKeyboardShortcuts() // This method also needs to be accessible (likely in Interaction extension)
@@ -260,7 +276,7 @@ extension DocumentTextView {
             name: NSTextView.didChangeSelectionNotification,
             object: self
         )
-        print("✅ Selection change observer registered")
+        // print("✅ Selection change observer registered")
         
         // Add observer for text changes
         NotificationCenter.default.addObserver(
@@ -293,7 +309,7 @@ extension DocumentTextView {
         // viewDidChangeEffectiveAppearance will handle subsequent changes.
         forceTextColorForCurrentAppearance()
         
-        print("✅ DocumentTextView setup complete")
+        // print("✅ DocumentTextView setup complete")
     }
 
     // MARK: - Appearance Handling
@@ -303,7 +319,7 @@ extension DocumentTextView {
     override func viewDidChangeEffectiveAppearance() {
         super.viewDidChangeEffectiveAppearance() // Always call super
 
-        print("🎨 Effective appearance changed. Updating text and typing attributes.")
+        // print("🎨 Effective appearance changed. Updating text and typing attributes.")
         forceTextColorForCurrentAppearance() // Updates existing text storage
 
         // Update typingAttributes as well
@@ -314,7 +330,7 @@ extension DocumentTextView {
         currentTypingAttributes[.foregroundColor] = newTypingColor
         self.typingAttributes = currentTypingAttributes
         
-        print("✒️ Typing attributes updated for new appearance.")
+        // print("✒️ Typing attributes updated for new appearance.")
     }
 }
 

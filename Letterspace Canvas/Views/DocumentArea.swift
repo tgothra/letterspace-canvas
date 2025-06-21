@@ -1028,10 +1028,10 @@ struct DocumentArea: View {
             
             // Document editor - let it expand naturally with small minimum
                 #if os(macOS)
-                // Using DocumentEditorView for the main content area on macOS
-                DocumentEditorView(document: $document, selectedBlock: .constant(nil))
+                // TESTING: Using StandaloneCleanEditor - completely header-free
+                StandaloneCleanEditor(document: $document)
                 .frame(width: paperWidth)
-                .frame(minHeight: 300) // Small minimum height to ensure visibility
+                .frame(minHeight: 400) // Minimum height for standalone editor
                 // Removed all tap overlay code - no longer needed for scroll-based header
                 #elseif os(iOS)
                 // iOS: SwiftUI-based text editor optimized for touch

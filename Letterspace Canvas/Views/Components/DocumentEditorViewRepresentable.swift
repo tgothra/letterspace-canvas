@@ -13,6 +13,7 @@ struct DocumentEditorView: NSViewRepresentable {
     @State private var isLoading = true
     
     func makeNSView(context: Context) -> NSView {
+        print("⚠️ OLD EDITOR: Creating DocumentEditorView (this should NOT appear if CleanDocumentEditor is working)")
         print("🏗️ Creating text view without internal scrolling...")
         
         // Create a wrapper view that will properly size itself
@@ -576,6 +577,9 @@ class DynamicHeightView: NSView {
         }
     }
     
+    private var lastReportedHeight: CGFloat = 100
+    private var isUpdatingLayout: Bool = false
+    
     override var intrinsicContentSize: NSSize {
         if let textView = textView {
             let size = textView.intrinsicContentSize
@@ -585,15 +589,22 @@ class DynamicHeightView: NSView {
     }
     
     override func layout() {
+        // PERFORMANCE: Prevent layout recursion
+        guard !isUpdatingLayout else { return }
+        
+        isUpdatingLayout = true
+        defer { isUpdatingLayout = false }
+        
         super.layout()
         
         if let textView = textView {
             // Update text view frame to match our bounds
             textView.frame = bounds
             
-            // Check if size changed
+            // PERFORMANCE: Only invalidate if height changed significantly
             let newHeight = textView.intrinsicContentSize.height
-            if abs(frame.height - newHeight) > 1 {
+            if abs(lastReportedHeight - newHeight) > 2 {
+                lastReportedHeight = newHeight
                 invalidateIntrinsicContentSize()
             }
         }
@@ -614,11 +625,17 @@ class DynamicHeightView: NSView {
     }
     
     @objc private func textViewDidChange(_ notification: Notification) {
+        // PERFORMANCE: Batch size recalculations
+        NSObject.cancelPreviousPerformRequests(withTarget: self, selector: #selector(performSizeUpdate), object: nil)
+        self.perform(#selector(performSizeUpdate), with: nil, afterDelay: 0.02)
+    }
+    
+    @objc private func performSizeUpdate() {
         // Force size recalculation
         invalidateIntrinsicContentSize()
         
-        // Notify SwiftUI
-        if let window = window {
+        // PERFORMANCE: Only notify window if needed
+        if let window = window, !isUpdatingLayout {
             window.layoutIfNeeded()
         }
     }
@@ -632,15 +649,32 @@ class DynamicHeightView: NSView {
 class NoScrollTextView: DocumentTextView {
     
     private var lastCalculatedHeight: CGFloat = 100
+    private var cachedContentSize: NSSize = NSSize(width: 752, height: 100)
+    private var lastStringLength: Int = 0
+    private var isLayoutInProgress: Bool = false
     
     override var intrinsicContentSize: NSSize {
+        // PERFORMANCE: Use cached size if content hasn't changed significantly
+        let currentLength = string.count
+        if abs(currentLength - lastStringLength) < 10 && !isLayoutInProgress {
+            return cachedContentSize
+        }
+        
         // Calculate the size needed for all text content
         guard let layoutManager = layoutManager,
               let textContainer = textContainer else {
-            return NSSize(width: 752, height: lastCalculatedHeight)
+            return cachedContentSize
         }
         
-        // Force complete layout
+        // PERFORMANCE: Prevent recursive layout calls
+        guard !isLayoutInProgress else {
+            return cachedContentSize
+        }
+        
+        isLayoutInProgress = true
+        defer { isLayoutInProgress = false }
+        
+        // Force complete layout only if necessary
         layoutManager.ensureLayout(for: textContainer)
         
         // Get the used rect for the text
@@ -651,39 +685,61 @@ class NoScrollTextView: DocumentTextView {
         let contentHeight = usedRect.height + insets.height * 2
         lastCalculatedHeight = max(contentHeight, 50)
         
-        return NSSize(width: 752, height: lastCalculatedHeight)
+        // Cache the result
+        cachedContentSize = NSSize(width: 752, height: lastCalculatedHeight)
+        lastStringLength = currentLength
+        
+        return cachedContentSize
     }
     
     override func didChangeText() {
         super.didChangeText()
         
-        // Force immediate layout update
+        // PERFORMANCE: Batch layout updates to reduce frequency
+        NSObject.cancelPreviousPerformRequests(withTarget: self, selector: #selector(performLayoutUpdate), object: nil)
+        self.perform(#selector(performLayoutUpdate), with: nil, afterDelay: 0.01)
+    }
+    
+    @objc private func performLayoutUpdate() {
+        // Invalidate cached size
+        lastStringLength = -1
+        
+        // Force layout manager to recalculate
         layoutManager?.ensureLayout(for: textContainer!)
         
         // Invalidate intrinsic content size
         invalidateIntrinsicContentSize()
         
-        // Force SwiftUI to re-measure
+        // PERFORMANCE: Use more efficient notification
         DispatchQueue.main.async { [weak self] in
-            self?.invalidateIntrinsicContentSize()
+            guard let self = self else { return }
+            self.invalidateIntrinsicContentSize()
             
-            // Notify SwiftUI that size changed
-            if let window = self?.window {
+            // Only notify window if size actually changed
+            if let window = self.window {
                 window.layoutIfNeeded()
             }
         }
     }
     
     override func layout() {
+        // PERFORMANCE: Prevent unnecessary layout cycles
+        guard !isLayoutInProgress else { return }
+        
         super.layout()
         
-        // Ensure text container matches our width
-        textContainer?.containerSize = NSSize(width: bounds.width - textContainerInset.width * 2, 
-                                             height: CGFloat.greatestFiniteMagnitude)
-        textContainer?.widthTracksTextView = false
+        // Ensure text container matches our width efficiently
+        let newContainerSize = NSSize(width: bounds.width - textContainerInset.width * 2, 
+                                     height: CGFloat.greatestFiniteMagnitude)
         
-        // Force layout manager to recalculate
-        layoutManager?.ensureLayout(for: textContainer!)
+        // Only update if size actually changed
+        if textContainer?.containerSize != newContainerSize {
+            textContainer?.containerSize = newContainerSize
+            textContainer?.widthTracksTextView = false
+            
+            // Force layout manager to recalculate only if needed
+            layoutManager?.ensureLayout(for: textContainer!)
+        }
     }
     
     override var isVerticallyResizable: Bool {
