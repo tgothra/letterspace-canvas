@@ -204,12 +204,14 @@ struct DocumentArea: View {
                                         showFloatingHeader = initialY < -10
                                         scrollOffset = initialY
                                     }
-                                    .onChange(of: triggerGeo.frame(in: .named("scroll")).minY) { oldValue, newValue in
-                                        // Update immediately without animation for smooth scrolling
-                                        let shouldShow = newValue < -10
-                                        showFloatingHeader = shouldShow
-                                        scrollOffset = newValue
-                                    }
+                                    .background(
+                                        // Use a preference key approach instead of onChange
+                                        GeometryReader { _ in
+                                            Color.clear
+                                                .preference(key: ScrollOffsetPreferenceKey.self, 
+                                                           value: triggerGeo.frame(in: .named("scroll")).minY)
+                                        }
+                                    )
                             }
                         )
                 }
@@ -222,6 +224,19 @@ struct DocumentArea: View {
             .frame(width: paperWidth)
         }
         .coordinateSpace(name: "scroll")
+        // Handle scroll offset changes using preference key with debouncing
+        .onPreferenceChange(ScrollOffsetPreferenceKey.self) { value in
+            // Only update if the change is significant (more than 5 points)
+            let shouldShow = value < -10
+            if showFloatingHeader != shouldShow {
+                showFloatingHeader = shouldShow
+            }
+            
+            // Only update scroll offset if changed significantly
+            if abs(scrollOffset - value) > 5 {
+                scrollOffset = value
+            }
+        }
         // Add extra padding only when keyboard is visible
         .padding(.bottom, keyboard.height > 0 ? keyboard.height + 20 : 0)
         .animation(.easeOut, value: keyboard.height)
@@ -1005,12 +1020,14 @@ struct DocumentArea: View {
                                         showFloatingHeader = initialY < -10
                                         scrollOffset = initialY
                                     }
-                                    .onChange(of: triggerGeo.frame(in: .named("scroll")).minY) { oldValue, newValue in
-                                        // Update immediately without animation for smooth scrolling
-                                        let shouldShow = newValue < -10
-                                        showFloatingHeader = shouldShow
-                                        scrollOffset = newValue
-                                    }
+                                    .background(
+                                        // Use a preference key approach instead of onChange
+                                        GeometryReader { _ in
+                                            Color.clear
+                                                .preference(key: ScrollOffsetPreferenceKey.self, 
+                                                           value: triggerGeo.frame(in: .named("scroll")).minY)
+                                        }
+                                    )
                             }
                         )
                 }
@@ -1032,10 +1049,13 @@ struct DocumentArea: View {
             
             // Document editor - let it expand naturally with small minimum
                 #if os(macOS)
-                // Using DocumentEditorView for the main content area on macOS
-                DocumentEditorView(document: $document, selectedBlock: .constant(nil))
+                // Wrap the DocumentEditorView in an isolated container
+                IsolatedEditorContainer {
+                    DocumentEditorView(document: $document, selectedBlock: .constant(nil))
+                        .frame(width: paperWidth)
+                        .frame(minHeight: 300) // Small minimum height to ensure visibility
+                }
                 .frame(width: paperWidth)
-                .frame(minHeight: 300) // Small minimum height to ensure visibility
                 // Removed all tap overlay code - no longer needed for scroll-based header
                 #elseif os(iOS)
                 // iOS: SwiftUI-based text editor optimized for touch
@@ -1630,5 +1650,50 @@ private func createHeaderTransition() -> AnyTransition {
         removal: removalTransition
     )
 }
+
+// Add preference key for scroll offset at the end of the file
+struct ScrollOffsetPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
+#if os(macOS)
+// Isolated container to prevent SwiftUI updates from affecting the text editor
+struct IsolatedEditorContainer<Content: View>: View {
+    let content: () -> Content
+    
+    init(@ViewBuilder content: @escaping () -> Content) {
+        self.content = content
+    }
+    
+    var body: some View {
+        // Use a simple container that doesn't respond to parent updates
+        _IsolatedHostingView(content: content())
+    }
+}
+
+// Custom hosting view that ignores parent updates
+struct _IsolatedHostingView<Content: View>: NSViewRepresentable {
+    let content: Content
+    
+    func makeNSView(context: Context) -> NSView {
+        let hostingController = NSHostingController(rootView: content)
+        let view = hostingController.view
+        
+        // Disable animations on this view
+        view.wantsLayer = true
+        view.layer?.speed = 0 // Disable all animations
+        
+        return view
+    }
+    
+    func updateNSView(_ nsView: NSView, context: Context) {
+        // Intentionally empty - we don't want to update based on parent changes
+    }
+}
+#endif
 
 #endif

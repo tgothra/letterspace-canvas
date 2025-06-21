@@ -19,11 +19,19 @@ extension DocumentTextView {
     override var frame: NSRect {
         get { return super.frame }
         set {
+            let oldFrame = super.frame
             super.frame = newValue
             
-            // Ensure proper layout when frame changes
-            needsDisplay = true
-            layoutManager?.ensureLayout(for: textContainer!)
+            // Only trigger display update if frame actually changed
+            if !oldFrame.equalTo(newValue) {
+                // Clear cache when frame changes significantly
+                if abs(oldFrame.width - newValue.width) > 1 {
+                    cachedScriptureLineRects.removeAll()
+                }
+                // Remove immediate needsDisplay call - let the system handle it
+                // needsDisplay = true
+                // layoutManager?.ensureLayout(for: textContainer!)
+            }
         }
     }
 
@@ -77,14 +85,22 @@ extension DocumentTextView {
         
         // Only recalculate the line rects if the visible rect has changed significantly
         let currentVisibleRect = self.visibleRect
-        let shouldRecalculateRects = cachedScriptureLineRects.isEmpty || 
-                                   !lastDrawnVisibleRect.equalTo(currentVisibleRect)
+        let rectChanged = abs(lastDrawnVisibleRect.origin.y - currentVisibleRect.origin.y) > 5 || 
+                         abs(lastDrawnVisibleRect.size.height - currentVisibleRect.size.height) > 5
+        
+        let shouldRecalculateRects = cachedScriptureLineRects.isEmpty || rectChanged
         
         // Update the last visible rect for future comparisons
-        lastDrawnVisibleRect = currentVisibleRect
+        if rectChanged {
+            lastDrawnVisibleRect = currentVisibleRect
+        }
         
         // Get the selected line color from AppSettings.shared
         let lineColor = AppSettings.shared.scriptureLineNSColor()
+        
+        // Use NSGraphicsContext to batch drawing operations
+        guard let context = NSGraphicsContext.current else { return }
+        context.saveGraphicsState()
         
         // Find scripture blocks with our custom attribute
         textStorage.enumerateAttribute(DocumentTextView.isScriptureBlockQuote, in: NSRange(location: 0, length: textStorage.length), options: []) { value, range, _ in
@@ -126,14 +142,17 @@ extension DocumentTextView {
                 lineRect = cachedScriptureLineRects[range]!
             }
             
-            // Only draw if in visible area
-            guard lineRect.intersects(visibleRect) else { return }
+            // Only draw if in visible area with some padding
+            let expandedVisibleRect = visibleRect.insetBy(dx: 0, dy: -50)
+            guard lineRect.intersects(expandedVisibleRect) else { return }
             
             // Draw the vertical line with rounded corners using the selected color
             let bezierPath = NSBezierPath(roundedRect: lineRect, xRadius: 1.5, yRadius: 1.5)
             lineColor.setFill()
             bezierPath.fill()
         }
+        
+        context.restoreGraphicsState()
     }
     
     private func drawScriptureBackgrounds(in dirtyRect: NSRect) {

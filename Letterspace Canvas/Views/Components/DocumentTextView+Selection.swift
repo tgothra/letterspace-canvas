@@ -86,9 +86,15 @@ extension DocumentTextView {
         // --- FIX for lingering selection --- 
         // After everything, mark the view as needing display to clean up potential rendering artifacts
         // like the lingering selection sliver.
-        self.setNeedsDisplay(self.bounds) // Use bounds instead of true
+        // Only redisplay if selection changed significantly
+        if abs(charRange.location - previousSelectedRange.location) > 0 || 
+           abs(charRange.length - previousSelectedRange.length) > 0 {
+            self.setNeedsDisplay(self.bounds, avoidAdditionalLayout: true)
+        }
         // --- END FIX ---
     }
+    
+    private var previousSelectedRange = NSRange(location: 0, length: 0)
     
     override func didChangeText() {
         super.didChangeText()
@@ -109,11 +115,13 @@ extension DocumentTextView {
         fixScriptureIndentation()
         
         // EMERGENCY COLOR OVERRIDE: Force text color based on current appearance
-        forceTextColorForCurrentAppearance()
+        // Only do this if appearance actually changed, not on every text change
+        // forceTextColorForCurrentAppearance()  // REMOVED - too expensive
         
         // Force redraw to ensure highlights and colors are visible
-        needsDisplay = true
-        displayIfNeeded()
+        // Remove immediate display update - let the system handle it
+        // needsDisplay = true
+        // displayIfNeeded()  // REMOVED - forcing immediate redraw causes performance issues
     }
 
     @objc func selectionDidChange(_ notification: Notification) {
@@ -181,7 +189,11 @@ extension DocumentTextView {
             hideFormattingToolbar()
         }
         
-        self.setNeedsDisplay(self.bounds)
+        // Only update display if selection actually changed
+        if currentSelectedRange != previousSelectedRange {
+            previousSelectedRange = currentSelectedRange
+            self.setNeedsDisplay(self.bounds, avoidAdditionalLayout: true)
+        }
     }
 }
 #endif 
