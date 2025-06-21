@@ -90,11 +90,24 @@ extension DocumentTextView {
         if abs(charRange.location - previousSelectedRange.location) > 0 || 
            abs(charRange.length - previousSelectedRange.length) > 0 {
             self.setNeedsDisplay(self.bounds, avoidAdditionalLayout: true)
+            previousSelectedRange = charRange
         }
         // --- END FIX ---
     }
     
-    private var previousSelectedRange = NSRange(location: 0, length: 0)
+    // Use associated object instead of stored property
+    private var previousSelectedRange: NSRange {
+        get {
+            return objc_getAssociatedObject(self, &AssociatedKeys.previousSelectedRange) as? NSRange ?? NSRange(location: 0, length: 0)
+        }
+        set {
+            objc_setAssociatedObject(self, &AssociatedKeys.previousSelectedRange, newValue, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+        }
+    }
+    
+    private struct AssociatedKeys {
+        static var previousSelectedRange = "previousSelectedRange"
+    }
     
     override func didChangeText() {
         super.didChangeText()

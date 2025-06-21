@@ -1651,15 +1651,6 @@ private func createHeaderTransition() -> AnyTransition {
     )
 }
 
-// Add preference key for scroll offset at the end of the file
-struct ScrollOffsetPreferenceKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
-    }
-}
-
 #if os(macOS)
 // Isolated container to prevent SwiftUI updates from affecting the text editor
 struct IsolatedEditorContainer<Content: View>: View {
