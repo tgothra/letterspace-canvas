@@ -1,6 +1,5 @@
 #if os(macOS) || os(iOS)
 import SwiftUI
-import Combine
 #if os(macOS)
 import AppKit
 #elseif os(iOS)
@@ -50,9 +49,6 @@ struct DocumentArea: View {
     @State private var showFloatingHeader: Bool = false // Always start hidden
     
     @StateObject private var keyboard = KeyboardObserver()
-    
-    // Track event monitor to properly clean it up
-    @State private var mouseEventMonitor: Any?
     
     private var currentOverlap: CGFloat {
         if viewMode == .minimal || !isHeaderExpanded {
@@ -184,77 +180,64 @@ struct DocumentArea: View {
     
     // Document vertical content stack - MODIFIED for inline scrolling header
     private func documentVStack(geo: GeometryProxy) -> some View {
-        ScrollView(.vertical, showsIndicators: true) {
-            VStack(spacing: 0) {
-                // Header is now INSIDE the scroll view
-                if viewMode != .focus && !isDistractionFreeMode && (headerImage != nil || isHeaderExpanded) {
-                    headerView
-                        
-                    // Trigger after header image
-                    Rectangle()
-                        .fill(Color.clear)
-                        .frame(height: 1)
-                        .id("trigger")
-                        .background(
-                            GeometryReader { triggerGeo in
-                                Color.clear
-                                    .onAppear {
-                                        // Initial check without animation
-                                        let initialY = triggerGeo.frame(in: .named("scroll")).minY
-                                        showFloatingHeader = initialY < -10
-                                        scrollOffset = initialY
+        ScrollViewReader { scrollProxy in
+            ScrollView(.vertical, showsIndicators: true) {
+                        VStack(spacing: 0) {
+                    // Header is now INSIDE the scroll view
+            if viewMode != .focus && !isDistractionFreeMode && (headerImage != nil || isHeaderExpanded) {
+                                headerView
+                            .id("header")
+                            
+                            // Trigger after header image
+                            Rectangle()
+                                .fill(Color.clear)
+                                .frame(height: 1)
+                                .id("trigger")
+                                .background(
+                                    GeometryReader { triggerGeo in
+                                        Color.clear
+                                            .onChange(of: triggerGeo.frame(in: .named("scroll")).minY) { oldValue, newValue in
+                                                withAnimation(.easeInOut(duration: 0.3)) {
+                                                    // Show floating header when trigger is completely off screen (Y < -10 for buffer)
+                                                    // Hide when trigger is visible again (Y >= -10)
+                                                    let shouldShow = newValue < -10
+                                                    showFloatingHeader = shouldShow
+                                                    scrollOffset = newValue
+                                                    print("📍 Trigger Y: \(newValue), shouldShow: \(shouldShow)")
+                                                }
+                                            }
                                     }
-                                    .background(
-                                        // Use a preference key approach instead of onChange
-                                        GeometryReader { _ in
-                                            Color.clear
-                                                .preference(key: ScrollOffsetPreferenceKey.self, 
-                                                           value: triggerGeo.frame(in: .named("scroll")).minY)
-                                        }
-                                    )
-                            }
-                        )
-                }
-                
-                // Document content - no minimum height constraint
-                AnimatedDocumentContainer(document: $document) {
-                    documentContentView
-                }
+                                )
+                    }
+                    
+                    // Document content - no minimum height constraint
+            AnimatedDocumentContainer(document: $document) {
+                            documentContentView
             }
-            .frame(width: paperWidth)
-        }
-        .coordinateSpace(name: "scroll")
-        // Handle scroll offset changes using preference key with debouncing
-        .onPreferenceChange(ScrollOffsetPreferenceKey.self) { value in
-            // Only update if the change is significant (more than 5 points)
-            let shouldShow = value < -10
-            if showFloatingHeader != shouldShow {
-                showFloatingHeader = shouldShow
+                        }
+                        .frame(width: paperWidth)
             }
-            
-            // Only update scroll offset if changed significantly
-            if abs(scrollOffset - value) > 5 {
-                scrollOffset = value
-            }
-        }
-        // Add extra padding only when keyboard is visible
-        .padding(.bottom, keyboard.height > 0 ? keyboard.height + 20 : 0)
-        .animation(.easeOut, value: keyboard.height)
+            .coordinateSpace(name: "scroll")
+            // Add extra padding only when keyboard is visible
+            .padding(.bottom, keyboard.height > 0 ? keyboard.height + 20 : 0)
+            .animation(.easeOut, value: keyboard.height)
+                    }
         .overlay(alignment: .top) {
             // Show floating header when scrolled past threshold
-            ZStack {
-                if showFloatingHeader {
-                    floatingHeaderView
-                        .transition(.asymmetric(
-                            insertion: .move(edge: .top).combined(with: .opacity),
-                            removal: .move(edge: .top).combined(with: .opacity)
-                        ))
-                }
+            if showFloatingHeader {
+                floatingHeaderView
+                    .transition(.asymmetric(
+                        insertion: .move(edge: .top).combined(with: .opacity),
+                        removal: .move(edge: .top).combined(with: .opacity)
+                    ))
+                    .onAppear { print("🎯 Floating header appeared in overlay") }
+                    .onDisappear { print("🎯 Floating header disappeared from overlay") }
             }
-            .animation(.easeInOut(duration: 0.2), value: showFloatingHeader)
+            
+
         }
-        .opacity(isDocumentVisible ? 1 : 0)
-        .offset(y: isDocumentVisible ? 0 : 20)
+                        .opacity(isDocumentVisible ? 1 : 0)
+                        .offset(y: isDocumentVisible ? 0 : 20)
     }
     
 
@@ -541,39 +524,40 @@ struct DocumentArea: View {
         // Add global event monitor to directly handle clicks in the text editor area
         // This helps ensure header image mode is properly turned off when clicked
         #if os(macOS)
-        if mouseEventMonitor == nil {
-            mouseEventMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { event in
-                // Check if the click is in the main document editor
-                if let window = event.window,
-                   let contentView = window.contentView,
-                   let location = contentView.superview?.convert(event.locationInWindow, from: nil),
-                   let hitView = contentView.hitTest(location),
-                   (hitView.className.contains("DocumentEditor") || 
-                    hitView.superview?.className.contains("DocumentEditor") == true || 
-                    hitView.superview?.superview?.className.contains("DocumentEditor") == true) {
+        NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { event in
+            // Check if the click is in the main document editor
+            if let window = event.window,
+               let contentView = window.contentView,
+               let location = contentView.superview?.convert(event.locationInWindow, from: nil),
+               let hitView = contentView.hitTest(location),
+               (hitView.className.contains("DocumentEditor") || 
+                hitView.superview?.className.contains("DocumentEditor") == true || 
+                hitView.superview?.superview?.className.contains("DocumentEditor") == true) {
+                
+                // Special case: handle when user has header image enabled but no actual image uploaded
+                if self.isHeaderExpanded && !self.hasActualHeaderImage() {
+                    print("🖱️ Direct text editor click with header placeholder but no actual image")
                     
-                    // Special case: handle when user has header image enabled but no actual image uploaded
-                    if self.isHeaderExpanded && !self.hasActualHeaderImage() {
-                        // Turn OFF header image mode completely
+                    // Turn OFF header image mode completely
                         DispatchQueue.main.async {
-                            withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
-                                self.isHeaderExpanded = false
-                                self.document.isHeaderExpanded = false
-                                self.headerImage = nil
-                                self.isImageExpanded = false
-                                self.isTitleVisible = true
-                                self.isEditorFocused = false  // Text-only expanded title format
-                                
-                                // Save the document to persist this change
-                                self.document.save()
-                            }
+                        withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                            self.isHeaderExpanded = false
+                            self.document.isHeaderExpanded = false
+                            self.headerImage = nil
+                            self.isImageExpanded = false
+                            self.isTitleVisible = true
+                            self.isEditorFocused = false  // Text-only expanded title format
+                            
+                            // Save the document to persist this change
+                            self.document.save()
+                            print("📝 Turned off header image mode on direct text editor click (no actual image was uploaded)")
                         }
                     }
                 }
-                
-                // Return the event to continue normal processing
-                return event
             }
+            
+            // Return the event to continue normal processing
+            return event
         }
         #endif
         
@@ -750,20 +734,15 @@ struct DocumentArea: View {
     // Handle onDisappear event
     private func handleOnDisappear() {
         // Clear any focus when document is closed
-        #if os(macOS)
-        if let window = NSApp.keyWindow {
-            window.makeFirstResponder(nil)
-        }
+                #if os(macOS)
+                if let window = NSApp.keyWindow {
+                    window.makeFirstResponder(nil)
+                }
+                #endif
+                // Reset editor focused state
+                isEditorFocused = false
         
-        // Clean up event monitor
-        if let monitor = mouseEventMonitor {
-            NSEvent.removeMonitor(monitor)
-            mouseEventMonitor = nil
-        }
-        #endif
-        
-        // Reset editor focused state
-        isEditorFocused = false
+
         
         // CRITICAL FIX: If header is expanded but no actual image exists, reset to text-only
         if isHeaderExpanded && !hasActualHeaderImage() {
@@ -776,6 +755,7 @@ struct DocumentArea: View {
             
             // Save the document to persist this change
             document.save()
+            print("📝 Reset to text-only header on document close (no image was uploaded)")
         }
     }
     
@@ -958,6 +938,7 @@ struct DocumentArea: View {
                     isTitleVisible: $isTitleVisible
                 )
                 .buttonStyle(.plain)
+                .drawingGroup() // Add hardware acceleration for smoother transitions
                 .padding(.top, 24)
                     
                     // Add an invisible tracking element at the bottom of header
@@ -969,6 +950,7 @@ struct DocumentArea: View {
                                 Color.clear
                                     .preference(key: DividerOffsetKey.self, 
                                               value: headerBottomGeo.frame(in: .named("scroll")).minY)
+                                    .onAppear { print("📍 Header bottom tracker appeared") }
                             }
                         )
                 }
@@ -1003,6 +985,7 @@ struct DocumentArea: View {
                                 Color.clear
                                     .preference(key: DividerOffsetKey.self, 
                                               value: dividerGeo.frame(in: .named("scroll")).minY)
+                                    .onAppear { print("📍 Divider tracker appeared") }
                             }
                         )
                     
@@ -1014,20 +997,16 @@ struct DocumentArea: View {
                         .background(
                             GeometryReader { triggerGeo in
                                 Color.clear
-                                    .onAppear {
-                                        // Initial check without animation
-                                        let initialY = triggerGeo.frame(in: .named("scroll")).minY
-                                        showFloatingHeader = initialY < -10
-                                        scrollOffset = initialY
-                                    }
-                                    .background(
-                                        // Use a preference key approach instead of onChange
-                                        GeometryReader { _ in
-                                            Color.clear
-                                                .preference(key: ScrollOffsetPreferenceKey.self, 
-                                                           value: triggerGeo.frame(in: .named("scroll")).minY)
+                                    .onChange(of: triggerGeo.frame(in: .named("scroll")).minY) { oldValue, newValue in
+                                        withAnimation(.easeInOut(duration: 0.3)) {
+                                            // Show floating header when trigger is completely off screen (Y < -10 for buffer)
+                                            // Hide when trigger is visible again (Y >= -10)
+                                            let shouldShow = newValue < -10
+                                            showFloatingHeader = shouldShow
+                                            scrollOffset = newValue
+                                            print("📍 Trigger Y: \(newValue), shouldShow: \(shouldShow)")
                                         }
-                                    )
+                                    }
                             }
                         )
                 }
@@ -1049,13 +1028,10 @@ struct DocumentArea: View {
             
             // Document editor - let it expand naturally with small minimum
                 #if os(macOS)
-                // Wrap the DocumentEditorView in an isolated container
-                IsolatedEditorContainer {
-                    DocumentEditorView(document: $document, selectedBlock: .constant(nil))
-                        .frame(width: paperWidth)
-                        .frame(minHeight: 300) // Small minimum height to ensure visibility
-                }
+                // Using DocumentEditorView for the main content area on macOS
+                DocumentEditorView(document: $document, selectedBlock: .constant(nil))
                 .frame(width: paperWidth)
+                .frame(minHeight: 300) // Small minimum height to ensure visibility
                 // Removed all tap overlay code - no longer needed for scroll-based header
                 #elseif os(iOS)
                 // iOS: SwiftUI-based text editor optimized for touch
@@ -1650,41 +1626,5 @@ private func createHeaderTransition() -> AnyTransition {
         removal: removalTransition
     )
 }
-
-#if os(macOS)
-// Isolated container to prevent SwiftUI updates from affecting the text editor
-struct IsolatedEditorContainer<Content: View>: View {
-    let content: () -> Content
-    
-    init(@ViewBuilder content: @escaping () -> Content) {
-        self.content = content
-    }
-    
-    var body: some View {
-        // Use a simple container that doesn't respond to parent updates
-        _IsolatedHostingView(content: content())
-    }
-}
-
-// Custom hosting view that ignores parent updates
-struct _IsolatedHostingView<Content: View>: NSViewRepresentable {
-    let content: Content
-    
-    func makeNSView(context: Context) -> NSView {
-        let hostingController = NSHostingController(rootView: content)
-        let view = hostingController.view
-        
-        // Disable animations on this view
-        view.wantsLayer = true
-        view.layer?.speed = 0 // Disable all animations
-        
-        return view
-    }
-    
-    func updateNSView(_ nsView: NSView, context: Context) {
-        // Intentionally empty - we don't want to update based on parent changes
-    }
-}
-#endif
 
 #endif

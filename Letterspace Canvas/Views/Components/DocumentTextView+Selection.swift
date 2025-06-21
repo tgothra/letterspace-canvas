@@ -86,27 +86,8 @@ extension DocumentTextView {
         // --- FIX for lingering selection --- 
         // After everything, mark the view as needing display to clean up potential rendering artifacts
         // like the lingering selection sliver.
-        // Only redisplay if selection changed significantly
-        if abs(charRange.location - previousSelectedRange.location) > 0 || 
-           abs(charRange.length - previousSelectedRange.length) > 0 {
-            self.setNeedsDisplay(self.bounds, avoidAdditionalLayout: true)
-            previousSelectedRange = charRange
-        }
+        self.setNeedsDisplay(self.bounds) // Use bounds instead of true
         // --- END FIX ---
-    }
-    
-    // Use associated object instead of stored property
-    private var previousSelectedRange: NSRange {
-        get {
-            return objc_getAssociatedObject(self, &AssociatedKeys.previousSelectedRange) as? NSRange ?? NSRange(location: 0, length: 0)
-        }
-        set {
-            objc_setAssociatedObject(self, &AssociatedKeys.previousSelectedRange, newValue, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
-        }
-    }
-    
-    private struct AssociatedKeys {
-        static var previousSelectedRange = "previousSelectedRange"
     }
     
     override func didChangeText() {
@@ -128,13 +109,11 @@ extension DocumentTextView {
         fixScriptureIndentation()
         
         // EMERGENCY COLOR OVERRIDE: Force text color based on current appearance
-        // Only do this if appearance actually changed, not on every text change
-        // forceTextColorForCurrentAppearance()  // REMOVED - too expensive
+        forceTextColorForCurrentAppearance()
         
         // Force redraw to ensure highlights and colors are visible
-        // Remove immediate display update - let the system handle it
-        // needsDisplay = true
-        // displayIfNeeded()  // REMOVED - forcing immediate redraw causes performance issues
+        needsDisplay = true
+        displayIfNeeded()
     }
 
     @objc func selectionDidChange(_ notification: Notification) {
@@ -202,11 +181,7 @@ extension DocumentTextView {
             hideFormattingToolbar()
         }
         
-        // Only update display if selection actually changed
-        if currentSelectedRange != previousSelectedRange {
-            previousSelectedRange = currentSelectedRange
-            self.setNeedsDisplay(self.bounds, avoidAdditionalLayout: true)
-        }
+        self.setNeedsDisplay(self.bounds)
     }
 }
 #endif 

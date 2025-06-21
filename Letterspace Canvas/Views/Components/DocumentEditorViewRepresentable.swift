@@ -30,8 +30,6 @@ struct DocumentEditorView: NSViewRepresentable {
         layoutManager.allowsNonContiguousLayout = false
         layoutManager.backgroundLayoutEnabled = true
         layoutManager.defaultAttachmentScaling = .scaleProportionallyDown
-        // Add performance optimization
-        layoutManager.usesDefaultHyphenation = false
         
         // Set up the text storage system
         let textStorage = NSTextStorage()
@@ -49,14 +47,6 @@ struct DocumentEditorView: NSViewRepresentable {
         textView.importsGraphics = true
         textView.isRichText = true
         textView.allowsImageEditing = false
-        
-        // Add performance optimizations
-        textView.displaysLinkToolTips = false
-        textView.usesAdaptiveColorMappingForDarkAppearance = true
-        
-        // Disable Core Animation for smoother text rendering
-        textView.wantsLayer = false
-        textView.layerContentsRedrawPolicy = .never
         
         // CRITICAL: Configure for dynamic sizing
         textView.isVerticallyResizable = true
@@ -87,6 +77,10 @@ struct DocumentEditorView: NSViewRepresentable {
         // Add text view to wrapper
         wrapperView.textView = textView
         wrapperView.addSubview(textView)
+        
+        // Ensure layout is complete before returning
+        layoutManager.ensureLayout(for: textContainer)
+        textView.layoutManager?.ensureLayout(for: textContainer)
         
         // Set default typing attributes with consistent styling across all lines
         let isDarkModeInitial = colorScheme == .dark
@@ -218,28 +212,28 @@ struct DocumentEditorView: NSViewRepresentable {
                 if textView.textStorage?.length != attributedContent.length {
                     print("📤 Updating text view content - preserving scripture formatting")
                 
-                    // Create a mutable copy to ensure we can modify attributes
-                    let mutableContent = NSMutableAttributedString(attributedString: attributedContent)
+                // Create a mutable copy to ensure we can modify attributes
+                let mutableContent = NSMutableAttributedString(attributedString: attributedContent)
                     
                     // Apply scripture ranges if present in the textElement
                     if !textElement.scriptureRanges.isEmpty {
-                        // Apply both attributes to each stored range
+                    // Apply both attributes to each stored range
                         for rangeArray in textElement.scriptureRanges {
-                            if rangeArray.count == 2 {
-                                let location = rangeArray[0]
-                                let length = rangeArray[1]
+                        if rangeArray.count == 2 {
+                            let location = rangeArray[0]
+                            let length = rangeArray[1]
+                            
+                            // Create an NSRange from the stored integers
+                            let scriptureRange = NSRange(location: location, length: length)
+                            
+                            // Safety check to ensure range is within bounds
+                            if location + length <= mutableContent.length {
+                                // Apply non-editable attribute
+                                mutableContent.addAttribute(DocumentTextView.nonEditableAttribute, value: true, range: scriptureRange)
                                 
-                                // Create an NSRange from the stored integers
-                                let scriptureRange = NSRange(location: location, length: length)
+                                // Apply block quote attribute (for green line)
+                                mutableContent.addAttribute(DocumentTextView.isScriptureBlockQuote, value: true, range: scriptureRange)
                                 
-                                // Safety check to ensure range is within bounds
-                                if location + length <= mutableContent.length {
-                                    // Apply non-editable attribute
-                                    mutableContent.addAttribute(DocumentTextView.nonEditableAttribute, value: true, range: scriptureRange)
-                                    
-                                    // Apply block quote attribute (for green line)
-                                    mutableContent.addAttribute(DocumentTextView.isScriptureBlockQuote, value: true, range: scriptureRange)
-                                    
                                     print("📥 Re-applied scripture attributes from stored range: \\(scriptureRange)")
                                 }
                             }
@@ -582,43 +576,27 @@ class DynamicHeightView: NSView {
         }
     }
     
-    private var cachedIntrinsicSize: NSSize = NSSize(width: 752, height: 100)
-    private var isUpdatingLayout = false
-    
     override var intrinsicContentSize: NSSize {
         if let textView = textView {
             let size = textView.intrinsicContentSize
-            cachedIntrinsicSize = NSSize(width: 752, height: size.height)
-            return cachedIntrinsicSize
+            return NSSize(width: 752, height: size.height)
         }
-        return cachedIntrinsicSize
+        return NSSize(width: 752, height: 100)
     }
     
     override func layout() {
         super.layout()
         
-        guard !isUpdatingLayout else { return }
-        isUpdatingLayout = true
-        
         if let textView = textView {
             // Update text view frame to match our bounds
             textView.frame = bounds
             
-            // Check if size changed significantly (more than 5 pixels)
+            // Check if size changed
             let newHeight = textView.intrinsicContentSize.height
-            if abs(cachedIntrinsicSize.height - newHeight) > 5 {
-                cachedIntrinsicSize.height = newHeight
-                // Debounce the invalidation
-                NSObject.cancelPreviousPerformRequests(withTarget: self, selector: #selector(delayedInvalidateIntrinsicContentSize), object: nil)
-                perform(#selector(delayedInvalidateIntrinsicContentSize), with: nil, afterDelay: 0.1)
+            if abs(frame.height - newHeight) > 1 {
+                invalidateIntrinsicContentSize()
             }
         }
-        
-        isUpdatingLayout = false
-    }
-    
-    @objc private func delayedInvalidateIntrinsicContentSize() {
-        invalidateIntrinsicContentSize()
     }
     
     override func viewDidMoveToWindow() {
@@ -636,14 +614,17 @@ class DynamicHeightView: NSView {
     }
     
     @objc private func textViewDidChange(_ notification: Notification) {
-        // Debounce size recalculation
-        NSObject.cancelPreviousPerformRequests(withTarget: self, selector: #selector(delayedInvalidateIntrinsicContentSize), object: nil)
-        perform(#selector(delayedInvalidateIntrinsicContentSize), with: nil, afterDelay: 0.1)
+        // Force size recalculation
+        invalidateIntrinsicContentSize()
+        
+        // Notify SwiftUI
+        if let window = window {
+            window.layoutIfNeeded()
+        }
     }
     
     deinit {
         NotificationCenter.default.removeObserver(self)
-        NSObject.cancelPreviousPerformRequests(withTarget: self)
     }
 }
 
@@ -651,26 +632,16 @@ class DynamicHeightView: NSView {
 class NoScrollTextView: DocumentTextView {
     
     private var lastCalculatedHeight: CGFloat = 100
-    private var isCalculatingSize = false
     
     override var intrinsicContentSize: NSSize {
-        guard !isCalculatingSize else {
-            return NSSize(width: 752, height: lastCalculatedHeight)
-        }
-        
-        isCalculatingSize = true
-        defer { isCalculatingSize = false }
-        
         // Calculate the size needed for all text content
         guard let layoutManager = layoutManager,
               let textContainer = textContainer else {
             return NSSize(width: 752, height: lastCalculatedHeight)
         }
         
-        // Only force layout if necessary
-        if layoutManager.numberOfGlyphs == 0 {
-            layoutManager.ensureLayout(for: textContainer)
-        }
+        // Force complete layout
+        layoutManager.ensureLayout(for: textContainer)
         
         // Get the used rect for the text
         let usedRect = layoutManager.usedRect(for: textContainer)
@@ -678,11 +649,7 @@ class NoScrollTextView: DocumentTextView {
         
         // Calculate height based on actual content
         let contentHeight = usedRect.height + insets.height * 2
-        
-        // Only update if changed significantly
-        if abs(lastCalculatedHeight - contentHeight) > 5 {
-            lastCalculatedHeight = max(contentHeight, 50)
-        }
+        lastCalculatedHeight = max(contentHeight, 50)
         
         return NSSize(width: 752, height: lastCalculatedHeight)
     }
@@ -690,20 +657,20 @@ class NoScrollTextView: DocumentTextView {
     override func didChangeText() {
         super.didChangeText()
         
-        // Don't force immediate layout - let it happen naturally
-        // layoutManager?.ensureLayout(for: textContainer!)
+        // Force immediate layout update
+        layoutManager?.ensureLayout(for: textContainer!)
         
-        // Debounce intrinsic content size invalidation
-        NSObject.cancelPreviousPerformRequests(withTarget: self, selector: #selector(delayedInvalidate), object: nil)
-        perform(#selector(delayedInvalidate), with: nil, afterDelay: 0.05)
-    }
-    
-    @objc private func delayedInvalidate() {
+        // Invalidate intrinsic content size
         invalidateIntrinsicContentSize()
         
-        // Notify SwiftUI that size changed
-        if let window = self.window {
-            window.layoutIfNeeded()
+        // Force SwiftUI to re-measure
+        DispatchQueue.main.async { [weak self] in
+            self?.invalidateIntrinsicContentSize()
+            
+            // Notify SwiftUI that size changed
+            if let window = self?.window {
+                window.layoutIfNeeded()
+            }
         }
     }
     
@@ -715,8 +682,8 @@ class NoScrollTextView: DocumentTextView {
                                              height: CGFloat.greatestFiniteMagnitude)
         textContainer?.widthTracksTextView = false
         
-        // Don't force layout here - let it happen naturally
-        // layoutManager?.ensureLayout(for: textContainer!)
+        // Force layout manager to recalculate
+        layoutManager?.ensureLayout(for: textContainer!)
     }
     
     override var isVerticallyResizable: Bool {
@@ -744,9 +711,6 @@ class NoScrollTextView: DocumentTextView {
 extension DocumentTextView {
     func forceTextColorForCurrentAppearance() {
         guard let textStorage = self.textStorage else { return }
-        
-        // Skip if we don't have any text
-        guard textStorage.length > 0 else { return }
         
         // Apply the label color to all text to ensure proper dark/light mode handling
         textStorage.beginEditing()
@@ -799,14 +763,9 @@ extension DocumentTextView {
         textStorage.endEditing()
         print("🎨 Applied full opacity color for current appearance mode: \(isDarkMode ? "dark" : "light")")
         
-        // Remove immediate display update - let the text storage handle it
-        // layoutManager?.ensureLayout(for: textContainer!)
-        // needsDisplay = true
-        
-        // Only force display update if we're not actively typing
-        if self.window?.firstResponder != self {
-            setNeedsDisplay(bounds, avoidAdditionalLayout: true)
-        }
+        // Force immediate layout refresh
+        layoutManager?.ensureLayout(for: textContainer!)
+        needsDisplay = true
     }
 }
 #endif
