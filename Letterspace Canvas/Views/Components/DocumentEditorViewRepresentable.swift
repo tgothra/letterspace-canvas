@@ -610,12 +610,42 @@ class DynamicHeightView: NSView {
                 name: NSText.didChangeNotification,
                 object: textView
             )
+            
+            // Set up scroll monitoring
+            if window != nil {
+                NotificationCenter.default.addObserver(
+                    self,
+                    selector: #selector(scrollViewWillBeginScrolling),
+                    name: NSScrollView.willStartLiveScrollNotification,
+                    object: nil
+                )
+                NotificationCenter.default.addObserver(
+                    self,
+                    selector: #selector(scrollViewDidEndScrolling),
+                    name: NSScrollView.didEndLiveScrollNotification,
+                    object: nil
+                )
+            }
         }
     }
     
     @objc private func textViewDidChange(_ notification: Notification) {
         // Don't force immediate updates - let the text view handle batching
         // This prevents double-updates that cause jitter
+    }
+    
+    @objc private func scrollViewWillBeginScrolling(_ notification: Notification) {
+        // Notify text view that scrolling has started
+        if let textView = textView as? NoScrollTextView {
+            textView.setScrolling(true)
+        }
+    }
+    
+    @objc private func scrollViewDidEndScrolling(_ notification: Notification) {
+        // Notify text view that scrolling has ended
+        if let textView = textView as? NoScrollTextView {
+            textView.setScrolling(false)
+        }
     }
     
     deinit {
@@ -629,8 +659,16 @@ class NoScrollTextView: DocumentTextView {
     private var lastCalculatedHeight: CGFloat = 100
     private var heightUpdateTimer: Timer?
     private var pendingHeightUpdate = false
+    private var isScrolling = false
+    private var scrollEndTimer: Timer?
+    private var cachedHeight: CGFloat = 100
     
     override var intrinsicContentSize: NSSize {
+        // If we're scrolling, return the cached height to avoid recalculation
+        if isScrolling {
+            return NSSize(width: 752, height: cachedHeight)
+        }
+        
         // Calculate the size needed for all text content
         guard let layoutManager = layoutManager,
               let textContainer = textContainer else {
@@ -647,6 +685,7 @@ class NoScrollTextView: DocumentTextView {
         // Calculate height based on actual content
         let contentHeight = usedRect.height + insets.height * 2
         lastCalculatedHeight = max(contentHeight, 50)
+        cachedHeight = lastCalculatedHeight
         
         return NSSize(width: 752, height: lastCalculatedHeight)
     }
@@ -694,6 +733,9 @@ class NoScrollTextView: DocumentTextView {
     override func layout() {
         super.layout()
         
+        // Skip layout updates during scrolling
+        guard !isScrolling else { return }
+        
         // Ensure text container matches our width
         textContainer?.containerSize = NSSize(width: bounds.width - textContainerInset.width * 2, 
                                              height: CGFloat.greatestFiniteMagnitude)
@@ -727,6 +769,8 @@ class NoScrollTextView: DocumentTextView {
     deinit {
         heightUpdateTimer?.invalidate()
         heightUpdateTimer = nil
+        scrollEndTimer?.invalidate()
+        scrollEndTimer = nil
     }
     
     // Force immediate update when text view loses focus
@@ -740,6 +784,24 @@ class NoScrollTextView: DocumentTextView {
         }
         
         return result
+    }
+    
+    // Handle scroll state changes
+    func setScrolling(_ scrolling: Bool) {
+        scrollEndTimer?.invalidate()
+        
+        if scrolling {
+            isScrolling = true
+        } else {
+            // Delay the end of scrolling state to handle momentum scrolling
+            scrollEndTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false) { [weak self] _ in
+                self?.isScrolling = false
+                // Update height after scrolling ends
+                if self?.pendingHeightUpdate == true {
+                    self?.performHeightUpdate()
+                }
+            }
+        }
     }
 }
 
