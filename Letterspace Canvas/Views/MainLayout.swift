@@ -2918,8 +2918,22 @@ struct MainLayout: View {
             // .frame(maxWidth: .infinity) // Already applied by parent ZStack
             // .frame(maxHeight: dashboardGeo.size.height) // Use available height
                             } else {
-                                // TESTING: Pure text editor with no headers at all
-                                PureTextEditorView(document: $document)
+                                DocumentArea(
+                                    document: $document,
+                                    isHeaderExpanded: $isHeaderExpanded,
+                                    isSubtitleVisible: Binding(
+                                        get: { document.isSubtitleVisible },
+                    set: { newValue in document.isSubtitleVisible = newValue; document.save() }
+                                    ),
+                                    documentHeight: $documentHeight,
+                                    viewportHeight: $viewportHeight,
+                                    isDistractionFreeMode: viewMode == .distractionFree,
+                                    viewMode: $viewMode,
+                availableWidth: availableWidth, // Pass dynamic width
+                onHeaderClick: { withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) { scrollOffset = 0 } },
+                                    isSearchActive: $isSearchActive,
+                                    shouldPauseHover: isSearchActive
+                                )
                                 .id(document.id)
                                 .transition(.asymmetric(
                                     insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .center)),

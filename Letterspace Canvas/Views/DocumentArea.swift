@@ -178,66 +178,28 @@ struct DocumentArea: View {
         .frame(maxWidth: .infinity) // Ensure HStack takes max width
     }
     
-    // Document vertical content stack - MODIFIED for inline scrolling header
+    // Document vertical content stack - SIMPLIFIED for integrated header
     private func documentVStack(geo: GeometryProxy) -> some View {
         ScrollViewReader { scrollProxy in
             ScrollView(.vertical, showsIndicators: true) {
-                        VStack(spacing: 0) {
-                    // Header is now INSIDE the scroll view
-            if viewMode != .focus && !isDistractionFreeMode && (headerImage != nil || isHeaderExpanded) {
-                                headerView
-                            .id("header")
-                            
-                            // Trigger after header image
-                            Rectangle()
-                                .fill(Color.clear)
-                                .frame(height: 1)
-                                .id("trigger")
-                                .background(
-                                    GeometryReader { triggerGeo in
-                                        Color.clear
-                                            .onChange(of: triggerGeo.frame(in: .named("scroll")).minY) { oldValue, newValue in
-                                                withAnimation(.easeInOut(duration: 0.3)) {
-                                                    // Show floating header when trigger is completely off screen (Y < -10 for buffer)
-                                                    // Hide when trigger is visible again (Y >= -10)
-                                                    let shouldShow = newValue < -10
-                                                    showFloatingHeader = shouldShow
-                                                    scrollOffset = newValue
-                                                    print("📍 Trigger Y: \(newValue), shouldShow: \(shouldShow)")
-                                                }
-                                            }
-                                    }
-                                )
-                    }
+                VStack(spacing: 0) {
+                    // INTEGRATED HEADER: No separate header needed - it's part of the text editor
                     
-                    // Document content - no minimum height constraint
-            AnimatedDocumentContainer(document: $document) {
-                            documentContentView
-            }
-                        }
-                        .frame(width: paperWidth)
+                    // Document content with integrated header
+                    AnimatedDocumentContainer(document: $document) {
+                        documentContentView
+                    }
+                }
+                .frame(width: paperWidth)
             }
             .coordinateSpace(name: "scroll")
             // Add extra padding only when keyboard is visible
             .padding(.bottom, keyboard.height > 0 ? keyboard.height + 20 : 0)
             .animation(.easeOut, value: keyboard.height)
-                    }
-        .overlay(alignment: .top) {
-            // Show floating header when scrolled past threshold
-            if showFloatingHeader {
-                floatingHeaderView
-                    .transition(.asymmetric(
-                        insertion: .move(edge: .top).combined(with: .opacity),
-                        removal: .move(edge: .top).combined(with: .opacity)
-                    ))
-                    .onAppear { print("🎯 Floating header appeared in overlay") }
-                    .onDisappear { print("🎯 Floating header disappeared from overlay") }
-            }
-            
-
         }
-                        .opacity(isDocumentVisible ? 1 : 0)
-                        .offset(y: isDocumentVisible ? 0 : 20)
+        // SIMPLIFIED: No floating header overlay needed since header scrolls with content
+        .opacity(isDocumentVisible ? 1 : 0)
+        .offset(y: isDocumentVisible ? 0 : 20)
     }
     
 
@@ -965,85 +927,32 @@ struct DocumentArea: View {
     
     private var documentContentView: some View {
         VStack(spacing: 0) {
-            // Only show title/subtitle in document content when there's no header image
-            // and header expansion is not enabled
-            if headerImage == nil && !isHeaderExpanded {
-                // Title/subtitle section
-                VStack(spacing: 0) {
-                    documentTitleView
-                    
-                    // Separator with consistent transitions
-                    Divider()
-                        .frame(height: 1)
-                        .background(colorScheme == .dark ? Color.white.opacity(0.1) : Color.black.opacity(0.1))
-                        .padding(.horizontal, 24)
-                        // Apply specific top/bottom padding
-                        .padding(.top, isDistractionFreeMode ? 16 : 24)
-                        .padding(.bottom, 12) // Reduced bottom padding to 12
-                        .background(
-                            GeometryReader { dividerGeo in
-                                Color.clear
-                                    .preference(key: DividerOffsetKey.self, 
-                                              value: dividerGeo.frame(in: .named("scroll")).minY)
-                                    .onAppear { print("📍 Divider tracker appeared") }
-                            }
-                        )
-                    
-                    // Trigger after red divider for no-header-image case
-                    Rectangle()
-                        .fill(Color.clear)
-                        .frame(height: 1)
-                        .id("trigger")
-                        .background(
-                            GeometryReader { triggerGeo in
-                                Color.clear
-                                    .onChange(of: triggerGeo.frame(in: .named("scroll")).minY) { oldValue, newValue in
-                                        withAnimation(.easeInOut(duration: 0.3)) {
-                                            // Show floating header when trigger is completely off screen (Y < -10 for buffer)
-                                            // Hide when trigger is visible again (Y >= -10)
-                                            let shouldShow = newValue < -10
-                                            showFloatingHeader = shouldShow
-                                            scrollOffset = newValue
-                                            print("📍 Trigger Y: \(newValue), shouldShow: \(shouldShow)")
-                                        }
-                                    }
-                            }
-                        )
-                }
-                // IMPORTANT: Use an identity transition for removal to make title disappear immediately
-                // without any animation when toggling header on
-                .transition(.asymmetric(
-                    insertion: .opacity.combined(with: .scale(scale: 0.98)),
-                    removal: .identity
-                ))
-                .opacity(isDistractionFreeMode ? 0.7 : 1)
-                // IMPORTANT: Remove ALL animations for title visibility when toggling header
-                // Only animate title changes not related to header toggling
-
-                
-                // Add small spacing between title and content when title is visible
-                Spacer()
-                    .frame(height: 8)
-            }
+            // INTEGRATED HEADER: The text editor now includes the header as part of its content
+            // No separate title/subtitle section needed - it's all in the text editor
             
-            // Document editor - let it expand naturally with small minimum
-                #if os(macOS)
-                // TESTING: Using StandaloneCleanEditor - completely header-free
-                StandaloneCleanEditor(document: $document)
-                .frame(width: paperWidth)
-                .frame(minHeight: 400) // Minimum height for standalone editor
-                // Removed all tap overlay code - no longer needed for scroll-based header
-                #elseif os(iOS)
-                // iOS: SwiftUI-based text editor optimized for touch
-                IOSDocumentEditor(document: $document)
-                .frame(minHeight: 300)
-                #endif
+            // Document editor with integrated header - let it expand naturally
+            #if os(macOS)
+            // Using DocumentEditorView with integrated header for the main content area on macOS
+            DocumentEditorView(
+                document: $document, 
+                selectedBlock: .constant(nil),
+                isHeaderExpanded: $isHeaderExpanded,
+                headerImage: $headerImage,
+                isShowingImagePicker: $isShowingImagePicker
+            )
+            .frame(width: paperWidth)
+            .frame(minHeight: 400) // Increased minimum height to account for header
+            #elseif os(iOS)
+            // iOS: SwiftUI-based text editor optimized for touch (TODO: Update for header integration)
+            IOSDocumentEditor(document: $document)
+            .frame(minHeight: 400)
+            #endif
             
             // Add extra space at bottom to ensure scrollbar is contained (only on non-iPad)
             #if os(iOS)
             if UIDevice.current.userInterfaceIdiom != .pad {
-            Spacer()
-                .frame(height: 16)
+                Spacer()
+                    .frame(height: 16)
             }
             #else
             Spacer()
@@ -1062,7 +971,6 @@ struct DocumentArea: View {
                     y: 2
                 )
         )
-
     }
     
     private var documentTitleView: some View {
