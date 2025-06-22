@@ -47,6 +47,7 @@ struct DocumentArea: View {
     // Scroll-based header behavior
     @State private var scrollOffset: CGFloat = 0
     @State private var showFloatingHeader: Bool = false // Always start hidden
+    @State private var useFixedHeight: Bool = false // New: Switch to fixed height when floating header shows
     
     @StateObject private var keyboard = KeyboardObserver()
     
@@ -182,10 +183,10 @@ struct DocumentArea: View {
     private func documentVStack(geo: GeometryProxy) -> some View {
         ScrollViewReader { scrollProxy in
             ScrollView(.vertical, showsIndicators: true) {
-                VStack(spacing: 0) {
+                        VStack(spacing: 0) {
                     // Header is now INSIDE the scroll view
-                    if viewMode != .focus && !isDistractionFreeMode && (headerImage != nil || isHeaderExpanded) {
-                        headerView
+            if viewMode != .focus && !isDistractionFreeMode && (headerImage != nil || isHeaderExpanded) {
+                                headerView
                             .id("header")
                             
                         // This trigger uses a PreferenceKey to report its position, which is much
@@ -204,11 +205,11 @@ struct DocumentArea: View {
                     }
                     
                     // Document content - no minimum height constraint
-                    AnimatedDocumentContainer(document: $document) {
-                        documentContentView
-                    }
-                }
-                .frame(width: paperWidth)
+            AnimatedDocumentContainer(document: $document) {
+                            documentContentView
+            }
+                        }
+                        .frame(width: paperWidth)
             }
             .coordinateSpace(name: "scroll")
             // This modifier receives the scroll offset from the PreferenceKey and updates the state.
@@ -221,6 +222,7 @@ struct DocumentArea: View {
                     if showFloatingHeader {
                         withAnimation(.easeInOut(duration: 0.2)) {
                             showFloatingHeader = false
+                            useFixedHeight = false // Switch back to dynamic height
                         }
                     }
                     return
@@ -230,6 +232,7 @@ struct DocumentArea: View {
                 if showFloatingHeader != shouldShow {
                     withAnimation(.easeInOut(duration: 0.2)) {
                         showFloatingHeader = shouldShow
+                        useFixedHeight = shouldShow // Switch to fixed height when floating header shows
                     }
                 }
                 scrollOffset = triggerY // Update for other potential uses
@@ -1053,7 +1056,7 @@ struct DocumentArea: View {
             // Document editor - let it expand naturally with small minimum
                 #if os(macOS)
                 // Using DocumentEditorView for the main content area on macOS
-                DocumentEditorView(document: $document, selectedBlock: .constant(nil))
+                DocumentEditorView(document: $document, selectedBlock: .constant(nil), useFixedHeight: $useFixedHeight)
                 .frame(width: paperWidth)
                 .frame(minHeight: 300) // Small minimum height to ensure visibility
                 // Removed all tap overlay code - no longer needed for scroll-based header
