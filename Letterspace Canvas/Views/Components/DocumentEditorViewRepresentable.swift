@@ -12,78 +12,52 @@ struct DocumentEditorView: NSViewRepresentable {
     @Environment(\.colorScheme) var colorScheme
     @State private var isLoading = true
     
-    // Header-related bindings
-    @Binding var isHeaderExpanded: Bool
-    @Binding var headerImage: NSImage?
-    @Binding var isShowingImagePicker: Bool
-    
     func makeNSView(context: Context) -> NSView {
-        print("🏗️ Creating text view with INTEGRATED HEADER approach...")
+        print("🏗️ Creating text view without internal scrolling...")
         
         // Create a wrapper view that will properly size itself
         let wrapperView = DynamicHeightView()
         
-        // FIXED: Create container with stable sizing
+        // Create a fixed size container with appropriate sizing
         let containerWidth = 752.0
         let textContainer = NSTextContainer(containerSize: NSSize(width: containerWidth - 38, height: CGFloat.greatestFiniteMagnitude))
         textContainer.widthTracksTextView = false // Force fixed width
         textContainer.heightTracksTextView = false  // Don't track height
         textContainer.lineFragmentPadding = 0
         
-        // OPTIMIZED: Create layout manager with minimal configuration
+        // Create a layout manager with improved configuration
         let layoutManager = NSLayoutManager()
         layoutManager.allowsNonContiguousLayout = false
-        layoutManager.backgroundLayoutEnabled = false // Disable background layout for immediate rendering
+        layoutManager.backgroundLayoutEnabled = true
         layoutManager.defaultAttachmentScaling = .scaleProportionallyDown
-        // Note: defaultLineHeight is a method, we'll set line height via paragraph style instead
         
         // Set up the text storage system
         let textStorage = NSTextStorage()
         layoutManager.addTextContainer(textContainer)
         textStorage.addLayoutManager(layoutManager)
         
-        // Create the text view with INTEGRATED HEADER
+        // Create the text view directly - no container view
         let textView = NoScrollTextView(frame: NSRect(x: 0, y: 0, width: containerWidth, height: 100), textContainer: textContainer)
-        
-        // DEBUG: Print header state values
-        print("🎯 Header Debug - isHeaderExpanded: \(isHeaderExpanded)")
-        print("🎯 Header Debug - headerImage: \(headerImage != nil ? "HAS IMAGE" : "NO IMAGE")")
-        print("🎯 Header Debug - document.title: '\(document.title)'")
-        
-        // Configure header state - FORCE VISIBLE FOR TESTING
-        textView.isHeaderExpanded = true // Force true for testing
-        textView.setHeaderImage(headerImage)
-        textView.setTitle(document.title.isEmpty ? "Test Document" : document.title)
-        
-        print("🎯 Header Debug - Set textView.isHeaderExpanded to: \(textView.isHeaderExpanded)")
-        
-        // Set up notification observer for header image picker
-        NotificationCenter.default.addObserver(
-            forName: .headerImagePickerRequested,
-            object: textView,
-            queue: .main
-        ) { _ in
-            isShowingImagePicker = true
-        }
         
         // Configure appearance and behavior
         textView.font = NSFont(name: "Inter-Regular", size: 15) // Already at 15pt
+        textView.textContainerInset = NSSize(width: 19, height: 24) // Increased vertical inset
         textView.isEditable = true
         textView.isSelectable = true
         textView.importsGraphics = true
         textView.isRichText = true
         textView.allowsImageEditing = false
         
-        // FIXED: Configure for stable sizing
+        // CRITICAL: Configure for dynamic sizing
         textView.isVerticallyResizable = true
         textView.isHorizontallyResizable = false
         textView.autoresizingMask = []  // No autoresizing
         
-        // FIXED: Set size constraints once
+        // Set size constraints for proper expansion
         textView.minSize = NSSize(width: containerWidth, height: 50)
         textView.maxSize = NSSize(width: containerWidth, height: CGFloat.greatestFiniteMagnitude)
         
-        // OPTIMIZED: Minimal priority settings
+        // CRITICAL: Tell SwiftUI to use intrinsic content size
         textView.setContentHuggingPriority(.defaultLow, for: .vertical)
         textView.setContentCompressionResistancePriority(.defaultHigh, for: .vertical)
         
@@ -104,7 +78,9 @@ struct DocumentEditorView: NSViewRepresentable {
         wrapperView.textView = textView
         wrapperView.addSubview(textView)
         
-        // REMOVED: No layout manager forcing - let it render naturally
+        // Ensure layout is complete before returning
+        layoutManager.ensureLayout(for: textContainer)
+        textView.layoutManager?.ensureLayout(for: textContainer)
         
         // Set default typing attributes with consistent styling across all lines
         let isDarkModeInitial = colorScheme == .dark
@@ -113,10 +89,7 @@ struct DocumentEditorView: NSViewRepresentable {
             .font: NSFont(name: "Inter-Regular", size: 15) ?? .systemFont(ofSize: 15),
             .paragraphStyle: {
                 let style = NSMutableParagraphStyle()
-                // FIXED: Use consistent line heights for smooth rendering
-                style.minimumLineHeight = 19.5
-                style.maximumLineHeight = 19.5
-                style.lineHeightMultiple = 1.0 // Use 1.0 since we're setting explicit heights
+                style.lineHeightMultiple = 1.3
                 style.headIndent = 0
                 style.firstLineHeadIndent = 0
                 style.paragraphSpacing = 4
@@ -128,17 +101,12 @@ struct DocumentEditorView: NSViewRepresentable {
         // Force apply text color to ensure uniform appearance
         textView.forceTextColorForCurrentAppearance()
         
-        // SMOOTH: Apply fixed line heights to any existing content
-        textView.applyFixedLineHeights()
-        
         // IMPORTANT: Explicitly restore scripture attributes when first creating the view
         // This ensures scripture blocks are properly protected from the start
         print("🏗️ Initial restoration of scripture attributes during view creation")
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             // Small delay to ensure text is fully loaded before applying attributes
             textView.restoreScriptureAttributes()
-            // SMOOTH: Reapply fixed line heights after scripture restoration
-            textView.applyFixedLineHeights()
         }
         
         return wrapperView
@@ -150,17 +118,12 @@ struct DocumentEditorView: NSViewRepresentable {
               let textView = wrapperView.textView as? NoScrollTextView else { return }
         textView.colorScheme = colorScheme  // Update colorScheme when it changes
         
-        // HEADER INTEGRATION: Update header state
-        textView.isHeaderExpanded = isHeaderExpanded
-        textView.setHeaderImage(headerImage)
-        textView.setTitle(document.title)
-        
         // CRITICAL FIX: Force update the header state and ensure editing capability
-        let isHeaderExpandedValue = document.isHeaderExpanded
-        textView.isHeaderImageCurrentlyExpanded = isHeaderExpandedValue
+        let isHeaderExpanded = document.isHeaderExpanded
+        textView.isHeaderImageCurrentlyExpanded = isHeaderExpanded
         
         // If header isn't expanded, force enable editing
-        if !isHeaderExpandedValue {
+        if !isHeaderExpanded {
             DispatchQueue.main.async {
                 textView.isEditable = true
                 textView.isSelectable = true
@@ -173,7 +136,7 @@ struct DocumentEditorView: NSViewRepresentable {
             }
         }
         
-        // FIXED: Maintain fixed width constraints without forcing layout
+        // Maintain fixed width constraints
         textView.minSize = NSSize(width: 752, height: 0)
         textView.maxSize = NSSize(width: 752, height: CGFloat.greatestFiniteMagnitude)
         textView.textContainer?.containerSize = NSSize(width: 752, height: CGFloat.greatestFiniteMagnitude)
@@ -189,9 +152,6 @@ struct DocumentEditorView: NSViewRepresentable {
             
             // Always update document reference
             textView.document = document
-            
-            // Update header content for new document
-            textView.setTitle(document.title)
             
             // Explicitly clear the text view
             textView.string = ""
@@ -219,9 +179,6 @@ struct DocumentEditorView: NSViewRepresentable {
                 
                 // Set the text storage to the new content
                 textView.textStorage?.setAttributedString(mutableContent)
-                
-                // SMOOTH: Apply fixed line heights to updated content
-                textView.applyFixedLineHeights()
                 
             } else if !document.elements.contains(where: { $0.type == .textBlock }) {
                 // If no text block, ensure text view is empty
@@ -285,9 +242,6 @@ struct DocumentEditorView: NSViewRepresentable {
                     
                     // Set the text storage to the new content
                     textView.textStorage?.setAttributedString(mutableContent)
-                    
-                    // SMOOTH: Apply fixed line heights to updated content
-                    textView.applyFixedLineHeights()
                 }
             }
             
@@ -317,11 +271,6 @@ struct DocumentEditorView: NSViewRepresentable {
         
         func textDidChange(_ notification: Notification) {
             guard let textView = notification.object as? NSTextView else { return }
-            
-            // SMOOTH: Apply fixed line heights to new text as it's typed
-            if let documentTextView = textView as? DocumentTextView {
-                documentTextView.applyFixedLineHeights()
-            }
             
             // Create a mutable copy of the attributed string to preserve all attributes
             let attributedString = NSMutableAttributedString(attributedString: textView.textStorage!)
@@ -616,12 +565,12 @@ struct DocumentEditorView: NSViewRepresentable {
 
 // MARK: - Custom Classes for No-Scroll Text View
 
-/// Wrapper view that sizes to its text view content without internal scrolling
+/// Wrapper view that dynamically sizes itself based on text view content
 class DynamicHeightView: NSView {
     var textView: NSTextView? {
         didSet {
             if let textView = textView {
-                // FIXED: Position text view at origin with fixed width
+                // Position text view at origin
                 textView.frame = NSRect(x: 0, y: 0, width: 752, height: textView.intrinsicContentSize.height)
             }
         }
@@ -639,277 +588,119 @@ class DynamicHeightView: NSView {
         super.layout()
         
         if let textView = textView {
-            // SMOOTH: Simple frame update, no size change detection
+            // Update text view frame to match our bounds
             textView.frame = bounds
-        }
-    }
-}
-
-/// Custom text view that includes header as part of scrollable content
-class DocumentTextViewWithHeader: DocumentTextView {
-    
-    // Header properties
-    var headerImageView: NSImageView?
-    var titleTextField: NSTextField?
-    var subtitleTextField: NSTextField?
-    var headerContainerView: NSView?
-    var placeholderView: NSView?
-    
-    // Header state
-    var hasHeaderImage: Bool = false
-    var isHeaderExpanded: Bool = false {
-        didSet {
-            updateHeaderVisibility()
-        }
-    }
-    
-    override func awakeFromNib() {
-        super.awakeFromNib()
-        setupHeaderViews()
-    }
-    
-    override init(frame frameRect: NSRect, textContainer container: NSTextContainer?) {
-        super.init(frame: frameRect, textContainer: container)
-        setupHeaderViews()
-    }
-    
-    required init?(coder: NSCoder) {
-        super.init(coder: coder)
-        setupHeaderViews()
-    }
-    
-    private func setupHeaderViews() {
-        print("🎯 Header Setup - setupHeaderViews() called")
-        
-        // Create header container
-        headerContainerView = NSView()
-        headerContainerView?.wantsLayer = true
-        headerContainerView?.layer?.backgroundColor = NSColor.clear.cgColor
-        
-        // Create image view for header image
-        headerImageView = NSImageView()
-        headerImageView?.imageScaling = .scaleProportionallyUpOrDown
-        headerImageView?.wantsLayer = true
-        headerImageView?.layer?.cornerRadius = 8
-        headerImageView?.layer?.masksToBounds = true
-        
-        // Create title text field
-        titleTextField = NSTextField()
-        titleTextField?.isEditable = true
-        titleTextField?.isSelectable = true
-        titleTextField?.isBordered = false
-        titleTextField?.drawsBackground = false
-        titleTextField?.font = NSFont.systemFont(ofSize: 32, weight: .bold)
-        titleTextField?.placeholderString = "Untitled"
-        
-        // Create subtitle text field  
-        subtitleTextField = NSTextField()
-        subtitleTextField?.isEditable = true
-        subtitleTextField?.isSelectable = true
-        subtitleTextField?.isBordered = false
-        subtitleTextField?.drawsBackground = false
-        subtitleTextField?.font = NSFont.systemFont(ofSize: 16, weight: .regular)
-        subtitleTextField?.placeholderString = "Add a subtitle..."
-        
-        // Create placeholder view for when no header image
-        placeholderView = NSView()
-        placeholderView?.wantsLayer = true
-        placeholderView?.layer?.backgroundColor = NSColor.systemGray.withAlphaComponent(0.2).cgColor
-        placeholderView?.layer?.cornerRadius = 8
-        
-        // Add click gesture to placeholder
-        let clickGesture = NSClickGestureRecognizer(target: self, action: #selector(headerPlaceholderClicked))
-        placeholderView?.addGestureRecognizer(clickGesture)
-        
-        // Add all to header container
-        if let container = headerContainerView,
-           let imageView = headerImageView,
-           let titleField = titleTextField,
-           let subtitleField = subtitleTextField,
-           let placeholder = placeholderView {
             
-            container.addSubview(imageView)
-            container.addSubview(titleField)
-            container.addSubview(subtitleField)
-            container.addSubview(placeholder)
-            
-            // Add container to text view
-            addSubview(container)
-            
-            print("🎯 Header Setup - All header views added to container and container added to text view")
-        }
-        
-        updateHeaderVisibility()
-        print("🎯 Header Setup - setupHeaderViews() completed")
-        
-        // Force layout after a short delay to ensure bounds are set
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            self.layoutHeaderViews()
-            print("🎯 Header Setup - Delayed layout call completed")
+            // Check if size changed
+            let newHeight = textView.intrinsicContentSize.height
+            if abs(frame.height - newHeight) > 1 {
+                invalidateIntrinsicContentSize()
+            }
         }
     }
     
-    @objc private func headerPlaceholderClicked() {
-        // Notify delegate about image picker request
-        NotificationCenter.default.post(name: .headerImagePickerRequested, object: self)
-    }
-    
-    private func updateHeaderVisibility() {
-        guard let container = headerContainerView else { return }
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
         
-        print("🎯 Header Visibility - isHeaderExpanded: \(isHeaderExpanded)")
-        container.isHidden = !isHeaderExpanded
-        print("🎯 Header Visibility - container.isHidden: \(container.isHidden)")
-        layoutHeaderViews()
-    }
-    
-    private func layoutHeaderViews() {
-        guard let container = headerContainerView,
-              let imageView = headerImageView,
-              let titleField = titleTextField,
-              let subtitleField = subtitleTextField,
-              let placeholder = placeholderView else { 
-            print("🎯 Header Layout - Missing header views, skipping layout")
-            return 
+        // Set up observer for text view changes
+        if let textView = textView {
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(textViewDidChange),
+                name: NSText.didChangeNotification,
+                object: textView
+            )
         }
-        
-        print("🎯 Header Layout - layoutHeaderViews() called")
-        print("🎯 Header Layout - bounds: \(bounds)")
-        print("🎯 Header Layout - hasHeaderImage: \(hasHeaderImage)")
-        
-        // SIMPLIFIED: Make header always visible at the top, regardless of bounds height
-        let containerWidth = max(bounds.width - 40, 200) // Ensure minimum width
-        let headerHeight: CGFloat = 200 // Fixed height for now
-        
-        // Position header container at the TOP of the text view (y = bounds.height - headerHeight)
-        // But if bounds.height is small, position it at y = 0
-        let yPosition = max(0, bounds.height - headerHeight)
-        container.frame = NSRect(x: 20, y: yPosition, width: containerWidth, height: headerHeight)
-        
-        // Give container a visible background for debugging
-        container.wantsLayer = true
-        container.layer?.backgroundColor = NSColor.systemBlue.withAlphaComponent(0.5).cgColor
-        container.layer?.borderColor = NSColor.red.cgColor
-        container.layer?.borderWidth = 2.0
-        
-        print("🎯 Header Layout - container.frame: \(container.frame)")
-        
-        // Always show placeholder for now (simpler)
-        imageView.isHidden = true
-        placeholder.isHidden = false
-        
-        // Simple layout - stack vertically with padding
-        let padding: CGFloat = 10
-        placeholder.frame = NSRect(x: padding, y: 140, width: containerWidth - 2*padding, height: 50)
-        titleField.frame = NSRect(x: padding, y: 100, width: containerWidth - 2*padding, height: 30)
-        subtitleField.frame = NSRect(x: padding, y: 60, width: containerWidth - 2*padding, height: 30)
-        
-        // Give placeholder a visible background
-        placeholder.wantsLayer = true
-        placeholder.layer?.backgroundColor = NSColor.systemRed.withAlphaComponent(0.7).cgColor
-        placeholder.layer?.borderColor = NSColor.black.cgColor
-        placeholder.layer?.borderWidth = 1.0
-        
-        // Make title field visible
-        titleField.backgroundColor = NSColor.systemYellow.withAlphaComponent(0.3)
-        titleField.isBordered = true
-        
-        print("🎯 Header Layout - Simplified layout: placeholder.frame: \(placeholder.frame)")
-        print("🎯 Header Layout - titleField.frame: \(titleField.frame)")
-        
-        // Adjust text container inset to account for header
-        if isHeaderExpanded {
-            textContainerInset = NSSize(width: 19, height: headerHeight + 40)
-            print("🎯 Header Layout - Set textContainerInset to: \(textContainerInset)")
-        } else {
-            textContainerInset = NSSize(width: 19, height: 24)
-            print("🎯 Header Layout - Set textContainerInset to default: \(textContainerInset)")
-        }
-        
-        // Force a redraw
-        container.needsDisplay = true
-        needsDisplay = true
-        
-        // Ensure container is visible
-        container.isHidden = false
-        print("🎯 Header Layout - Container visibility: \(container.isHidden ? "HIDDEN" : "VISIBLE")")
     }
     
-    override func layout() {
-        super.layout()
-        print("🎯 Header Layout - DocumentTextViewWithHeader layout() called, bounds: \(bounds)")
-        layoutHeaderViews()
+    @objc private func textViewDidChange(_ notification: Notification) {
+        // Don't force immediate updates - let the text view handle batching
+        // This prevents double-updates that cause jitter
     }
     
-    func setHeaderImage(_ image: NSImage?) {
-        headerImageView?.image = image
-        hasHeaderImage = image != nil
-        layoutHeaderViews()
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
-    
-    func setTitle(_ title: String) {
-        print("🎯 Header Title - setTitle called with: '\(title)'")
-        titleTextField?.stringValue = title
-        print("🎯 Header Title - titleTextField.stringValue set to: '\(titleTextField?.stringValue ?? "nil")'")
-    }
-    
-    func setSubtitle(_ subtitle: String) {
-        subtitleTextField?.stringValue = subtitle
-    }
-}
-
-// Notification for header image picker
-extension Notification.Name {
-    static let headerImagePickerRequested = Notification.Name("headerImagePickerRequested")
 }
 
 /// Custom text view that never scrolls internally and sizes to content
-class NoScrollTextView: DocumentTextViewWithHeader {
+class NoScrollTextView: DocumentTextView {
     
-    // FIXED HEIGHT APPROACH - No more dynamic calculations
-    private let fixedLineHeight: CGFloat = 19.5 // Inter-Regular at 15pt with 1.3 line height
-    private let baseHeight: CGFloat = 100
-    private let minHeight: CGFloat = 50
-    
-    // Cache for performance
-    private var cachedHeight: CGFloat = 100
-    private var lastLineCount: Int = 0
+    private var lastCalculatedHeight: CGFloat = 100
+    private var heightUpdateTimer: Timer?
+    private var pendingHeightUpdate = false
     
     override var intrinsicContentSize: NSSize {
-        // SMOOTH: Calculate height directly from line count, no layout manager
-        let lineCount = max(1, string.components(separatedBy: .newlines).count)
-        
-        // Only recalculate if line count changed
-        if lineCount != lastLineCount {
-            lastLineCount = lineCount
-            
-            // Simple calculation: lines * height + padding
-            let contentHeight = CGFloat(lineCount) * fixedLineHeight
-            let totalHeight = contentHeight + textContainerInset.height * 2
-            cachedHeight = max(totalHeight, minHeight)
+        // Calculate the size needed for all text content
+        guard let layoutManager = layoutManager,
+              let textContainer = textContainer else {
+            return NSSize(width: 752, height: lastCalculatedHeight)
         }
         
-        return NSSize(width: 752, height: cachedHeight)
+        // Force complete layout
+        layoutManager.ensureLayout(for: textContainer)
+        
+        // Get the used rect for the text
+        let usedRect = layoutManager.usedRect(for: textContainer)
+        let insets = textContainerInset
+        
+        // Calculate height based on actual content
+        let contentHeight = usedRect.height + insets.height * 2
+        lastCalculatedHeight = max(contentHeight, 50)
+        
+        return NSSize(width: 752, height: lastCalculatedHeight)
     }
     
     override func didChangeText() {
         super.didChangeText()
         
-        // SMOOTH: Only invalidate if line count actually changed
-        let newLineCount = string.components(separatedBy: .newlines).count
-        if newLineCount != lastLineCount {
-            invalidateIntrinsicContentSize()
+        // Cancel existing timer
+        heightUpdateTimer?.invalidate()
+        
+        // Mark that we need an update
+        pendingHeightUpdate = true
+        
+        // For large changes (like paste), update immediately
+        // Otherwise batch small changes (typing)
+        let changeSize = abs(lastCalculatedHeight - intrinsicContentSize.height)
+        let updateDelay = changeSize > 100 ? 0.0 : 0.1
+        
+        if updateDelay == 0 {
+            performHeightUpdate()
+        } else {
+            // Schedule update after a short delay (batch multiple keystrokes)
+            heightUpdateTimer = Timer.scheduledTimer(withTimeInterval: updateDelay, repeats: false) { [weak self] _ in
+                self?.performHeightUpdate()
+            }
+        }
+    }
+    
+    private func performHeightUpdate() {
+        guard pendingHeightUpdate else { return }
+        pendingHeightUpdate = false
+        
+        // Ensure layout is complete
+        layoutManager?.ensureLayout(for: textContainer!)
+        
+        // Invalidate intrinsic content size
+        invalidateIntrinsicContentSize()
+        
+        // Notify SwiftUI that size changed
+        if let window = window {
+            window.layoutIfNeeded()
         }
     }
     
     override func layout() {
         super.layout()
         
-        // FIXED: Set container size once and never change it
+        // Ensure text container matches our width
         textContainer?.containerSize = NSSize(width: bounds.width - textContainerInset.width * 2, 
                                              height: CGFloat.greatestFiniteMagnitude)
         textContainer?.widthTracksTextView = false
-        textContainer?.heightTracksTextView = false
+        
+        // Force layout manager to recalculate
+        layoutManager?.ensureLayout(for: textContainer!)
     }
     
     override var isVerticallyResizable: Bool {
@@ -932,11 +723,23 @@ class NoScrollTextView: DocumentTextViewWithHeader {
         return false
     }
     
-    // DIRECT RENDERING: Override drawing for immediate feedback
-    override func draw(_ dirtyRect: NSRect) {
-        // FIXED: Ensure consistent line height through paragraph style instead of layout manager
-        // Note: defaultLineHeight is a method, not a property
-        super.draw(dirtyRect)
+    // Clean up timer on dealloc
+    deinit {
+        heightUpdateTimer?.invalidate()
+        heightUpdateTimer = nil
+    }
+    
+    // Force immediate update when text view loses focus
+    override func resignFirstResponder() -> Bool {
+        let result = super.resignFirstResponder()
+        
+        // If there's a pending update, perform it immediately
+        if pendingHeightUpdate {
+            heightUpdateTimer?.invalidate()
+            performHeightUpdate()
+        }
+        
+        return result
     }
 }
 
@@ -958,9 +761,6 @@ extension DocumentTextView {
         let fullRange = NSRange(location: 0, length: textStorage.length)
         textStorage.addAttribute(.foregroundColor, value: fullOpacityColor, range: fullRange)
         
-        // FIXED: Apply consistent line heights to all text
-        applyFixedLineHeights()
-        
         // Check specifically for any paragraphs with transparent/missing colors
         let nsString = string as NSString
         
@@ -972,11 +772,9 @@ extension DocumentTextView {
                 let fontAttribute = NSFont(name: "Inter-Regular", size: 15) ?? .systemFont(ofSize: 15)
                 textStorage.addAttribute(.font, value: fontAttribute, range: firstParagraphRange)
                 
-                // FIXED: Create paragraph style with fixed line heights
+                // Create a proper paragraph style with explicit line height and spacing
                 let style = NSMutableParagraphStyle()
-                style.minimumLineHeight = 19.5
-                style.maximumLineHeight = 19.5
-                style.lineHeightMultiple = 1.0
+                style.lineHeightMultiple = 1.3
                 style.paragraphSpacing = 4
                 style.firstLineHeadIndent = 0
                 style.headIndent = 0
@@ -984,7 +782,7 @@ extension DocumentTextView {
                 
                 // Double-ensure color is set correctly with full opacity on first paragraph
                 textStorage.addAttribute(.foregroundColor, value: fullOpacityColor, range: firstParagraphRange)
-                print("📝 Fixed first paragraph formatting with fixed line heights")
+                print("📝 Fixed first paragraph formatting")
             }
         }
         
@@ -999,33 +797,11 @@ extension DocumentTextView {
         }
         
         textStorage.endEditing()
-        print("🎨 Applied full opacity color and fixed line heights for current appearance mode: \(isDarkMode ? "dark" : "light")")
+        print("🎨 Applied full opacity color for current appearance mode: \(isDarkMode ? "dark" : "light")")
         
         // Force immediate layout refresh
         layoutManager?.ensureLayout(for: textContainer!)
         needsDisplay = true
-    }
-    
-    // SMOOTH: Apply fixed line heights to all existing text
-    func applyFixedLineHeights() {
-        guard let textStorage = self.textStorage, textStorage.length > 0 else { return }
-        
-        let fullRange = NSRange(location: 0, length: textStorage.length)
-        
-        // Apply fixed line heights to all paragraphs
-        textStorage.enumerateAttribute(.paragraphStyle, in: fullRange, options: []) { (value, range, stop) in
-            let currentStyle = (value as? NSParagraphStyle) ?? NSParagraphStyle.default
-            let newStyle = currentStyle.mutableCopy() as! NSMutableParagraphStyle
-            
-            // FIXED: Set consistent line heights
-            newStyle.minimumLineHeight = 19.5
-            newStyle.maximumLineHeight = 19.5
-            newStyle.lineHeightMultiple = 1.0
-            
-            textStorage.addAttribute(.paragraphStyle, value: newStyle, range: range)
-        }
-        
-        print("🔧 Applied fixed line heights to all existing text")
     }
 }
 #endif
