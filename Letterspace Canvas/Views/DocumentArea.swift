@@ -182,46 +182,62 @@ struct DocumentArea: View {
     private func documentVStack(geo: GeometryProxy) -> some View {
         ScrollViewReader { scrollProxy in
             ScrollView(.vertical, showsIndicators: true) {
-                        VStack(spacing: 0) {
+                VStack(spacing: 0) {
                     // Header is now INSIDE the scroll view
-            if viewMode != .focus && !isDistractionFreeMode && (headerImage != nil || isHeaderExpanded) {
-                                headerView
+                    if viewMode != .focus && !isDistractionFreeMode && (headerImage != nil || isHeaderExpanded) {
+                        headerView
                             .id("header")
                             
-                            // Trigger after header image
-                            Rectangle()
-                                .fill(Color.clear)
-                                .frame(height: 1)
-                                .id("trigger")
-                                .background(
-                                    GeometryReader { triggerGeo in
-                                        Color.clear
-                                            .onChange(of: triggerGeo.frame(in: .named("scroll")).minY) { oldValue, newValue in
-                                                withAnimation(.easeInOut(duration: 0.3)) {
-                                                    // Show floating header when trigger is completely off screen (Y < -10 for buffer)
-                                                    // Hide when trigger is visible again (Y >= -10)
-                                                    let shouldShow = newValue < -10
-                                                    showFloatingHeader = shouldShow
-                                                    scrollOffset = newValue
-                                                    print("📍 Trigger Y: \(newValue), shouldShow: \(shouldShow)")
-                                                }
-                                            }
-                                    }
-                                )
+                        // This trigger uses a PreferenceKey to report its position, which is much
+                        // more performant than using .onChange which triggers on every pixel.
+                        Rectangle()
+                            .fill(Color.clear)
+                            .frame(height: 1)
+                            .id("trigger")
+                            .background(
+                                GeometryReader { triggerGeo in
+                                    Color.clear
+                                        .preference(key: ScrollOffsetPreferenceKey.self,
+                                                    value: triggerGeo.frame(in: .named("scroll")).minY)
+                                }
+                            )
                     }
                     
                     // Document content - no minimum height constraint
-            AnimatedDocumentContainer(document: $document) {
-                            documentContentView
-            }
-                        }
-                        .frame(width: paperWidth)
+                    AnimatedDocumentContainer(document: $document) {
+                        documentContentView
+                    }
+                }
+                .frame(width: paperWidth)
             }
             .coordinateSpace(name: "scroll")
+            // This modifier receives the scroll offset from the PreferenceKey and updates the state.
+            // This is the single source of truth for scroll-based UI changes and avoids
+            // the performance bottleneck of the old approach.
+            .onPreferenceChange(ScrollOffsetPreferenceKey.self) { triggerY in
+                // If triggerY is the default 0, it means the trigger isn't on screen,
+                // so we shouldn't show the floating header.
+                guard triggerY != 0 else {
+                    if showFloatingHeader {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            showFloatingHeader = false
+                        }
+                    }
+                    return
+                }
+
+                let shouldShow = triggerY < -10 // Header trigger has scrolled off-screen
+                if showFloatingHeader != shouldShow {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        showFloatingHeader = shouldShow
+                    }
+                }
+                scrollOffset = triggerY // Update for other potential uses
+            }
             // Add extra padding only when keyboard is visible
             .padding(.bottom, keyboard.height > 0 ? keyboard.height + 20 : 0)
             .animation(.easeOut, value: keyboard.height)
-                    }
+        }
         .overlay(alignment: .top) {
             // Show floating header when scrolled past threshold
             if showFloatingHeader {
@@ -308,6 +324,14 @@ struct DocumentArea: View {
     
     // Add preference key for tracking divider position
     struct DividerOffsetKey: PreferenceKey {
+        static var defaultValue: CGFloat = 0
+        static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+            value = nextValue()
+        }
+    }
+
+    // A more performant way to read scroll offset
+    struct ScrollOffsetPreferenceKey: PreferenceKey {
         static var defaultValue: CGFloat = 0
         static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
             value = nextValue()
