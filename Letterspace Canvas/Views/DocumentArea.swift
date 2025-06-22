@@ -216,26 +216,27 @@ struct DocumentArea: View {
             // This is the single source of truth for scroll-based UI changes and avoids
             // the performance bottleneck of the old approach.
             .onPreferenceChange(ScrollOffsetPreferenceKey.self) { triggerY in
-                // If triggerY is the default 0, it means the trigger isn't on screen,
-                // so we shouldn't show the floating header.
-                guard triggerY != 0 else {
+                // Only process trigger changes when we actually have a header/trigger element
+                // If no header is visible, the trigger won't exist and triggerY will be 0
+                if viewMode != .focus && !isDistractionFreeMode && (headerImage != nil || isHeaderExpanded) {
+                    // We have a header, so process the trigger position
+                    let shouldShow = triggerY < -10 // Header trigger has scrolled off-screen
+                    if showFloatingHeader != shouldShow {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            showFloatingHeader = shouldShow
+                            useFixedHeight = shouldShow // Switch to fixed height when floating header shows
+                        }
+                    }
+                    scrollOffset = triggerY // Update for other potential uses
+                } else {
+                    // No header visible, so no floating header should be shown
                     if showFloatingHeader {
                         withAnimation(.easeInOut(duration: 0.2)) {
                             showFloatingHeader = false
                             useFixedHeight = false // Switch back to dynamic height
                         }
                     }
-                    return
                 }
-
-                let shouldShow = triggerY < -10 // Header trigger has scrolled off-screen
-                if showFloatingHeader != shouldShow {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        showFloatingHeader = shouldShow
-                        useFixedHeight = shouldShow // Switch to fixed height when floating header shows
-                    }
-                }
-                scrollOffset = triggerY // Update for other potential uses
             }
             // Add extra padding only when keyboard is visible
             .padding(.bottom, keyboard.height > 0 ? keyboard.height + 20 : 0)
