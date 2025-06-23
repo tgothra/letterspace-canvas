@@ -18,7 +18,9 @@ final class KeyboardObserver: ObservableObject {
         cancellable = Publishers.Merge(keyboardWillShow, keyboardWillHide)
             .subscribe(on: DispatchQueue.main)
             .assign(to: \.height, on: self)
+        #else
+        // On macOS, keyboard height is always 0 since there's no virtual keyboard
+        height = 0
         #endif
-        // On macOS, height remains 0 (no keyboard)
     }
 } 

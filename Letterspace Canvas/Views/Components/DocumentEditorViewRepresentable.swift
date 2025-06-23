@@ -8,7 +8,6 @@ import ObjectiveC
 struct DocumentEditorView: NSViewRepresentable {
     @Binding var document: Letterspace_CanvasDocument
     @Binding var selectedBlock: UUID?
-    @Binding var useFixedHeight: Bool
     @State private var showToolbar = false
     @Environment(\.colorScheme) var colorScheme
     @State private var isLoading = true
@@ -118,9 +117,6 @@ struct DocumentEditorView: NSViewRepresentable {
         guard let wrapperView = nsView as? DynamicHeightView,
               let textView = wrapperView.textView as? NoScrollTextView else { return }
         textView.colorScheme = colorScheme  // Update colorScheme when it changes
-        
-        // NEW: Update the fixed height mode
-        textView.useFixedHeight = useFixedHeight
         
         // CRITICAL FIX: Force update the header state and ensure editing capability
         let isHeaderExpanded = document.isHeaderExpanded
@@ -614,41 +610,16 @@ class DynamicHeightView: NSView {
                 name: NSText.didChangeNotification,
                 object: textView
             )
-            
-            // Set up scroll monitoring
-            if window != nil {
-                NotificationCenter.default.addObserver(
-                    self,
-                    selector: #selector(scrollViewWillBeginScrolling),
-                    name: NSScrollView.willStartLiveScrollNotification,
-                    object: nil
-                )
-                NotificationCenter.default.addObserver(
-                    self,
-                    selector: #selector(scrollViewDidEndScrolling),
-                    name: NSScrollView.didEndLiveScrollNotification,
-                    object: nil
-                )
-            }
         }
     }
     
     @objc private func textViewDidChange(_ notification: Notification) {
-        // Don't force immediate updates - let the text view handle batching
-        // This prevents double-updates that cause jitter
-    }
-    
-    @objc private func scrollViewWillBeginScrolling(_ notification: Notification) {
-        // Notify text view that scrolling has started
-        if let textView = textView as? NoScrollTextView {
-            textView.setScrolling(true)
-        }
-    }
-    
-    @objc private func scrollViewDidEndScrolling(_ notification: Notification) {
-        // Notify text view that scrolling has ended
-        if let textView = textView as? NoScrollTextView {
-            textView.setScrolling(false)
+        // Force size recalculation
+        invalidateIntrinsicContentSize()
+        
+        // Notify SwiftUI
+        if let window = window {
+            window.layoutIfNeeded()
         }
     }
     
@@ -661,24 +632,8 @@ class DynamicHeightView: NSView {
 class NoScrollTextView: DocumentTextView {
     
     private var lastCalculatedHeight: CGFloat = 100
-    private var heightUpdateTimer: Timer?
-    private var pendingHeightUpdate = false
-    private var isScrolling = false
-    private var scrollEndTimer: Timer?
-    private var cachedHeight: CGFloat = 100
-    var useFixedHeight: Bool = false // NEW: Control dynamic vs fixed height
     
     override var intrinsicContentSize: NSSize {
-        // If we're in fixed height mode, return a large fixed height for smooth scrolling
-        if useFixedHeight {
-            return NSSize(width: 752, height: 2000) // Large fixed height
-        }
-        
-        // If we're scrolling, return the cached height to avoid recalculation
-        if isScrolling {
-            return NSSize(width: 752, height: cachedHeight)
-        }
-        
         // Calculate the size needed for all text content
         guard let layoutManager = layoutManager,
               let textContainer = textContainer else {
@@ -695,7 +650,6 @@ class NoScrollTextView: DocumentTextView {
         // Calculate height based on actual content
         let contentHeight = usedRect.height + insets.height * 2
         lastCalculatedHeight = max(contentHeight, 50)
-        cachedHeight = lastCalculatedHeight
         
         return NSSize(width: 752, height: lastCalculatedHeight)
     }
@@ -703,48 +657,25 @@ class NoScrollTextView: DocumentTextView {
     override func didChangeText() {
         super.didChangeText()
         
-        // Cancel existing timer
-        heightUpdateTimer?.invalidate()
-        
-        // Mark that we need an update
-        pendingHeightUpdate = true
-        
-        // For large changes (like paste), update immediately
-        // Otherwise batch small changes (typing)
-        let changeSize = abs(lastCalculatedHeight - intrinsicContentSize.height)
-        let updateDelay = changeSize > 100 ? 0.0 : 0.1
-        
-        if updateDelay == 0 {
-            performHeightUpdate()
-        } else {
-            // Schedule update after a short delay (batch multiple keystrokes)
-            heightUpdateTimer = Timer.scheduledTimer(withTimeInterval: updateDelay, repeats: false) { [weak self] _ in
-                self?.performHeightUpdate()
-            }
-        }
-    }
-    
-    private func performHeightUpdate() {
-        guard pendingHeightUpdate else { return }
-        pendingHeightUpdate = false
-        
-        // Ensure layout is complete
+        // Force immediate layout update
         layoutManager?.ensureLayout(for: textContainer!)
         
         // Invalidate intrinsic content size
         invalidateIntrinsicContentSize()
         
-        // Notify SwiftUI that size changed
-        if let window = window {
-            window.layoutIfNeeded()
+        // Force SwiftUI to re-measure
+        DispatchQueue.main.async { [weak self] in
+            self?.invalidateIntrinsicContentSize()
+            
+            // Notify SwiftUI that size changed
+            if let window = self?.window {
+                window.layoutIfNeeded()
+            }
         }
     }
     
     override func layout() {
         super.layout()
-        
-        // Skip layout updates during scrolling
-        guard !isScrolling else { return }
         
         // Ensure text container matches our width
         textContainer?.containerSize = NSSize(width: bounds.width - textContainerInset.width * 2, 
@@ -773,45 +704,6 @@ class NoScrollTextView: DocumentTextView {
     override func scrollToVisible(_ rect: NSRect) -> Bool {
         // Do nothing - prevent internal scrolling
         return false
-    }
-    
-    // Clean up timer on dealloc
-    deinit {
-        heightUpdateTimer?.invalidate()
-        heightUpdateTimer = nil
-        scrollEndTimer?.invalidate()
-        scrollEndTimer = nil
-    }
-    
-    // Force immediate update when text view loses focus
-    override func resignFirstResponder() -> Bool {
-        let result = super.resignFirstResponder()
-        
-        // If there's a pending update, perform it immediately
-        if pendingHeightUpdate {
-            heightUpdateTimer?.invalidate()
-            performHeightUpdate()
-        }
-        
-        return result
-    }
-    
-    // Handle scroll state changes
-    func setScrolling(_ scrolling: Bool) {
-        scrollEndTimer?.invalidate()
-        
-        if scrolling {
-            isScrolling = true
-        } else {
-            // Delay the end of scrolling state to handle momentum scrolling
-            scrollEndTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false) { [weak self] _ in
-                self?.isScrolling = false
-                // Update height after scrolling ends
-                if self?.pendingHeightUpdate == true {
-                    self?.performHeightUpdate()
-                }
-            }
-        }
     }
 }
 

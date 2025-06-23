@@ -34,6 +34,9 @@ struct HeaderImageSection: View {
     @State private var isHoveringX = false
     @State private var isHoveringHeader = false
     @Binding var isTitleVisible: Bool
+    @Binding var showTooltip: Bool
+    @Binding var hasShownTooltip: Bool
+    @Binding var hasShownRevealTooltip: Bool
     @State private var isImageLoading = false
     @State private var placeholderOpacity: Double = 0.0
     #if os(macOS)
