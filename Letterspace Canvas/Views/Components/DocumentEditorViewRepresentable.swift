@@ -12,17 +12,35 @@ struct DocumentEditorView: NSViewRepresentable {
     @Environment(\.colorScheme) var colorScheme
     @State private var isLoading = true
     
-    func makeNSView(context: Context) -> NSView {
-        print("🏗️ Creating text view without internal scrolling...")
+    func makeNSView(context: Context) -> NSScrollView {
+        print("🏗️ Creating text view...")
         
-        // Create a wrapper view that will properly size itself
-        let wrapperView = DynamicHeightView()
+        // Create the scroll view with improved configuration
+        let scrollView = NSScrollView()
+        scrollView.hasVerticalScroller = true
+        scrollView.hasHorizontalScroller = false
+        scrollView.autohidesScrollers = false // We're handling this ourselves
+        scrollView.scrollerStyle = .overlay
+        scrollView.borderType = .noBorder
+        scrollView.scrollerKnobStyle = .light
+        scrollView.drawsBackground = false
+        
+        // Replace the default scroller with our custom one
+        let customScroller = SlimScroller()
+        customScroller.scrollerStyle = .overlay
+        customScroller.knobStyle = .light
+        customScroller.controlSize = .small
+        customScroller.alphaValue = 1.0 // We'll handle transparency ourselves
+        scrollView.verticalScroller = customScroller
+        
+        // Set reasonable content insets - not too large
+        scrollView.contentInsets = NSEdgeInsets(top: 16, left: 0, bottom: 16, right: 0)
         
         // Create a fixed size container with appropriate sizing
         let containerWidth = 752.0
-        let textContainer = NSTextContainer(containerSize: NSSize(width: containerWidth - 38, height: CGFloat.greatestFiniteMagnitude))
+        let textContainer = NSTextContainer(containerSize: NSSize(width: containerWidth, height: CGFloat.greatestFiniteMagnitude))
         textContainer.widthTracksTextView = false // Force fixed width
-        textContainer.heightTracksTextView = false  // Don't track height
+        textContainer.heightTracksTextView = false
         textContainer.lineFragmentPadding = 0
         
         // Create a layout manager with improved configuration
@@ -36,8 +54,8 @@ struct DocumentEditorView: NSViewRepresentable {
         layoutManager.addTextContainer(textContainer)
         textStorage.addLayoutManager(layoutManager)
         
-        // Create the text view directly - no container view
-        let textView = NoScrollTextView(frame: NSRect(x: 0, y: 0, width: containerWidth, height: 100), textContainer: textContainer)
+        // Create the text view with improved configuration
+        let textView = DocumentTextView(frame: .zero, textContainer: textContainer)
         
         // Configure appearance and behavior
         textView.font = NSFont(name: "Inter-Regular", size: 15) // Already at 15pt
@@ -47,19 +65,13 @@ struct DocumentEditorView: NSViewRepresentable {
         textView.importsGraphics = true
         textView.isRichText = true
         textView.allowsImageEditing = false
-        
-        // CRITICAL: Configure for dynamic sizing
         textView.isVerticallyResizable = true
         textView.isHorizontallyResizable = false
-        textView.autoresizingMask = []  // No autoresizing
+        textView.autoresizingMask = [.width]
         
-        // Set size constraints for proper expansion
-        textView.minSize = NSSize(width: containerWidth, height: 50)
+        // Set fixed width for text container
+        textView.minSize = NSSize(width: containerWidth, height: 0)
         textView.maxSize = NSSize(width: containerWidth, height: CGFloat.greatestFiniteMagnitude)
-        
-        // CRITICAL: Tell SwiftUI to use intrinsic content size
-        textView.setContentHuggingPriority(.defaultLow, for: .vertical)
-        textView.setContentCompressionResistancePriority(.defaultHigh, for: .vertical)
         
         // Configure the text view for the current document
         textView.document = document
@@ -74,9 +86,16 @@ struct DocumentEditorView: NSViewRepresentable {
         // Reset paragraph indentation
         textView.resetParagraphIndentation()
         
-        // Add text view to wrapper
-        wrapperView.textView = textView
-        wrapperView.addSubview(textView)
+        // --- Use Custom Clip View ---
+        // Create and configure clip view for smooth scrolling
+        let clipView = BookmarkAwareClipView() // Use our custom clip view
+        clipView.drawsBackground = false
+        clipView.documentView = textView
+        clipView.textView = textView // Pass the textView reference to the clip view
+        // --- End Custom Clip View ---
+        
+        // Set up scroll view with clip view
+        scrollView.contentView = clipView
         
         // Ensure layout is complete before returning
         layoutManager.ensureLayout(for: textContainer)
@@ -109,13 +128,12 @@ struct DocumentEditorView: NSViewRepresentable {
             textView.restoreScriptureAttributes()
         }
         
-        return wrapperView
+        return scrollView
     }
     
-    func updateNSView(_ nsView: NSView, context: Context) {
-        // Get text view from wrapper
-        guard let wrapperView = nsView as? DynamicHeightView,
-              let textView = wrapperView.textView as? NoScrollTextView else { return }
+    func updateNSView(_ scrollView: NSScrollView, context: Context) {
+        // Get text view from coordinator
+        guard let textView = context.coordinator.textView else { return }
         textView.colorScheme = colorScheme  // Update colorScheme when it changes
         
         // CRITICAL FIX: Force update the header state and ensure editing capability
@@ -149,6 +167,9 @@ struct DocumentEditorView: NSViewRepresentable {
         // This prevents losing unsaved scripture when focus changes but ensures new documents start fresh
         if documentChanged {
             print("📄 Document ID changed in DocumentEditorView updateNSView: Clearing and reloading content for new document.")
+            
+            // Store current scroll position
+            let scrollPosition = scrollView.contentView.bounds.origin
             
             // Always update document reference
             textView.document = document
@@ -187,10 +208,16 @@ struct DocumentEditorView: NSViewRepresentable {
                 }
             }
             
+            // Restore scroll position
+            scrollView.contentView.bounds.origin = scrollPosition
+            
         } else if textView.window?.firstResponder !== textView {
             // This part handles updates when not actively editing (e.g., focus changes)
             // It should preserve existing content unless it's a completely different document (handled above)
             print("🔄 DocumentEditorView updateNSView: Updating content while not actively editing.")
+
+            // Store current scroll position
+            let scrollPosition = scrollView.contentView.bounds.origin
 
             // Always update document reference
             textView.document = document
@@ -245,7 +272,8 @@ struct DocumentEditorView: NSViewRepresentable {
                 }
             }
             
-            // No scroll position restoration needed - using outer scroll view
+            // Restore scroll position
+            scrollView.contentView.bounds.origin = scrollPosition
         }
     }
     
@@ -536,10 +564,9 @@ struct DocumentEditorView: NSViewRepresentable {
         }
     }
     
-    func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
-        // Get text view from wrapper
-        if let wrapperView = nsView as? DynamicHeightView,
-           let textView = wrapperView.textView as? DocumentTextView {
+    func dismantleNSView(_ nsView: NSScrollView, coordinator: Coordinator) {
+        // Clear any text selection
+        if let textView = nsView.documentView as? DocumentTextView {
             textView.selectedRange = NSRange(location: 0, length: 0)
             
             // Close any floating panels (including toolbar)
@@ -560,150 +587,6 @@ struct DocumentEditorView: NSViewRepresentable {
         // Clean up any timers
         coordinator.hideSearchTimer?.invalidate()
         coordinator.hideSearchTimer = nil
-    }
-}
-
-// MARK: - Custom Classes for No-Scroll Text View
-
-/// Wrapper view that dynamically sizes itself based on text view content
-class DynamicHeightView: NSView {
-    var textView: NSTextView? {
-        didSet {
-            if let textView = textView {
-                // Position text view at origin
-                textView.frame = NSRect(x: 0, y: 0, width: 752, height: textView.intrinsicContentSize.height)
-            }
-        }
-    }
-    
-    override var intrinsicContentSize: NSSize {
-        if let textView = textView {
-            let size = textView.intrinsicContentSize
-            return NSSize(width: 752, height: size.height)
-        }
-        return NSSize(width: 752, height: 100)
-    }
-    
-    override func layout() {
-        super.layout()
-        
-        if let textView = textView {
-            // Update text view frame to match our bounds
-            textView.frame = bounds
-            
-            // Check if size changed
-            let newHeight = textView.intrinsicContentSize.height
-            if abs(frame.height - newHeight) > 1 {
-                invalidateIntrinsicContentSize()
-            }
-        }
-    }
-    
-    override func viewDidMoveToWindow() {
-        super.viewDidMoveToWindow()
-        
-        // Set up observer for text view changes
-        if let textView = textView {
-            NotificationCenter.default.addObserver(
-                self,
-                selector: #selector(textViewDidChange),
-                name: NSText.didChangeNotification,
-                object: textView
-            )
-        }
-    }
-    
-    @objc private func textViewDidChange(_ notification: Notification) {
-        // Force size recalculation
-        invalidateIntrinsicContentSize()
-        
-        // Notify SwiftUI
-        if let window = window {
-            window.layoutIfNeeded()
-        }
-    }
-    
-    deinit {
-        NotificationCenter.default.removeObserver(self)
-    }
-}
-
-/// Custom text view that never scrolls internally and sizes to content
-class NoScrollTextView: DocumentTextView {
-    
-    private var lastCalculatedHeight: CGFloat = 100
-    
-    override var intrinsicContentSize: NSSize {
-        // Calculate the size needed for all text content
-        guard let layoutManager = layoutManager,
-              let textContainer = textContainer else {
-            return NSSize(width: 752, height: lastCalculatedHeight)
-        }
-        
-        // Force complete layout
-        layoutManager.ensureLayout(for: textContainer)
-        
-        // Get the used rect for the text
-        let usedRect = layoutManager.usedRect(for: textContainer)
-        let insets = textContainerInset
-        
-        // Calculate height based on actual content
-        let contentHeight = usedRect.height + insets.height * 2
-        lastCalculatedHeight = max(contentHeight, 50)
-        
-        return NSSize(width: 752, height: lastCalculatedHeight)
-    }
-    
-    override func didChangeText() {
-        super.didChangeText()
-        
-        // Force immediate layout update
-        layoutManager?.ensureLayout(for: textContainer!)
-        
-        // Invalidate intrinsic content size
-        invalidateIntrinsicContentSize()
-        
-        // Force SwiftUI to re-measure
-        DispatchQueue.main.async { [weak self] in
-            self?.invalidateIntrinsicContentSize()
-            
-            // Notify SwiftUI that size changed
-            if let window = self?.window {
-                window.layoutIfNeeded()
-            }
-        }
-    }
-    
-    override func layout() {
-        super.layout()
-        
-        // Ensure text container matches our width
-        textContainer?.containerSize = NSSize(width: bounds.width - textContainerInset.width * 2, 
-                                             height: CGFloat.greatestFiniteMagnitude)
-        textContainer?.widthTracksTextView = false
-        
-        // Force layout manager to recalculate
-        layoutManager?.ensureLayout(for: textContainer!)
-    }
-    
-    override var isVerticallyResizable: Bool {
-        get { true }
-        set { /* Always true */ }
-    }
-    
-    override var isHorizontallyResizable: Bool {
-        get { false }
-        set { /* Always false */ }
-    }
-    
-    // Prevent any scrolling
-    override func scrollRangeToVisible(_ range: NSRange) {
-        // Do nothing - prevent internal scrolling
-    }
-    
-    override func scrollToVisible(_ rect: NSRect) -> Bool {
-        // Do nothing - prevent internal scrolling
-        return false
     }
 }
 
