@@ -279,7 +279,7 @@ struct DocumentArea: View {
     @State private var isInitialAppearance = true // New state for tracking initial load
     @State private var elementsReady = false // New state to track when all elements are ready
     @State private var isScrollingToSearchResult = false // Add missing state variable
-    @State private var showTapAgainPopup: Bool = false
+    // Removed showTapAgainPopup state - no longer needed
     @State private var hasShownTapAgainPopup: Bool = false
     
     // Remove unused state variables
@@ -362,10 +362,7 @@ struct DocumentArea: View {
             // Tooltip overlay
             tooltipOverlay
             
-            // "Tap again to edit" popup overlay
-            if showTapAgainPopup {
-                tapAgainPopupOverlay
-            }
+            // Removed "Tap again to edit" popup - no longer needed
         } // End of main ZStack
         // Add card styling for iPad at the container level to fill entire area
         #if os(iOS)
@@ -478,59 +475,7 @@ struct DocumentArea: View {
         .padding(.top, (headerImage != nil || isHeaderExpanded) ? 35 : 20)
     }
     
-    // "Tap again to edit" popup overlay
-    private var tapAgainPopupOverlay: some View {
-        ZStack {
-            // Fixed position container that appears in the same place regardless of header state
-            VStack {
-                Spacer()
-                    .frame(height: 350) // Fixed distance from top of document
-                
-                tapAgainPopupContent
-                
-                Spacer()
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .clipped(antialiased: false)
-        .allowsHitTesting(false)
-        .transition(.opacity)
-        .animation(.easeInOut(duration: 0.3))
-        .zIndex(9999)
-    }
-    
-    // Content of the "Tap again to edit" popup
-    private var tapAgainPopupContent: some View {
-        VStack(spacing: 10) { // Reduced spacing from 12 to 10
-            // Line 1: Animated swipe icon with "Swipe to read" text
-            HStack(spacing: 6) { // Reduced spacing from 8 to 6
-                // Animated swipe icon
-                SwipeAnimationView()
-                
-                Text("Swipe to read")
-                    .font(.system(size: 14, weight: .medium)) // Reduced from 15 to 14
-                                .foregroundColor(.white)
-            }
-            
-            // Line 2: "Tap again to edit" text with animated tap icon
-            HStack(spacing: 6) { // Reduced spacing from 8 to 6
-                // Animated tap icon
-                TapAnimationView()
-                
-                Text("Tap again to edit")
-                    .font(.system(size: 14, weight: .medium)) // Reduced from 15 to 14
-                    .foregroundColor(.white)
-            }
-        }
-        .padding(.horizontal, 16) // Reduced from 20 to 16
-        .padding(.vertical, 12) // Reduced from 14 to 12
-                                .background(
-            RoundedRectangle(cornerRadius: 10) // Reduced from 12 to 10
-                .fill(Color.black.opacity(0.8))
-                .shadow(color: Color.black.opacity(0.4), radius: 5, x: 0, y: 3)
-        )
-        .scaleEffect(1.0) // Removed the scale effect entirely (was 1.1)
-    }
+    // Removed "Tap again to edit" popup views - no longer needed
     
     // Handle image import result
     private func handleImageImport(result: Result<[URL], Error>) {
@@ -984,7 +929,7 @@ struct DocumentArea: View {
         
         // Reset popup state
         hasShownTapAgainPopup = false
-        showTapAgainPopup = false
+        // Removed showTapAgainPopup logic
         
         // CRITICAL FIX: If header is expanded but no actual image exists, reset to text-only
         if isHeaderExpanded && !hasActualHeaderImage() {
@@ -1154,7 +1099,7 @@ struct DocumentArea: View {
             
             // Reset popup state for new document
             hasShownTapAgainPopup = false
-            showTapAgainPopup = false
+            // Removed showTapAgainPopup logic
         }
     }
     
@@ -1166,18 +1111,39 @@ struct DocumentArea: View {
         #if os(macOS) // Scroll logic is macOS specific due to NSApp.keyWindow etc.
         // Handle upward scroll (positive deltaY)
         if deltaY > 0 {
-            // Only reveal when we're at the top and not already expanded
-            if !isImageExpanded {
-                // Get the current scroll view from the document editor
-                if let window = NSApp.keyWindow,
-                   let scrollView = window.contentView?.subviews.first(where: { $0.className.contains("DocumentEditor") })?.enclosingScrollView {
-                    
-                    // Check if we're at the top of the content
-                    let isAtTop = scrollView.contentView.bounds.origin.y <= 0
-                    
-                    // Only expand if we're at the top and still scrolling up
-                    if isAtTop {
+            // Get the current scroll view from the document editor
+            if let window = NSApp.keyWindow,
+               let scrollView = window.contentView?.subviews.first(where: { $0.className.contains("DocumentEditor") })?.enclosingScrollView {
+                
+                // Check if we're at the top of the content
+                let isAtTop = scrollView.contentView.bounds.origin.y <= 0
+                
+                // Only proceed if we're at the top
+                if isAtTop {
+                    // Case 1: Header is hidden - reveal it
+                    if !isHeaderExpanded {
                         withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                            print("📈 Two-finger scroll up at top: Revealing header")
+                            isHeaderExpanded = true
+                            document.isHeaderExpanded = true
+                            isImageExpanded = true
+                            isTitleVisible = true
+                            isEditorFocused = false
+                            
+                            // Save the document to persist header state
+                            document.save()
+                            
+                            // Clear text editor focus when revealing header
+                            if let window = NSApp.keyWindow,
+                               window.firstResponder is NSTextView {
+                                window.makeFirstResponder(nil)
+                            }
+                        }
+                    }
+                    // Case 2: Header is visible but collapsed - expand it
+                    else if !isImageExpanded {
+                        withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                            print("📈 Two-finger scroll up at top: Expanding header")
                             isImageExpanded = true
                             isTitleVisible = true
                             
@@ -1208,6 +1174,7 @@ struct DocumentArea: View {
             if isHeaderExpanded && !hasActualHeaderImage() {
                 // Turn OFF header image mode completely instead of collapsing
                 withAnimation(.easeInOut(duration: 0.5)) {
+                    print("📉 Two-finger scroll down: Hiding header (no image)")
                     isHeaderExpanded = false
                     document.isHeaderExpanded = false // This is correct - we want to remove the header
                     headerImage = nil
@@ -1217,7 +1184,6 @@ struct DocumentArea: View {
                     
                     // Save the document to persist this change
                     document.save()
-                    print("📝 Turned off header image mode on scroll (no actual image was uploaded)")
                     
                     // Restore text editor focus to last position
                     if let window = NSApp.keyWindow,
@@ -1228,9 +1194,10 @@ struct DocumentArea: View {
             }
             // Check if we have a header image or just title/subtitle
             else if headerImage != nil {
-                // Handle header image case
+                // Handle header image case - collapse but don't hide completely
                 if isImageExpanded {
                     withAnimation(.easeInOut(duration: 0.5)) {
+                        print("📉 Two-finger scroll down: Collapsing header image")
                         isImageExpanded = false
                         isTitleVisible = true
                         isEditorFocused = true
@@ -1250,6 +1217,7 @@ struct DocumentArea: View {
                 // Now collapse title/subtitle on downward scroll when expanded
                 if !isEditorFocused {
                     withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                        print("📉 Two-finger scroll down: Collapsing title")
                         // Collapse title when scrolling down
                         isEditorFocused = true
                         isTitleVisible = true
@@ -1300,23 +1268,8 @@ struct DocumentArea: View {
                 ).animation(.easeInOut(duration: 0.35)))
                 .onChange(of: isImageExpanded) { _, newValue in
                     if !newValue && headerImage != nil && !hasShownRevealTooltip {
-                        // Force show our popup when image is collapsed
-                        print("🔥 FORCING 'Tap again to edit' popup when image collapsed via onChange")
                         hasShownRevealTooltip = true
-                        showTapAgainPopup = true
-                        
-                        // Force UI update with immediate and delayed calls
-                        DispatchQueue.main.async {
-                            showTapAgainPopup = true
-                            
-                            // Automatically hide after a delay with a shorter timeout
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-                                withAnimation(.easeOut(duration: 0.5)) {
-                                    print("🔽 Hiding 'Tap again to edit' popup from onChange handler")
-                                    showTapAgainPopup = false
-                                }
-                            }
-                        }
+                        // Removed tap again popup logic
                     }
                 }
             } else {
@@ -1405,165 +1358,7 @@ struct DocumentArea: View {
                         }
                     )
                     // Add overlay for intercept first click when header is expanded
-                    .overlay {
-                        if headerImage != nil && isHeaderExpanded && isImageExpanded {
-                            // Transparent clickable overlay on top of editor
-                            Rectangle()
-                                .fill(Color.clear)
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    // Debounce mechanism
-                                    // We create a unique key for this document to prevent issues with multiple documents
-                                    let debounceKey = "Letterspace_HeaderClick_\(document.id)"
-                                    let lastClickTime = UserDefaults.standard.double(forKey: debounceKey)
-                                    let currentTime = Date().timeIntervalSince1970
-                                    let timeSinceLastClick = currentTime - lastClickTime
-                                    
-                                    // If clicked too recently, ignore this click (500ms debounce)
-                                    if timeSinceLastClick < 0.5 {
-                                        print("🛑 Debouncing document area header click - ignoring")
-                                        return
-                                    }
-                                    
-                                    // Update the click timestamp
-                                    UserDefaults.standard.set(currentTime, forKey: debounceKey)
-                                    
-                                    print("⚡ Intercepted first click on editor with expanded header")
-                                    
-                                    // Check if there's an actual uploaded header image
-                                    let hasRealHeaderImage = hasActualHeaderImage()
-                                    
-                                    // If no actual image exists, completely turn off header mode
-                                    if !hasRealHeaderImage {
-                                        withAnimation(.easeInOut(duration: 0.5)) {
-                                            // Turn off header mode completely
-                                            isHeaderExpanded = false
-                                            document.isHeaderExpanded = false
-                                            headerImage = nil
-                                            isImageExpanded = false
-                                            isTitleVisible = true
-                                            isEditorFocused = false  // Expanded title format for text-only mode
-                                            
-                                            // Save the document to persist this change
-                                            document.save()
-                                            print("📝 Turned off header image mode on document click (no actual image was uploaded)")
-                                            
-                                            // Don't show tap again popup in this case
-                                            hasShownTapAgainPopup = true
-                                            showTapAgainPopup = false
-                                            
-                                            // Make sure text editor doesn't get focus
-                                            if let window = NSApp.keyWindow {
-                                                window.makeFirstResponder(nil)
-                                            }
-                                        }
-                                        return
-                                    }
-                                    
-                                    // Restore original popup state logic *before* animation
-                                    if !hasShownTapAgainPopup {
-                                        print("🔥 Setting popup state BEFORE animation for document WITH header image")
-                                        hasShownTapAgainPopup = true
-                                        showTapAgainPopup = true
-
-                                        // Schedule the hiding mechanism
-                                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-                                            withAnimation(.easeOut(duration: 0.5)) {
-                                                print("🔽 Hiding 'Tap again to edit' popup for document WITH header image")
-                                                showTapAgainPopup = false
-                                            }
-                                        }
-                                    }
-                                    
-                                    // Animate the header collapse only for documents with actual header images
-                                    withAnimation(.easeInOut(duration: 0.5)) {
-                                        // Just collapse the header
-                                        isImageExpanded = false
-                                        isTitleVisible = true
-                                        
-                                        // Make sure text editor doesn't get focus
-                                        if let window = NSApp.keyWindow {
-                                            window.makeFirstResponder(nil)
-                                        }
-                                    }
-                                }
-                        } else if headerImage == nil && !isHeaderExpanded && !isEditorFocused {
-                            // For documents with no header image, intercept first click to collapse title/subtitle
-                            Rectangle()
-                                .fill(Color.clear)
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    // Debounce mechanism
-                                    // We create a unique key for this document to prevent issues with multiple documents
-                                    let debounceKey = "Letterspace_NoHeaderClick_\(document.id)"
-                                    let lastClickTime = UserDefaults.standard.double(forKey: debounceKey)
-                                    let currentTime = Date().timeIntervalSince1970
-                                    let timeSinceLastClick = currentTime - lastClickTime
-                                    
-                                    // If clicked too recently, ignore this click (500ms debounce)
-                                    if timeSinceLastClick < 0.5 {
-                                        print("🛑 Debouncing document area no-header click - ignoring")
-                                        return
-                                    }
-                                    
-                                    // Update the click timestamp
-                                    UserDefaults.standard.set(currentTime, forKey: debounceKey)
-                                    
-                                    print("⚡ Intercepted first click on editor with no header image")
-                                    withAnimation(.easeInOut(duration: 0.5)) {
-                                        // Just collapse the text header (title/subtitle)
-                                        isEditorFocused = true
-                                        isTitleVisible = true
-                                        
-                                        // Make sure text editor doesn't get focus
-                                        if let window = NSApp.keyWindow {
-                                            window.makeFirstResponder(nil)
-                                        }
-                                        
-                                        // Only show popup if it hasn't been shown before for this document
-                                        if !hasShownTapAgainPopup {
-                                            print("🔥 FORCING 'Tap again to edit' popup for document WITHOUT header image")
-                                            hasShownTapAgainPopup = true
-                                            showTapAgainPopup = true
-                                            
-                                            // Add timer to dismiss popup after 1.2 seconds
-                                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-                                                withAnimation(.easeOut(duration: 0.5)) {
-                                                    print("🔽 Hiding 'Tap again to edit' popup for document WITHOUT header image")
-                                                    showTapAgainPopup = false
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                        } else {
-                            // After first click, clear the flag to allow normal interaction
-                            Color.clear.onAppear {
-                                if UserDefaults.standard.bool(forKey: "Letterspace_FirstClickHandled") {
-                                    // CRITICAL FIX: Reset the flag IMMEDIATELY, not after a delay
-                                    // This ensures the text view can become first responder without waiting
-                                    UserDefaults.standard.set(false, forKey: "Letterspace_FirstClickHandled")
-                                    UserDefaults.standard.synchronize()
-                                    print("⚠️ Immediately reset FirstClickHandled flag in DocumentArea")
-                                    
-                                    // Force the text view to be editable after a very short delay
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                                        #if os(macOS)
-                                        if let window = NSApp.keyWindow,
-                                           let textView = window.contentView?.firstSubview(ofType: NSTextView.self) as? DocumentTextView {
-                                            // Force editing mode and focus
-                                            textView.isEditable = true
-                                            textView.isSelectable = true
-                                            textView.isHeaderImageCurrentlyExpanded = false
-                                            window.makeFirstResponder(textView)
-                                            print("🔄 Forced text view focus from DocumentArea")
-                                        }
-                                        #endif
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    // Removed first click interception overlay - no longer needed
                 #elseif os(iOS)
                 // iOS: SwiftUI-based text editor optimized for touch
                 IOSDocumentEditor(document: $document)
