@@ -321,65 +321,7 @@ struct HeaderImageSection: View {
     }
     
     // MARK: - Image Handling
-    private func handleImageSelection(url: URL) {
-        guard let appDirectory = Letterspace_CanvasDocument.getAppDocumentsDirectory() else {
-            print("❌ Could not access documents directory")
-            isShowingImagePicker = false
-            return
-        }
-
-        let documentImagesPath = appDirectory.appendingPathComponent(document.id).appendingPathComponent("Images")
-
-        do {
-            // Create document-specific images directory if it doesn't exist
-            try FileManager.default.createDirectory(at: documentImagesPath, withIntermediateDirectories: true, attributes: nil)
-
-            let fileName = "header_\(UUID().uuidString).\(url.pathExtension)"
-            let destinationURL = documentImagesPath.appendingPathComponent(fileName)
-
-            // Copy the selected image to the app's storage
-            try FileManager.default.copyItem(at: url, to: destinationURL)
-
-            // Update document model
-            var updatedDoc = document
-            if let index = updatedDoc.elements.firstIndex(where: { $0.type == .headerImage }) {
-                // Remove old image file if content was different
-                let oldFileName = updatedDoc.elements[index].content
-                if !oldFileName.isEmpty && oldFileName != fileName {
-                    let oldFileURL = documentImagesPath.appendingPathComponent(oldFileName)
-                    try? FileManager.default.removeItem(at: oldFileURL)
-                }
-                updatedDoc.elements[index].content = fileName
-            } else {
-                let headerElement = DocumentElement(type: .headerImage, content: fileName)
-                updatedDoc.elements.insert(headerElement, at: 0) // Insert at the beginning
-            }
-            updatedDoc.isHeaderExpanded = true // Ensure header feature is on
-
-            self.document = updatedDoc // Update the binding
-            self.document.save()
-
-            // Update the displayed image
-            #if os(macOS)
-            self.headerImage = NSImage(contentsOf: destinationURL)
-            #elseif os(iOS)
-            self.headerImage = UIImage(contentsOfFile: destinationURL.path)
-            #endif
-            
-            // Ensure the header is visually expanded
-            if !self.isExpanded {
-                 withAnimation(.easeInOut(duration: 0.35)) {
-                    self.isExpanded = true
-                }
-            }
-
-            print("🖼️ Header image selected and saved: \(fileName)")
-
-        } catch {
-            print("❌ Error handling image selection: \(error)")
-        }
-        isShowingImagePicker = false
-    }
+    // Note: Image selection is now handled by DocumentArea's fileImporter
     
     var body: some View {
         if !self.isHeaderExpanded { // If the header FEATURE is off (e.g. user explicitly removed header)
@@ -434,60 +376,7 @@ struct HeaderImageSection: View {
                 headerImage = nil
                 loadHeaderImageIfNeeded()
             }
-            .sheet(isPresented: $isShowingImagePicker) {
-                #if os(macOS)
-                // Assuming ImagePicker is the correct view.
-                // It expects a Binding<String> for selectedImage path, which we don't directly use here.
-                // We'll pass a dummy state and use our own handleImageSelection.
-                // Or, ImagePicker needs to be adapted to use a callback with URL.
-                // For now, let's use NSOpenPanel directly as it's simpler for this specific case.
-                // ImagePickerMacOS( <<-- This was the original problematic line
-                // We will reconstruct the panel logic here as it's more direct than adapting ImagePicker
-                // The 'ImagePicker' found is more of a full component with its own save logic.
-                // HeaderImageSection needs direct control over the URL.
-                
-                // Re-implementing a simple panel presentation here:
-                // This requires handleImageSelection to be called from within this closure if an image is picked.
-                // However, .sheet is not the right place for this kind of imperative logic.
-                // The original ImagePickerMacOS likely was a struct that took a callback.
-                // Let's define a simple local picker view for macOS.
-                
-                // Re-implementing a simple panel presentation here:
-                // This requires handleImageSelection to be called from within this closure if an image is picked.
-                // However, .sheet is not the right place for this kind of imperative logic.
-                // The original ImagePickerMacOS likely was a struct that took a callback.
-                // Let's define a simple local picker view for macOS.
-                
-                SimpleMacOSFilePicker(
-                    isPresented: $isShowingImagePicker,
-                    allowedContentTypes: [UTType.image],
-                    onFilePicked: { url in
-                        handleImageSelection(url: url)
-                    },
-                    onCancel: {
-                        // Copied from original onCancel logic for the sheet
-                        if headerImage == nil && !checkForActualImage() {
-                            withAnimation(.spring(response: 1.2, dampingFraction: 0.7)) {
-                                isExpanded = false
-                            }
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                                withAnimation(.spring(response: 1.0, dampingFraction: 0.8)) {
-                                    isHeaderExpanded = false
-                                    document.isHeaderExpanded = false
-                                    isTitleVisible = true
-                                    isEditorFocused = false
-                                    document.save()
-                                }
-                            }
-                        }
-                    }
-                )
-                #elseif os(iOS)
-                // For iOS, you'd use something like PHPickerViewController representable
-                // For now, keeping EmptyView as per previous refactoring
-                EmptyView() // Placeholder for iOS image picker
-                #endif
-            }
+
         }
     }
 
@@ -697,9 +586,12 @@ struct HeaderImageSection: View {
                                 .overlay(
                                     Button(action: {
                     // Action to show the image picker
+                                        print("📸 iOS: Add Header Image button tapped")
+                                        print("📸 iOS: Before - isShowingImagePicker: \(isShowingImagePicker)")
                                         withAnimation(.easeInOut(duration: 0.35)) {
                                             isShowingImagePicker = true
                                         }
+                                        print("📸 iOS: After - isShowingImagePicker: \(isShowingImagePicker)")
                                     }) {
                                         VStack {
                                             Image(systemName: "photo")
@@ -769,69 +661,7 @@ struct HeaderImageSection: View {
     }
 }
 
-#if os(macOS)
-struct SimpleMacOSFilePicker: NSViewRepresentable {
-    @Binding var isPresented: Bool
-    let allowedContentTypes: [UTType]
-    let onFilePicked: (URL) -> Void
-    let onCancel: (() -> Void)?
 
-    func makeNSView(context: Context) -> NSView {
-        let view = NSView() // Dummy view
-        return view
-    }
-
-    func updateNSView(_ nsView: NSView, context: Context) {
-        // This needs to be triggered carefully to avoid multiple presentations
-        // Typically, this logic is better outside updateNSView or controlled by a separate state.
-        // For simplicity in this context, we'll attempt to show it if isPresented is true
-        // and the panel isn't already up (which is hard to check from here directly).
-        // A better approach for production would be a more robust coordinator pattern.
-
-        // Guard against re-presenting if already handled by a previous update cycle
-        if isPresented && context.coordinator.panelPresentedThisUpdateCycle == false {
-            context.coordinator.panelPresentedThisUpdateCycle = true // Mark as presented for this cycle
-            
-            DispatchQueue.main.async { // Ensure panel is presented on the main thread
-                let panel = NSOpenPanel()
-                panel.allowsMultipleSelection = false
-                panel.canChooseDirectories = false
-                panel.canChooseFiles = true
-                panel.allowedContentTypes = allowedContentTypes
-                
-                // If we present it modally, it blocks.
-                // If we need it non-modal, it requires more complex handling.
-                // For a sheet-like behavior, modal is usually expected.
-                if panel.runModal() == .OK, let url = panel.url {
-                    onFilePicked(url)
-                } else {
-                    onCancel?()
-                }
-                // Reset presentation state binding
-                self.isPresented = false
-                // Allow panel to be presented again in future update cycles
-                context.coordinator.panelPresentedThisUpdateCycle = false
-            }
-        } else if !isPresented {
-            // If isPresented becomes false, ensure we reset the cycle guard
-             context.coordinator.panelPresentedThisUpdateCycle = false
-        }
-    }
-    
-    func makeCoordinator() -> Coordinator {
-        Coordinator(self)
-                            }
-
-    class Coordinator: NSObject {
-        var parent: SimpleMacOSFilePicker
-        var panelPresentedThisUpdateCycle: Bool = false // Guard
-
-        init(_ parent: SimpleMacOSFilePicker) {
-            self.parent = parent
-            }
-        }
-    }
-#endif
 
 // Custom button style to prevent flash effect
 struct NoFlashButtonStyle: ButtonStyle {

@@ -330,10 +330,17 @@ struct DocumentArea: View {
         }
         .fileImporter(
             isPresented: $isShowingImagePicker,
-            allowedContentTypes: [UTType.image],
+            allowedContentTypes: [.image, .jpeg, .png, .heic, .gif, .webP],
             allowsMultipleSelection: false
         ) { result in
-            handleImageImport(result: result)
+            print("📸 iOS Image picker result: \(result)")
+            // Ensure picker is dismissed first
+            isShowingImagePicker = false
+            
+            // Handle result after a slight delay to avoid presentation conflicts
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                handleImageImport(result: result)
+            }
         }
     }
     
