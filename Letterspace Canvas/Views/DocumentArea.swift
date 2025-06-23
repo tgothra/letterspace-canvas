@@ -1388,19 +1388,106 @@ struct DocumentArea: View {
             }
             
             // Document editor - let it expand naturally with small minimum
-                #if os(macOS)
-                // Using DocumentEditorView for the main content area on macOS
-                DocumentEditorView(document: $document, selectedBlock: .constant(nil))
-                    .allowsHitTesting(!isAnimatingHeaderCollapse)
-                .frame(width: paperWidth)
-                .frame(minHeight: 300) // Small minimum height to ensure visibility
-                // Removed all tap overlay code - no longer needed for scroll-based header
-                #elseif os(iOS)
-                // iOS: SwiftUI-based text editor optimized for touch
-                IOSDocumentEditor(document: $document)
-                    .allowsHitTesting(!isAnimatingHeaderCollapse)
-                .frame(minHeight: 300)
-                #endif
+                ZStack {
+                    #if os(macOS)
+                    // Using DocumentEditorView for the main content area on macOS
+                    DocumentEditorView(document: $document, selectedBlock: .constant(nil))
+                        .allowsHitTesting(!isAnimatingHeaderCollapse)
+                    .frame(width: paperWidth)
+                    .frame(minHeight: 300) // Small minimum height to ensure visibility
+                    #elseif os(iOS)
+                    // iOS: SwiftUI-based text editor optimized for touch
+                    IOSDocumentEditor(document: $document)
+                        .allowsHitTesting(!isAnimatingHeaderCollapse)
+                    .frame(minHeight: 300)
+                    #endif
+                    
+                    // Transparent overlay for tap-to-minimize functionality (macOS only)
+                    #if os(macOS)
+                    if headerImage != nil && isHeaderExpanded && isImageExpanded {
+                        // Transparent clickable overlay on top of editor for header image case
+                        Rectangle()
+                            .fill(Color.clear)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                // Debounce mechanism
+                                let debounceKey = "Letterspace_HeaderClick_\(document.id)"
+                                let lastClickTime = UserDefaults.standard.double(forKey: debounceKey)
+                                let currentTime = Date().timeIntervalSince1970
+                                let timeSinceLastClick = currentTime - lastClickTime
+                                
+                                // If clicked too recently, ignore this click (500ms debounce)
+                                if timeSinceLastClick < 0.5 {
+                                    print("🛑 Debouncing document area header click - ignoring")
+                                    return
+                                }
+                                
+                                // Update the click timestamp
+                                UserDefaults.standard.set(currentTime, forKey: debounceKey)
+                                
+                                print("⚡ Intercepted first click on editor with expanded header")
+                                
+                                // Check if there's an actual uploaded header image
+                                let hasRealHeaderImage = hasActualHeaderImage()
+                                
+                                if hasRealHeaderImage {
+                                    // Collapse header image and focus editor
+                                    withAnimation(.easeInOut(duration: 0.5)) {
+                                        isImageExpanded = false
+                                        isEditorFocused = true
+                                        isTitleVisible = true
+                                    }
+                                } else {
+                                    // No real image, turn off header mode completely
+                                    withAnimation(.easeInOut(duration: 0.5)) {
+                                        isHeaderExpanded = false
+                                        document.isHeaderExpanded = false
+                                        headerImage = nil
+                                        isImageExpanded = false
+                                        isTitleVisible = true
+                                        isEditorFocused = true
+                                    }
+                                }
+                            }
+                    } else if headerImage == nil && !isHeaderExpanded && !isEditorFocused {
+                        // For documents with no header image, intercept first click to collapse title/subtitle
+                        Rectangle()
+                            .fill(Color.clear)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                // Debounce mechanism
+                                let debounceKey = "Letterspace_NoHeaderClick_\(document.id)"
+                                let lastClickTime = UserDefaults.standard.double(forKey: debounceKey)
+                                let currentTime = Date().timeIntervalSince1970
+                                let timeSinceLastClick = currentTime - lastClickTime
+                                
+                                // If clicked too recently, ignore this click (500ms debounce)
+                                if timeSinceLastClick < 0.5 {
+                                    print("🛑 Debouncing document area no-header click - ignoring")
+                                    return
+                                }
+                                
+                                // Update the click timestamp
+                                UserDefaults.standard.set(currentTime, forKey: debounceKey)
+                                
+                                print("⚡ Intercepted first click on editor with no header image")
+                                withAnimation(.easeInOut(duration: 0.5)) {
+                                    // Just collapse the text header (title/subtitle)
+                                    isEditorFocused = true
+                                    isTitleVisible = true
+                                    
+                                    // Focus the text editor
+                                    if let window = NSApp.keyWindow,
+                                       let textView = window.contentView?.subviews.first(where: { $0.className.contains("DocumentEditor") }) as? NSTextView {
+                                        textView.isSelectable = true
+                                        textView.isEditable = true
+                                        window.makeFirstResponder(textView)
+                                    }
+                                }
+                            }
+                    }
+                    #endif
+                }
             
             // Add extra space at bottom to ensure scrollbar is contained (only on non-iPad)
             #if os(iOS)
