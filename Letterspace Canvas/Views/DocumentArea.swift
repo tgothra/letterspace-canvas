@@ -259,6 +259,7 @@ struct DocumentArea: View {
     #endif
     
     @State private var isShowingImagePicker = false
+    @State private var imagePickerSourceRect: CGRect = .zero
     @State private var isHeaderSectionActive = false
     @Binding var documentHeight: CGFloat
     @Binding var viewportHeight: CGFloat
@@ -329,28 +330,34 @@ struct DocumentArea: View {
             documentContainer(geo: geo)
         }
                 #if os(iOS)
-        .sheet(isPresented: $isShowingImagePicker) {
-            IOSImagePicker(
-                isPresented: $isShowingImagePicker,
-                onImagePicked: { url in
-                    print("📸 iOS Image picker selected: \(url)")
-                    // Handle the picked image
-                    handleImageImport(result: .success([url]))
-                },
-                onCancel: {
-                    print("📸 iOS Image picker cancelled")
-                    // Handle cancellation if needed
-                    if headerImage == nil {
-                        // If no header image exists and picker was cancelled,
-                        // you might want to collapse the header
-                        withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) {
-                            isHeaderExpanded = false
-                            document.isHeaderExpanded = false
-                        }
+        .background(
+            GeometryReader { geometry in
+                Color.clear
+                    .sheet(isPresented: $isShowingImagePicker) {
+                        IOSImagePicker(
+                            isPresented: $isShowingImagePicker,
+                            sourceRect: imagePickerSourceRect,
+                            onImagePicked: { url in
+                                print("📸 iOS Image picker selected: \(url)")
+                                // Handle the picked image
+                                handleImageImport(result: .success([url]))
+                            },
+                            onCancel: {
+                                print("📸 iOS Image picker cancelled")
+                                // Handle cancellation if needed
+                                if headerImage == nil {
+                                    // If no header image exists and picker was cancelled,
+                                    // you might want to collapse the header
+                                    withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) {
+                                        isHeaderExpanded = false
+                                        document.isHeaderExpanded = false
+                                    }
+                                }
+                            }
+                        )
                     }
-                }
-            )
-        }
+            }
+        )
         #else
         .fileImporter(
             isPresented: $isShowingImagePicker,
@@ -1323,6 +1330,9 @@ struct DocumentArea: View {
                     insertion: .opacity.combined(with: .scale(scale: 0.98)),
                     removal: .opacity.combined(with: .scale(scale: 0.98))
                 ).animation(.easeInOut(duration: 0.35)))
+                .onPreferenceChange(ImagePickerSourceRectKey.self) { rect in
+                    imagePickerSourceRect = rect
+                }
                 .onChange(of: isImageExpanded) { _, newValue in
                     if !newValue && headerImage != nil && !hasShownRevealTooltip {
                         // Force show our popup when image is collapsed

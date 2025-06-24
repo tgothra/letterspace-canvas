@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 #if os(iOS)
 struct IOSImagePicker: UIViewControllerRepresentable {
     @Binding var isPresented: Bool
+    let sourceRect: CGRect
     let onImagePicked: (URL) -> Void
     let onCancel: () -> Void
     
@@ -46,8 +47,8 @@ struct IOSImagePicker: UIViewControllerRepresentable {
         // For iPad, set the popover presentation
         if let popoverController = actionSheet.popoverPresentationController {
             popoverController.sourceView = viewController.view
-            popoverController.sourceRect = CGRect(x: viewController.view.bounds.midX, y: viewController.view.bounds.midY, width: 0, height: 0)
-            popoverController.permittedArrowDirections = []
+            popoverController.sourceRect = parent.sourceRect
+            popoverController.permittedArrowDirections = [.up, .down]
         }
         
         // Present the action sheet after a slight delay to ensure the view is ready

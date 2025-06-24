@@ -1,10 +1,19 @@
 import SwiftUI
+import UniformTypeIdentifiers
+import CoreData
 #if os(macOS)
 import AppKit
 #elseif os(iOS)
 import UIKit // For UIImage and potentially other UIKit elements if needed later
 #endif
-import UniformTypeIdentifiers
+
+// MARK: - Preference Key for Image Picker Source Rect
+struct ImagePickerSourceRectKey: PreferenceKey {
+    static var defaultValue: CGRect = .zero
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
+        value = nextValue()
+    }
+}
 
 // Extension for String isEmpty check
 extension String {
@@ -571,42 +580,48 @@ struct HeaderImageSection: View {
     @ViewBuilder
     private var placeholderImageView: some View {
         // This is shown when headerImage is nil but isExpanded is true
-                            Rectangle()
-                                .fill(colorScheme == .dark ? Color(.sRGB, red: 0.15, green: 0.15, blue: 0.15, opacity: 1.0) : Color(.sRGB, red: 0.95, green: 0.95, blue: 0.95, opacity: 1.0))
-                                .frame(maxWidth: paperWidth)
+        Rectangle()
+            .fill(colorScheme == .dark ? Color(.sRGB, red: 0.15, green: 0.15, blue: 0.15, opacity: 1.0) : Color(.sRGB, red: 0.95, green: 0.95, blue: 0.95, opacity: 1.0))
+            .frame(maxWidth: paperWidth)
             // The height might need to be dynamic based on viewMode or a fixed value for placeholder
             .frame(height: viewMode == .minimal ? 160 : 300) // Adjusted height for placeholder
-                                .clipShape(RoundedRectangle(cornerRadius: 12))
-                                .transition(.asymmetric(
-                                    insertion: .opacity.combined(with: .move(edge: .top).combined(with: .scale(scale: 0.98))),
-                                    removal: .opacity.combined(with: .move(edge: .top).combined(with: .scale(scale: 0.98)))
-                                ))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .transition(.asymmetric(
+                insertion: .opacity.combined(with: .move(edge: .top).combined(with: .scale(scale: 0.98))),
+                removal: .opacity.combined(with: .move(edge: .top).combined(with: .scale(scale: 0.98)))
+            ))
             .animation(.easeInOut(duration: 0.35), value: isExpanded) // Make sure this animation is desired here
-                                .drawingGroup()
-                                .overlay(
-                                    Button(action: {
+            .drawingGroup()
+            .background(
+                GeometryReader { geometry in
+                    Color.clear
+                        .preference(key: ImagePickerSourceRectKey.self, value: geometry.frame(in: .global))
+                }
+            )
+            .overlay(
+                Button(action: {
                     // Action to show the image picker
-                                        print("📸 iOS: Add Header Image button tapped")
-                                        print("📸 iOS: Before - isShowingImagePicker: \(isShowingImagePicker)")
-                                        withAnimation(.easeInOut(duration: 0.35)) {
-                                            isShowingImagePicker = true
-                                        }
-                                        print("📸 iOS: After - isShowingImagePicker: \(isShowingImagePicker)")
-                                    }) {
-                                        VStack {
-                                            Image(systemName: "photo")
-                                                .font(.system(size: 48))
-                                                .foregroundColor(colorScheme == .dark ? .white.opacity(0.2) : .black.opacity(0.2))
-                                                .padding(.bottom, 8)
-                                            
-                                            Text("Add Header Image")
-                                                .font(.system(size: 16, weight: .medium))
-                                                .foregroundColor(colorScheme == .dark ? .white.opacity(0.2) : .black.opacity(0.2))
-                                        }
+                    print("📸 iOS: Add Header Image button tapped")
+                    print("📸 iOS: Before - isShowingImagePicker: \(isShowingImagePicker)")
+                    withAnimation(.easeInOut(duration: 0.35)) {
+                        isShowingImagePicker = true
+                    }
+                    print("📸 iOS: After - isShowingImagePicker: \(isShowingImagePicker)")
+                }) {
+                    VStack {
+                        Image(systemName: "photo")
+                            .font(.system(size: 48))
+                            .foregroundColor(colorScheme == .dark ? .white.opacity(0.2) : .black.opacity(0.2))
+                            .padding(.bottom, 8)
+                        
+                        Text("Add Header Image")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(colorScheme == .dark ? .white.opacity(0.2) : .black.opacity(0.2))
+                    }
                     .contentShape(Rectangle()) // Ensure the whole area is tappable
-                                    }
-                                    .buttonStyle(.plain)
-                                )
+                }
+                .buttonStyle(.plain)
+            )
     }
 
     // MARK: - Collapsed Placeholder View
