@@ -21,7 +21,6 @@ struct HeaderImageSection: View {
     @Binding var headerImage: UIImage?
     #endif
     @Binding var isShowingImagePicker: Bool
-    @Binding var isShowingImageSourcePicker: Bool
     @Binding var document: Letterspace_CanvasDocument
     @State private var isHoveringSubtitle = false
     @Binding var viewMode: ViewMode
@@ -587,21 +586,12 @@ struct HeaderImageSection: View {
                                 .overlay(
                                     Button(action: {
                     // Action to show the image picker
-                                        print("📸 Add Header Image button tapped")
-                                        #if os(iOS)
-                                        print("📸 iOS: Setting isShowingImageSourcePicker to true")
-                                        print("📸 iOS: Before - isShowingImageSourcePicker: \(isShowingImageSourcePicker)")
-                                        #endif
+                                        print("📸 iOS: Add Header Image button tapped")
+                                        print("📸 iOS: Before - isShowingImagePicker: \(isShowingImagePicker)")
                                         withAnimation(.easeInOut(duration: 0.35)) {
-                                            #if os(iOS)
-                                            isShowingImageSourcePicker = true
-                                            #else
                                             isShowingImagePicker = true
-                                            #endif
                                         }
-                                        #if os(iOS)
-                                        print("📸 iOS: After - isShowingImageSourcePicker: \(isShowingImageSourcePicker)")
-                                        #endif
+                                        print("📸 iOS: After - isShowingImagePicker: \(isShowingImagePicker)")
                                     }) {
                                         VStack {
                                             Image(systemName: "photo")

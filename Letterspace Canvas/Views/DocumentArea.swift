@@ -4,7 +4,6 @@ import SwiftUI
 import AppKit
 #elseif os(iOS)
 import UIKit // For UIImage
-import PhotosUI // For PHPickerViewController
 #endif
 import UniformTypeIdentifiers
 import UserNotifications
@@ -260,8 +259,6 @@ struct DocumentArea: View {
     #endif
     
     @State private var isShowingImagePicker = false
-    @State private var isShowingImageSourcePicker = false // iOS: Show action sheet to choose source
-    @State private var isShowingPhotoPicker = false // iOS: Show photo library picker
     @State private var isHeaderSectionActive = false
     @Binding var documentHeight: CGFloat
     @Binding var viewportHeight: CGFloat
@@ -331,36 +328,36 @@ struct DocumentArea: View {
             // Main container for all document UI
             documentContainer(geo: geo)
         }
-        #if os(iOS)
-        .sheet(isPresented: $isShowingImageSourcePicker) {
-            ImageSourcePickerView(
-                isPresented: $isShowingImageSourcePicker,
-                onPhotoLibrarySelected: {
-                    isShowingImageSourcePicker = false
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                        isShowingPhotoPicker = true
-                    }
+                #if os(iOS)
+        .sheet(isPresented: $isShowingImagePicker) {
+            IOSImagePicker(
+                isPresented: $isShowingImagePicker,
+                onImagePicked: { url in
+                    print("📸 iOS Image picker selected: \(url)")
+                    // Handle the picked image
+                    handleImageImport(result: .success([url]))
                 },
-                onFilesSelected: {
-                    isShowingImageSourcePicker = false
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                        isShowingImagePicker = true
+                onCancel: {
+                    print("📸 iOS Image picker cancelled")
+                    // Handle cancellation if needed
+                    if headerImage == nil {
+                        // If no header image exists and picker was cancelled,
+                        // you might want to collapse the header
+                        withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) {
+                            isHeaderExpanded = false
+                            document.isHeaderExpanded = false
+                        }
                     }
                 }
             )
         }
-        .sheet(isPresented: $isShowingPhotoPicker) {
-            iOSPhotoPicker(isPresented: $isShowingPhotoPicker) { image in
-                handlePhotoLibraryImage(image)
-            }
-        }
-        #endif
+        #else
         .fileImporter(
             isPresented: $isShowingImagePicker,
             allowedContentTypes: [.image, .jpeg, .png, .heic, .gif, .webP],
             allowsMultipleSelection: false
         ) { result in
-            print("📸 File picker result: \(result)")
+            print("📸 macOS Image picker result: \(result)")
             // Ensure picker is dismissed first
             isShowingImagePicker = false
             
@@ -369,6 +366,7 @@ struct DocumentArea: View {
                 handleImageImport(result: result)
             }
         }
+        #endif
     }
     
     // Break out main container into a separate method
@@ -690,65 +688,6 @@ struct DocumentArea: View {
             print("Error selecting image: \(error.localizedDescription)")
         }
     }
-    
-    #if os(iOS)
-    // Handle photo library image selection
-    private func handlePhotoLibraryImage(_ image: UIImage) {
-        print("📸 Photo library image selected")
-        
-        let fileName = UUID().uuidString + ".png"
-        if let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
-            let documentPath = documentsPath.appendingPathComponent("\(document.id)")
-            let imagesPath = documentPath.appendingPathComponent("Images")
-            
-            do {
-                try FileManager.default.createDirectory(at: documentPath, withIntermediateDirectories: true, attributes: nil)
-                try FileManager.default.createDirectory(at: imagesPath, withIntermediateDirectories: true, attributes: nil)
-                let fileURL = imagesPath.appendingPathComponent(fileName)
-                
-                if let imageData = image.pngData() {
-                    try imageData.write(to: fileURL)
-                    print("📸 Successfully saved photo library image")
-                    
-                    // Update document with new image
-                    if var headerElement = document.elements.first(where: { $0.type == .headerImage }) {
-                        headerElement.content = fileName
-                        if let index = document.elements.firstIndex(where: { $0.type == .headerImage }) {
-                            document.elements[index] = headerElement
-                        }
-                    } else {
-                        let headerElement = DocumentElement(type: .headerImage, content: fileName)
-                        document.elements.insert(headerElement, at: 0)
-                    }
-                    
-                    document.save()
-                    
-                    withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
-                        self.headerImage = image
-                        self.isImageExpanded = true
-                        self.viewMode = .normal
-                        self.isHeaderExpanded = true
-                        self.isEditorFocused = true
-                        self.isTitleVisible = true
-                        
-                        // Show tooltip for first image
-                        if !hasShownTooltip {
-                            showTooltip = true
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                                withAnimation(.easeOut(duration: 0.3)) {
-                                    showTooltip = false
-                                    hasShownTooltip = true
-                                }
-                            }
-                        }
-                    }
-                }
-            } catch {
-                print("📸 Error saving photo library image: \(error)")
-            }
-        }
-    }
-    #endif
     
     // Handle onAppear event
     private func handleOnAppear(geo: GeometryProxy) {
@@ -1360,7 +1299,6 @@ struct DocumentArea: View {
                     isExpanded: $isImageExpanded,
                     headerImage: $headerImage,
                     isShowingImagePicker: $isShowingImagePicker,
-                    isShowingImageSourcePicker: $isShowingImageSourcePicker,
                     document: $document,
                     viewMode: $viewMode,
                     colorScheme: colorScheme,
@@ -1804,8 +1742,8 @@ struct DocumentArea: View {
             // Add extra space at bottom to ensure scrollbar is contained (only on non-iPad)
             #if os(iOS)
             if UIDevice.current.userInterfaceIdiom != .pad {
-                Spacer()
-                    .frame(height: 16)
+            Spacer()
+                .frame(height: 16)
             }
             #else
             Spacer()
@@ -2418,151 +2356,5 @@ private func createHeaderTransition() -> AnyTransition {
         removal: removalTransition
     )
 }
-
-#if os(iOS)
-// MARK: - Image Source Picker View
-struct ImageSourcePickerView: View {
-    @Binding var isPresented: Bool
-    let onPhotoLibrarySelected: () -> Void
-    let onFilesSelected: () -> Void
-    @Environment(\.colorScheme) var colorScheme
-    
-    var body: some View {
-        NavigationView {
-            VStack(spacing: 20) {
-                Spacer()
-                
-                VStack(spacing: 16) {
-                    Text("Choose Image Source")
-                        .font(.title2)
-                        .fontWeight(.semibold)
-                        .padding(.bottom, 8)
-                    
-                    Button(action: {
-                        print("📸 iOS: Photo Library button tapped")
-                        onPhotoLibrarySelected()
-                    }) {
-                        HStack {
-                            Image(systemName: "photo.on.rectangle")
-                                .font(.title2)
-                                .foregroundColor(.blue)
-                            
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Photo Library")
-                                    .font(.headline)
-                                    .foregroundColor(.primary)
-                                
-                                Text("Choose from your photos")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                            
-                            Spacer()
-                            
-                            Image(systemName: "chevron.right")
-                                .foregroundColor(.secondary)
-                        }
-                        .padding()
-                        .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(colorScheme == .dark ? Color(.systemGray6) : Color(.systemGray6))
-                        )
-                    }
-                    .buttonStyle(.plain)
-                    
-                    Button(action: {
-                        print("📸 iOS: Files button tapped")
-                        onFilesSelected()
-                    }) {
-                        HStack {
-                            Image(systemName: "folder")
-                                .font(.title2)
-                                .foregroundColor(.blue)
-                            
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Files")
-                                    .font(.headline)
-                                    .foregroundColor(.primary)
-                                
-                                Text("Browse files and documents")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                            
-                            Spacer()
-                            
-                            Image(systemName: "chevron.right")
-                                .foregroundColor(.secondary)
-                        }
-                        .padding()
-                        .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(colorScheme == .dark ? Color(.systemGray6) : Color(.systemGray6))
-                        )
-                    }
-                    .buttonStyle(.plain)
-                }
-                .padding(.horizontal)
-                
-                Spacer()
-            }
-            .navigationTitle("Add Header Image")
-            .navigationBarTitleDisplayMode(.inline)
-            .navigationBarItems(
-                trailing: Button("Cancel") {
-                    print("📸 iOS: Cancel button tapped")
-                    isPresented = false
-                }
-            )
-        }
-    }
-}
-
-// MARK: - iOS Photo Picker
-struct iOSPhotoPicker: UIViewControllerRepresentable {
-    @Binding var isPresented: Bool
-    let onImageSelected: (UIImage) -> Void
-    
-    func makeUIViewController(context: Context) -> PHPickerViewController {
-        var configuration = PHPickerConfiguration()
-        configuration.selectionLimit = 1
-        configuration.filter = .images
-        
-        let picker = PHPickerViewController(configuration: configuration)
-        picker.delegate = context.coordinator
-        return picker
-    }
-    
-    func updateUIViewController(_ uiViewController: PHPickerViewController, context: Context) {
-        // No updates needed
-    }
-    
-    func makeCoordinator() -> Coordinator {
-        Coordinator(self)
-    }
-    
-    class Coordinator: NSObject, PHPickerViewControllerDelegate {
-        let parent: iOSPhotoPicker
-        
-        init(_ parent: iOSPhotoPicker) {
-            self.parent = parent
-        }
-        
-        func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
-            parent.isPresented = false
-            
-            guard let result = results.first else { return }
-            
-            result.itemProvider.loadObject(ofClass: UIImage.self) { [weak self] object, error in
-                if let image = object as? UIImage {
-                    DispatchQueue.main.async {
-                        self?.parent.onImageSelected(image)
-                    }
-                }
-            }
-        }
-    }
-}
-#endif
 
 #endif

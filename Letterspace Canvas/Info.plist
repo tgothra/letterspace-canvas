@@ -157,5 +157,7 @@ InterTight-BlackItalic.ttf</string>
 			<string>Any</string>
 		</dict>
 	</dict>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Letterspace Canvas needs access to your photo library to add header images to your documents.</string>
 </dict>
 </plist>
