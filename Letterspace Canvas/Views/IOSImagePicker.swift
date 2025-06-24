@@ -3,14 +3,38 @@ import PhotosUI
 import UniformTypeIdentifiers
 
 #if os(iOS)
-struct IOSImagePicker: UIViewControllerRepresentable {
+struct IOSImagePickerController: UIViewRepresentable {
     @Binding var isPresented: Bool
     let sourceRect: CGRect
     let onImagePicked: (URL) -> Void
     let onCancel: () -> Void
     
-    func makeUIViewController(context: Context) -> UIViewController {
-        let viewController = UIViewController()
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView()
+        view.backgroundColor = .clear
+        return view
+    }
+    
+    func updateUIView(_ uiView: UIView, context: Context) {
+        if isPresented && !context.coordinator.hasPresented {
+            context.coordinator.hasPresented = true
+            presentActionSheet(from: uiView, context: context)
+        } else if !isPresented {
+            context.coordinator.hasPresented = false
+        }
+    }
+    
+    private func presentActionSheet(from view: UIView, context: Context) {
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let rootViewController = windowScene.windows.first?.rootViewController else {
+            return
+        }
+        
+        // Find the top-most view controller
+        var topController = rootViewController
+        while let presented = topController.presentedViewController {
+            topController = presented
+        }
         
         // Create action sheet with options
         let actionSheet = UIAlertController(title: nil, message: nil, preferredStyle: .actionSheet)
@@ -23,7 +47,7 @@ struct IOSImagePicker: UIViewControllerRepresentable {
             
             let picker = PHPickerViewController(configuration: configuration)
             picker.delegate = context.coordinator
-            viewController.present(picker, animated: true)
+            topController.present(picker, animated: true)
         }
         
         // Browse Files option
@@ -31,13 +55,15 @@ struct IOSImagePicker: UIViewControllerRepresentable {
             let documentPicker = UIDocumentPickerViewController(forOpeningContentTypes: [.image, .jpeg, .png, .heic, .gif, .webP])
             documentPicker.delegate = context.coordinator
             documentPicker.allowsMultipleSelection = false
-            viewController.present(documentPicker, animated: true)
+            topController.present(documentPicker, animated: true)
         }
         
         // Cancel option
         let cancelAction = UIAlertAction(title: "Cancel", style: .cancel) { _ in
-            isPresented = false
-            onCancel()
+            DispatchQueue.main.async {
+                self.isPresented = false
+                self.onCancel()
+            }
         }
         
         actionSheet.addAction(photoLibraryAction)
@@ -46,36 +72,25 @@ struct IOSImagePicker: UIViewControllerRepresentable {
         
         // For iPad, set the popover presentation
         if let popoverController = actionSheet.popoverPresentationController {
-            popoverController.sourceView = viewController.view
-            popoverController.sourceRect = parent.sourceRect
+            // Convert the source rect to the current view's coordinate system
+            let convertedRect = view.convert(sourceRect, from: nil)
+            popoverController.sourceView = view
+            popoverController.sourceRect = convertedRect
             popoverController.permittedArrowDirections = [.up, .down]
         }
         
-        // Present the action sheet after a slight delay to ensure the view is ready
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-               let rootViewController = windowScene.windows.first?.rootViewController {
-                var topController = rootViewController
-                while let presented = topController.presentedViewController {
-                    topController = presented
-                }
-                topController.present(actionSheet, animated: true)
-            }
-        }
-        
-        return viewController
+        topController.present(actionSheet, animated: true)
     }
-    
-    func updateUIViewController(_ uiViewController: UIViewController, context: Context) {}
     
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
     }
     
     class Coordinator: NSObject, PHPickerViewControllerDelegate, UIDocumentPickerDelegate {
-        let parent: IOSImagePicker
+        let parent: IOSImagePickerController
+        var hasPresented = false
         
-        init(_ parent: IOSImagePicker) {
+        init(_ parent: IOSImagePickerController) {
             self.parent = parent
         }
         
