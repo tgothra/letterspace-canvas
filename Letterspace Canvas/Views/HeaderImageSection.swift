@@ -21,6 +21,7 @@ struct HeaderImageSection: View {
     @Binding var headerImage: UIImage?
     #endif
     @Binding var isShowingImagePicker: Bool
+    @Binding var isShowingImageSourcePicker: Bool
     @Binding var document: Letterspace_CanvasDocument
     @State private var isHoveringSubtitle = false
     @Binding var viewMode: ViewMode
@@ -49,7 +50,9 @@ struct HeaderImageSection: View {
     @State private var isVisible: Bool = false
     
     // Add state variables for debouncing
-    // Removed debouncing variables since we no longer need tap-to-collapse functionality
+    @State private var isToggling: Bool = false
+    @State private var lastToggleTime: Date = Date()
+    private let debounceInterval: TimeInterval = 0.5 // 500ms debounce interval
     
     // Heights for the collapsed header bar
     private let collapsedBarHeight: CGFloat = 64
@@ -66,19 +69,137 @@ struct HeaderImageSection: View {
     #endif
     
     private func toggleHeader() {
-        // Simplified header interaction - no more tap to collapse/expand
-        // Only handle image picker for placeholders
+        // Implement debouncing to prevent rapid toggling
+        let now = Date()
+        let timeSinceLastToggle = now.timeIntervalSince(lastToggleTime)
+        if isToggling || timeSinceLastToggle < debounceInterval {
+            print("🛑 Debouncing header toggle - ignoring click")
+            return
+        }
+        isToggling = true
+        lastToggleTime = now
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+            isToggling = false
+        }
         
         let hasActualImage = checkForActualImage()
         
-        if headerImage == nil && !hasActualImage {
-            // Placeholder was clicked - show image picker
-            print("🖼️ User clicked placeholder to add image.")
-            withAnimation(.spring(response: 1.2, dampingFraction: 0.7)) {
-                isShowingImagePicker = true
+        // Case 1: Currently expanded
+        if isExpanded {
+            if headerImage == nil && !hasActualImage {
+                // Expanded placeholder was clicked (not via image picker)
+                // This typically means user clicked the background of the placeholder.
+                // Action: Show image picker.
+                print("🖼️ User clicked expanded placeholder background.")
+                withAnimation(.spring(response: 1.2, dampingFraction: 0.7)) {
+                    isShowingImagePicker = true // This should be the primary action.
+                }
+                // The .sheet onCancel/onImageSelected will handle collapsing or state changes.
+                return
+            }
+            
+            // Collapsing an actual image or collapsing from an expanded placeholder (if picker was cancelled)
+            #if os(macOS)
+            NotificationCenter.default.post(name: NSNotification.Name("HeaderImageToggling"), object: nil)
+            #endif
+            withAnimation(.easeInOut(duration: 0.35)) {
+                isExpanded = false // Collapse the view
+                if hasActualImage {
+                    isTitleVisible = true // For collapsed actual image bar
+                    isEditorFocused = true // Keep editor active
+                    onClick() // Trigger the onClick handler for actual image collapse
+                    UserDefaults.standard.set(true, forKey: "Letterspace_FirstClickHandled")
+                } else {
+                    // If collapsing from an expanded placeholder (e.g., picker cancelled, no image chosen)
+                    // We want to go to the collapsed placeholder state.
+                    // isHeaderExpanded remains true.
+                    isTitleVisible = true // For collapsed placeholder bar
+                    isEditorFocused = false // Or true, depending on desired focus for collapsed placeholder
+                }
+            }
+            // Focus management for macOS when collapsing actual image
+            if hasActualImage {
+                #if os(macOS)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    if let window = NSApp.keyWindow,
+                       let documentTextView = window.contentView?.firstSubview(ofType: NSTextView.self) as? DocumentTextView {
+                        documentTextView.isHeaderImageCurrentlyExpanded = false
+                        window.makeFirstResponder(documentTextView)
+                        documentTextView.forceEnableEditing()
+                    }
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                    if let window = NSApp.keyWindow,
+                       let documentTextView = window.contentView?.firstSubview(ofType: NSTextView.self) as? DocumentTextView {
+                        documentTextView.isHeaderImageCurrentlyExpanded = false
+                        documentTextView.forceEnableEditing()
+                        window.recalculateKeyViewLoop()
+                        window.makeFirstResponder(documentTextView)
+                    }
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                    if UserDefaults.standard.bool(forKey: "Letterspace_FirstClickHandled") {
+                        UserDefaults.standard.set(false, forKey: "Letterspace_FirstClickHandled")
+                        UserDefaults.standard.synchronize()
+                    }
+                }
+                #endif
+            }
+        // Case 2: Currently collapsed
+        } else { // !isExpanded
+            if headerImage == nil { // Collapsed placeholder was tapped
+                print("➕ User clicked collapsed placeholder to add image.")
+                // Action: Expand to show the large placeholderImageView for image selection.
+                // isHeaderExpanded remains true.
+                withAnimation(.easeInOut(duration: 0.35)) {
+                    isExpanded = true
+                    isTitleVisible = true // Title might be part of placeholderImageView or managed by it
+                    #if os(macOS)
+                    if let window = NSApp.keyWindow, window.firstResponder is NSTextView {
+                        window.makeFirstResponder(nil)
+                    }
+                    #endif
+                }
+                return // Explicitly return to avoid falling into the "turn off header" logic below
+            }
+
+            // Expanding an actual, existing image from its collapsed bar state
+            if hasActualImage { // This check is important here
+                #if os(macOS)
+                NotificationCenter.default.post(name: NSNotification.Name("HeaderImageToggling"), object: nil)
+                #endif
+                withAnimation(.easeInOut(duration: 0.35)) {
+                    isExpanded = true
+                    isTitleVisible = true // Title is usually part of expanded image view context
+                    isEditorFocused = true // Maintain editor focus compatibility
+                    #if os(macOS)
+                    if let window = NSApp.keyWindow, window.firstResponder is NSTextView {
+                        window.makeFirstResponder(nil)
+                    }
+                    #endif
+                }
+            } else {
+                // This case should ideally not be hit if the above logic for `headerImage == nil` is correct.
+                // This is the original logic for: !isExpanded && !hasActualImage
+                // which means a collapsed bar (that isn't a placeholder) was tapped, but no image file exists.
+                // This could happen if `isHeaderExpanded` is true, but `document.elements` for header image is empty/file missing.
+                // Action: Turn off header feature completely.
+                print("⚠️ Collapsed bar tapped, but no actual image file. Turning off header feature.")
+                withAnimation(.spring(response: 1.2, dampingFraction: 0.7)) {
+                    // isExpanded = false; // Already false
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    withAnimation(.spring(response: 1.0, dampingFraction: 0.8)) {
+                        isHeaderExpanded = false // Turn off the feature
+                        document.isHeaderExpanded = false
+                        // headerImage = nil; // Should already be nil or effectively nil
+                        isTitleVisible = true
+                        isEditorFocused = false
+                        document.save()
+                    }
+                }
             }
         }
-        // If there's an actual image, do nothing (no more tap to collapse)
     }
     
     // Helper function to check if document has an actual image file
@@ -466,12 +587,14 @@ struct HeaderImageSection: View {
                                 .overlay(
                                     Button(action: {
                     // Action to show the image picker
-                                        print("📸 iOS: Add Header Image button tapped")
-                                        print("📸 iOS: Before - isShowingImagePicker: \(isShowingImagePicker)")
+                                        print("📸 Add Header Image button tapped")
                                         withAnimation(.easeInOut(duration: 0.35)) {
+                                            #if os(iOS)
+                                            isShowingImageSourcePicker = true
+                                            #else
                                             isShowingImagePicker = true
+                                            #endif
                                         }
-                                        print("📸 iOS: After - isShowingImagePicker: \(isShowingImagePicker)")
                                     }) {
                                         VStack {
                                             Image(systemName: "photo")
