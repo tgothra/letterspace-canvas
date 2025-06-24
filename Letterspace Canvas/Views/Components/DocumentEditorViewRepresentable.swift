@@ -33,8 +33,8 @@ struct DocumentEditorView: NSViewRepresentable {
         customScroller.alphaValue = 1.0 // We'll handle transparency ourselves
         scrollView.verticalScroller = customScroller
         
-        // Set reasonable content insets - not too large
-        scrollView.contentInsets = NSEdgeInsets(top: 16, left: 0, bottom: 16, right: 0)
+        // Set reasonable content insets with generous bottom padding for last lines visibility
+        scrollView.contentInsets = NSEdgeInsets(top: 16, left: 0, bottom: 300, right: 0)
         
         // Create a fixed size container with appropriate sizing
         let containerWidth = 752.0
@@ -59,7 +59,7 @@ struct DocumentEditorView: NSViewRepresentable {
         
         // Configure appearance and behavior
         textView.font = NSFont(name: "Inter-Regular", size: 15) // Already at 15pt
-        textView.textContainerInset = NSSize(width: 19, height: 24) // Increased vertical inset
+        textView.textContainerInset = NSSize(width: 19, height: 60) // Moderate top padding to account for collapsed header
         textView.isEditable = true
         textView.isSelectable = true
         textView.importsGraphics = true
@@ -97,9 +97,43 @@ struct DocumentEditorView: NSViewRepresentable {
         // Set up scroll view with clip view
         scrollView.contentView = clipView
         
+        // Add scroll change notification observer for header behavior
+        NotificationCenter.default.addObserver(
+            forName: NSScrollView.didLiveScrollNotification,
+            object: scrollView,
+            queue: .main
+        ) { _ in
+            // Get current scroll position
+            let scrollPosition = scrollView.contentView.bounds.origin.y
+            
+            // Post notification with scroll position for header behavior
+            NotificationCenter.default.post(
+                name: NSNotification.Name("DocumentScrollPositionChanged"),
+                object: nil,
+                userInfo: ["scrollPosition": scrollPosition]
+            )
+        }
+        
+        // Add global scroll event monitor for header area scrolling
+        // This captures scroll events even when hovering over non-scrollable areas like the header
+        context.coordinator.setupGlobalScrollMonitor(for: scrollView)
+        
+        // Add bottom padding by adjusting the text view's frame to include extra space
+        // This ensures the last lines are always visible when scrolling to bottom
+        textView.translatesAutoresizingMaskIntoConstraints = false
+        
         // Ensure layout is complete before returning
         layoutManager.ensureLayout(for: textContainer)
         textView.layoutManager?.ensureLayout(for: textContainer)
+        
+        // Force the text view to update its content size with bottom padding
+        DispatchQueue.main.async {
+            textView.needsLayout = true
+            textView.needsDisplay = true
+            
+            // Use the coordinator method to update content size
+            context.coordinator.updateTextViewContentSize()
+        }
         
         // Set default typing attributes with consistent styling across all lines
         let isDarkModeInitial = colorScheme == .dark
@@ -159,6 +193,11 @@ struct DocumentEditorView: NSViewRepresentable {
         textView.maxSize = NSSize(width: 752, height: CGFloat.greatestFiniteMagnitude)
         textView.textContainer?.containerSize = NSSize(width: 752, height: CGFloat.greatestFiniteMagnitude)
         textView.textContainer?.widthTracksTextView = false
+        
+        // Update content size to ensure bottom padding is maintained
+        DispatchQueue.main.async {
+            context.coordinator.updateTextViewContentSize()
+        }
         
         // Track if document ID changed to ensure complete reset
         let documentChanged = textView.document?.id != document.id
@@ -393,6 +432,9 @@ struct DocumentEditorView: NSViewRepresentable {
                     self.parent.document = updatedDocument
                     updatedDocument.save()
                     print("💾 Document Saved (Text Did Change)")
+                    
+                    // Update content size to ensure bottom padding is maintained
+                    self.updateTextViewContentSize()
                 }
             }
         }
@@ -414,6 +456,78 @@ struct DocumentEditorView: NSViewRepresentable {
         func textViewDidChangeSelection(_ notification: Notification) {
             print("📍 Selection changed")
         }
+        
+        // Update text view content size to ensure bottom padding
+        func updateTextViewContentSize() {
+            guard let textView = self.textView,
+                  let layoutManager = textView.layoutManager,
+                  let textContainer = textView.textContainer,
+                  let scrollView = textView.enclosingScrollView else { return }
+            
+            // Force layout update
+            layoutManager.ensureLayout(for: textContainer)
+            
+            // Calculate the actual text height
+            let textHeight = layoutManager.usedRect(for: textContainer).height
+            let totalHeight = textHeight + textView.textContainerInset.height * 2 + 300 // Add 300px bottom padding
+            
+            // Update the text view frame to include bottom padding
+            let newHeight = max(totalHeight, scrollView.frame.height)
+            if textView.frame.height != newHeight {
+                textView.frame.size.height = newHeight
+                
+                // Notify the scroll view of the content size change
+                scrollView.reflectScrolledClipView(scrollView.contentView)
+                print("📏 Updated text view height to: \(newHeight) (text: \(textHeight) + padding: 300)")
+            }
+        }
+        
+        // Set up global scroll monitor for header area scrolling
+        func setupGlobalScrollMonitor(for scrollView: NSScrollView) {
+            // Remove any existing monitor first
+            if let existingMonitor = globalScrollMonitor {
+                NSEvent.removeMonitor(existingMonitor)
+            }
+            
+            // Add global scroll event monitor that works across the entire document area
+            globalScrollMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak scrollView] event in
+                guard let scrollView = scrollView,
+                      let window = scrollView.window else { return event }
+                
+                // Check if the event is within our window
+                let eventLocation = event.locationInWindow
+                let windowBounds = window.contentView?.bounds ?? NSRect.zero
+                
+                // Only process if the event is within our window bounds
+                if windowBounds.contains(eventLocation) {
+                    let deltaY = event.scrollingDeltaY * (event.hasPreciseScrollingDeltas ? 0.1 : 1.0)
+                    
+                    // If there's meaningful scroll, simulate scrolling the content
+                    if abs(deltaY) > 0.01 {
+                        // Get current scroll position
+                        let currentScrollPosition = scrollView.contentView.bounds.origin.y
+                        
+                        // Calculate new scroll position
+                        let newScrollPosition = max(0, currentScrollPosition - deltaY)
+                        
+                        // Apply the scroll to the content view
+                        scrollView.contentView.scroll(to: NSPoint(x: 0, y: newScrollPosition))
+                        
+                        // Post notification with the new scroll position
+                        NotificationCenter.default.post(
+                            name: NSNotification.Name("DocumentScrollPositionChanged"),
+                            object: nil,
+                            userInfo: ["scrollPosition": newScrollPosition]
+                        )
+                    }
+                }
+                
+                return event
+            }
+        }
+        
+        // Store the global scroll monitor reference for cleanup
+        var globalScrollMonitor: Any?
 
         // MARK: - NSTextViewDelegate conformance
         
@@ -565,6 +679,12 @@ struct DocumentEditorView: NSViewRepresentable {
     }
     
     func dismantleNSView(_ nsView: NSScrollView, coordinator: Coordinator) {
+        // Clean up global scroll monitor
+        if let monitor = coordinator.globalScrollMonitor {
+            NSEvent.removeMonitor(monitor)
+            coordinator.globalScrollMonitor = nil
+        }
+        
         // Clear any text selection
         if let textView = nsView.documentView as? DocumentTextView {
             textView.selectedRange = NSRange(location: 0, length: 0)

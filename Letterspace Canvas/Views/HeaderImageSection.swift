@@ -400,18 +400,21 @@ struct HeaderImageSection: View {
     // MARK: - Expanded Header View
     @ViewBuilder
     private func expandedHeaderView(_ image: PlatformSpecificImage) -> some View {
-        let size = image.size
-        let aspectRatioValue = size.height / size.width // Calculate aspect ratio once
-        let headerHeight = paperWidth * aspectRatioValue
-
         // Apply modifiers directly inside platform blocks
         #if os(macOS)
         Image(nsImage: image)
             .resizable()
-            .aspectRatio(contentMode: .fill)
-            .frame(width: paperWidth, height: headerHeight)
-            .clipped()
+            .aspectRatio(contentMode: .fit)
+            .frame(width: paperWidth)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.clear)
+            )
             .clipShape(RoundedRectangle(cornerRadius: 12))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Color.clear, lineWidth: 0)
+            )
             .transition(.asymmetric(
                 insertion: .opacity.combined(with: .move(edge: .top).combined(with: .scale(scale: 0.98))),
                 removal: .opacity.combined(with: .move(edge: .top).combined(with: .scale(scale: 0.98)))
@@ -423,18 +426,25 @@ struct HeaderImageSection: View {
             }
         #elseif os(iOS)
         Image(uiImage: image)
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fill)
-                                    .frame(width: paperWidth, height: headerHeight)
-                                    .clipped()
-                                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                                    .transition(.asymmetric(
-                                        insertion: .opacity.combined(with: .move(edge: .top).combined(with: .scale(scale: 0.98))),
-                                        removal: .opacity.combined(with: .move(edge: .top).combined(with: .scale(scale: 0.98)))
-                                    ))
-                                    .animation(.easeInOut(duration: 0.35), value: isExpanded)
-                                    .drawingGroup()
-                                    .overlay(alignment: .bottomTrailing) {
+            .resizable()
+            .aspectRatio(contentMode: .fit)
+            .frame(width: paperWidth)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.clear)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Color.clear, lineWidth: 0)
+            )
+            .transition(.asymmetric(
+                insertion: .opacity.combined(with: .move(edge: .top).combined(with: .scale(scale: 0.98))),
+                removal: .opacity.combined(with: .move(edge: .top).combined(with: .scale(scale: 0.98)))
+            ))
+            .animation(.easeInOut(duration: 0.35), value: isExpanded)
+            .drawingGroup()
+            .overlay(alignment: .bottomTrailing) {
                 if isHoveringHeader { headerMenu }
             }
         #else

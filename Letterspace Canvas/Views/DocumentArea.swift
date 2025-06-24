@@ -80,71 +80,24 @@ struct ScrollGestureHandler: NSViewRepresentable {
             }
             
             scrollMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
-                let location = self?.window?.convertPoint(fromScreen: NSEvent.mouseLocation)
-                let localPoint = self?.convert(location ?? .zero, from: nil)
+                // Check if the event is within our window
+                guard let window = self?.window else { return event }
                 
-                if let localPoint = localPoint,
-                   self?.bounds.contains(localPoint) == true {
+                // Get the event location in window coordinates
+                let eventLocation = event.locationInWindow
+                let windowBounds = window.contentView?.bounds ?? NSRect.zero
+                
+                // Only process if the event is within our window bounds
+                if windowBounds.contains(eventLocation) {
                     let deltaY = event.scrollingDeltaY * (event.hasPreciseScrollingDeltas ? 0.1 : 1.0)
-                    let currentTime = CACurrentMediaTime()
                     
-                    if let self = self {
-                        // Calculate velocity based on time delta
-                        let timeDelta = currentTime - self.lastScrollTime
-                        if timeDelta > 0 {
-                            self.scrollVelocity = deltaY / CGFloat(timeDelta)
+                    if let self = self, abs(deltaY) > 0.01 { // Only process meaningful scroll events
+                        DispatchQueue.main.async {
+                            self.onScroll?(deltaY)
                         }
-                        
-                        // Track scroll direction changes
-                        let currentDirection = deltaY >= 0 ? 1.0 : -1.0
-                        if currentDirection != self.lastScrollDirection && abs(deltaY) > 0.1 {
-                            // Reset accumulated delta on direction change
-                            self.accumulatedDelta = 0
-                            self.momentum = 0
-                        }
-                        self.lastScrollDirection = currentDirection
-                        
-                        // Accumulate delta for smoother small movements
-                        self.accumulatedDelta += deltaY
-                        
-                        // Update momentum with smoothing
-                        if abs(self.accumulatedDelta) > 1.0 {
-                            self.momentum = self.scrollVelocity * 0.8 + self.momentum * 0.2
-                            self.accumulatedDelta = 0
-                        }
-                        
-                        self.lastScrollTime = currentTime
-                        self.lastDeltaY = deltaY
-                        
-                        // Apply scroll with rubber-banding if needed
-                        if self.lastScrollPosition < 0 {
-                            if !self.isRubberBanding {
-                                self.isRubberBanding = true
-                                self.rubberBandingStart = self.lastScrollPosition
-                            }
-                            // Progressive resistance
-                            let resistance = pow(1 - min(abs(self.lastScrollPosition) / 1000.0, 0.99), 2)
-                            let rubberBandedDelta = deltaY * resistance
-                            self.lastScrollPosition += rubberBandedDelta
-                        } else {
-                            self.isRubberBanding = false
-                            self.lastScrollPosition += deltaY
-                        }
-                        
-                        // Update scrollbar size smoothly
-                        if let scrollView = self.window?.contentView?.subviews.first(where: { $0.className.contains("DocumentEditor") })?.enclosingScrollView {
-                            let contentHeight = scrollView.documentView?.frame.height ?? 0
-                            if contentHeight != self.lastContentHeight {
-                                self.targetScrollbarHeight = self.calculateScrollbarHeight(for: contentHeight)
-                                self.lastContentHeight = contentHeight
-                            }
-                        }
-                        
-                        self.onScroll?(deltaY)
                     }
-                    
-                    return event
                 }
+                
                 return event
             }
         }
@@ -154,6 +107,8 @@ struct ScrollGestureHandler: NSViewRepresentable {
             let ratio = viewportHeight / contentHeight
             return max(viewportHeight * ratio, 32) // Minimum scrollbar height of 32 points
         }
+        
+
         
         private func updateScrollbarSize() {
             if let scrollView = window?.contentView?.subviews.first(where: { $0.className.contains("DocumentEditor") })?.enclosingScrollView {
@@ -283,11 +238,20 @@ struct DocumentArea: View {
     @State private var showTapAgainPopup: Bool = false
     @State private var hasShownTapAgainPopup: Bool = false
     
+    // Manual scroll-to-collapse state variables
+    @State private var currentScrollOffset: CGFloat = 0.0
+    @State private var headerCollapseProgress: CGFloat = 0.0 // 0.0 = fully expanded, 1.0 = fully collapsed
+    
     // Remove unused state variables
     private let sidebarWidth: CGFloat = 220
     private let collapsedSidebarWidth: CGFloat = 48
     private let headerHeight: CGFloat = 200
     private let collapsedHeaderHeight: CGFloat = 48
+    
+    // Manual scroll-to-collapse constants
+    private let maxScrollForCollapse: CGFloat = 150 // How much scroll distance to fully collapse
+    private let expandedHeaderHeight: CGFloat = 200
+    private let collapsedHeaderHeightConst: CGFloat = 64
     
     private var currentOverlap: CGFloat {
         if viewMode == .minimal || !isHeaderExpanded {
@@ -377,11 +341,7 @@ struct DocumentArea: View {
             // Background with tap gesture
             backgroundView
             
-            #if os(macOS)
-            // Scroll gesture handler
-            ScrollGestureHandler { deltaY in handleScroll(deltaY) }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            #endif
+
             
             // Main document content
             documentHStack(geo: geo)
@@ -389,10 +349,12 @@ struct DocumentArea: View {
             // Tooltip overlay
             tooltipOverlay
             
-            // "Tap again to edit" popup overlay
+            // "Tap again to edit" popup overlay - only show on macOS
+            #if os(macOS)
             if showTapAgainPopup {
                 tapAgainPopupOverlay
             }
+            #endif
         } // End of main ZStack
         // Add card styling for iPad at the container level to fill entire area
         #if os(iOS)
@@ -472,8 +434,8 @@ struct DocumentArea: View {
                             documentContentView
                                 .frame(minHeight: geo.size.height)
             }
-            // Only add padding when a header exists or is enabled
-            .padding(.top, (headerImage != nil || isHeaderExpanded) ? 8 : 0)
+            // Only add padding when a header exists or is enabled - increased for better spacing
+            .padding(.top, (headerImage != nil || isHeaderExpanded) ? 24 : 0)
                         }
                         .frame(width: paperWidth)
             // Remove overall animation on currentOverlap to prevent animating document title
@@ -1060,6 +1022,17 @@ struct DocumentArea: View {
         ) { _ in
             handleTextDidEndEditing()
         }
+        
+        // Listen for scroll position changes from DocumentEditorView
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("DocumentScrollPositionChanged"),
+            object: nil,
+            queue: .main
+        ) { notification in
+            if let scrollPosition = notification.userInfo?["scrollPosition"] as? CGFloat {
+                self.handleScrollPositionChange(scrollPosition)
+            }
+        }
         #endif
         
         // Observe header toggling to ensure content snaps in place
@@ -1185,111 +1158,46 @@ struct DocumentArea: View {
         }
     }
     
-    private func handleScroll(_ deltaY: CGFloat) {
+    private func handleScrollPositionChange(_ scrollPosition: CGFloat) {
         // If we're in distraction-free mode, don't handle scroll
         if isDistractionFreeMode {
             return
         }
-        #if os(macOS) // Scroll logic is macOS specific due to NSApp.keyWindow etc.
-        // Handle upward scroll (positive deltaY)
-        if deltaY > 0 {
-            // Only reveal when we're at the top and not already expanded
-            if !isImageExpanded {
-                // Get the current scroll view from the document editor
-                if let window = NSApp.keyWindow,
-                   let scrollView = window.contentView?.subviews.first(where: { $0.className.contains("DocumentEditor") })?.enclosingScrollView {
-                    
-                    // Check if we're at the top of the content
-                    let isAtTop = scrollView.contentView.bounds.origin.y <= 0
-                    
-                    // Only expand if we're at the top and still scrolling up
-                    if isAtTop {
-                        withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
-                            isImageExpanded = true
-                            isTitleVisible = true
-                            
-                            // When there's no header image, don't change the editor focus state
-                            // This ensures the title remains in the expanded format
-                            if headerImage != nil {
-                                isEditorFocused = false
-                            } else {
-                                // For no header image case, also expand the title on upward scroll
-                                isEditorFocused = false
-                            }
-                            
-                            // Clear text editor focus when revealing header
-                            if let window = NSApp.keyWindow,
-                               window.firstResponder is NSTextView {
-                                window.makeFirstResponder(nil)
-                            }
-                        }
-                    }
-                }
-            }
+        
+        #if os(macOS)
+        // Update current scroll offset
+        currentScrollOffset = scrollPosition
+        
+        // Calculate header collapse progress (0.0 = fully expanded, 1.0 = fully collapsed)
+        let progress = min(max(scrollPosition / maxScrollForCollapse, 0.0), 1.0)
+        headerCollapseProgress = progress
+        
+        print("🖥️ macOS: Scroll position: \(scrollPosition), Progress: \(progress)")
+        
+        // Don't automatically change isImageExpanded - let it stay as user set it
+        // Only update the visual collapse progress
+        #endif
+    }
+    
+    // iOS-specific scroll handling for header behavior
+    private func handleIOSScrollChange(scrollOffset: CGFloat) {
+        #if os(iOS)
+        // If we're in distraction-free mode, don't handle scroll
+        if isDistractionFreeMode {
             return
         }
-
-        // Handle downward scroll (negative deltaY)
-        if deltaY < 0 {
-            // Check if header is expanded but no actual image exists
-            if isHeaderExpanded && !hasActualHeaderImage() {
-                // Turn OFF header image mode completely instead of collapsing
-                withAnimation(.easeInOut(duration: 0.5)) {
-                    isHeaderExpanded = false
-                    document.isHeaderExpanded = false // This is correct - we want to remove the header
-                    headerImage = nil
-                    isImageExpanded = false
-                    isTitleVisible = true
-                    isEditorFocused = true
-                    
-                    // Save the document to persist this change
-                    document.save()
-                    print("📝 Turned off header image mode on scroll (no actual image was uploaded)")
-                    
-                    // Restore text editor focus to last position
-                    if let window = NSApp.keyWindow,
-                       let textView = window.contentView?.subviews.first(where: { $0.className.contains("DocumentEditor") }) as? NSTextView {
-                        window.makeFirstResponder(textView)
-                    }
-                }
-            }
-            // Check if we have a header image or just title/subtitle
-            else if headerImage != nil {
-                // Handle header image case
-                if isImageExpanded {
-                    withAnimation(.easeInOut(duration: 0.5)) {
-                        isImageExpanded = false
-                        isTitleVisible = true
-                        isEditorFocused = true
-                        
-                        // We don't set document.isHeaderExpanded = false here
-                        // as we want to just collapse the header, not remove it
-                        
-                        // Restore text editor focus to last position
-                        if let window = NSApp.keyWindow,
-                           let textView = window.contentView?.subviews.first(where: { $0.className.contains("DocumentEditor") }) as? NSTextView {
-                            window.makeFirstResponder(textView)
-                        }
-                    }
-                }
-            } else {
-                // Handle title/subtitle only case - without a header image
-                // Now collapse title/subtitle on downward scroll when expanded
-                if !isEditorFocused {
-                    withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
-                        // Collapse title when scrolling down
-                        isEditorFocused = true
-                        isTitleVisible = true
-                        
-                        // Restore text editor focus to last position
-                        if let window = NSApp.keyWindow,
-                           let textView = window.contentView?.subviews.first(where: { $0.className.contains("DocumentEditor") }) as? NSTextView {
-                            window.makeFirstResponder(textView)
-                        }
-                    }
-                }
-            }
-        }
+        
+        // Update current scroll offset
+        currentScrollOffset = scrollOffset
+        
+        // Calculate header collapse progress (0.0 = fully expanded, 1.0 = fully collapsed)
+        let progress = min(max(scrollOffset / maxScrollForCollapse, 0.0), 1.0)
+        headerCollapseProgress = progress
+        
+        print("📱 iOS: Scroll offset: \(scrollOffset), Progress: \(progress)")
+        
+        // Don't automatically change isImageExpanded - let it stay as user set it
+        // Only update the visual collapse progress
         #endif
     }
     
@@ -1320,17 +1228,17 @@ struct DocumentArea: View {
                 .buttonStyle(.plain)
                 .drawingGroup() // Add hardware acceleration for smoother transitions
                 .padding(.top, 24)
-                // Use a combined transition to prevent jumping and maintain corner roundness
-                .transition(AnyTransition.asymmetric(
-                    insertion: .opacity.combined(with: .scale(scale: 0.98)),
-                    removal: .opacity.combined(with: .scale(scale: 0.98))
-                ).animation(.easeInOut(duration: 0.35)))
+                // Apply smooth scaling transformation based on collapse progress
+                .frame(height: calculateDynamicHeaderHeight())
+                .clipped() // Only clip overflow, not the content itself
+                .animation(.easeOut(duration: 0.1), value: headerCollapseProgress) // Smooth transitions
                 .onPreferenceChange(ImagePickerSourceRectKey.self) { rect in
                     imagePickerSourceRect = rect
                 }
                 .onChange(of: isImageExpanded) { _, newValue in
+                    #if os(macOS)
                     if !newValue && headerImage != nil && !hasShownRevealTooltip {
-                        // Force show our popup when image is collapsed
+                        // Force show our popup when image is collapsed (macOS only - now triggered by scroll)
                         print("🔥 FORCING 'Tap again to edit' popup when image collapsed via onChange")
                         hasShownRevealTooltip = true
                         showTapAgainPopup = true
@@ -1348,12 +1256,22 @@ struct DocumentArea: View {
                             }
                         }
                     }
+                    #endif
                 }
             } else {
                 // Return an empty view with zero height when no header
                 EmptyView()
             }
         }
+    }
+    
+    // Calculate the current header height based on collapse progress
+    private func calculateDynamicHeaderHeight() -> CGFloat {
+        let expandedHeight = expandedHeaderHeight
+        let collapsedHeight = collapsedHeaderHeightConst
+        
+        // Smoothly interpolate between expanded and collapsed heights
+        return expandedHeight - (headerCollapseProgress * (expandedHeight - collapsedHeight))
     }
     
     private var documentContentView: some View {
@@ -1434,308 +1352,27 @@ struct DocumentArea: View {
                                 }
                         }
                     )
-                    // Add overlay for intercept first click when header is expanded
-                    .overlay {
-                        if headerImage != nil && isHeaderExpanded && isImageExpanded {
-                            // Transparent clickable overlay on top of editor
-                            Rectangle()
-                                .fill(Color.clear)
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    // Debounce mechanism
-                                    // We create a unique key for this document to prevent issues with multiple documents
-                                    let debounceKey = "Letterspace_HeaderClick_\(document.id)"
-                                    let lastClickTime = UserDefaults.standard.double(forKey: debounceKey)
-                                    let currentTime = Date().timeIntervalSince1970
-                                    let timeSinceLastClick = currentTime - lastClickTime
-                                    
-                                    // If clicked too recently, ignore this click (500ms debounce)
-                                    if timeSinceLastClick < 0.5 {
-                                        print("🛑 Debouncing document area header click - ignoring")
-                                        return
-                                    }
-                                    
-                                    // Update the click timestamp
-                                    UserDefaults.standard.set(currentTime, forKey: debounceKey)
-                                    
-                                    print("⚡ Intercepted first click on editor with expanded header")
-                                    
-                                    // Check if there's an actual uploaded header image
-                                    let hasRealHeaderImage = hasActualHeaderImage()
-                                    
-                                    // If no actual image exists, completely turn off header mode
-                                    if !hasRealHeaderImage {
-                                        withAnimation(.easeInOut(duration: 0.5)) {
-                                            // Turn off header mode completely
-                                            isHeaderExpanded = false
-                                            document.isHeaderExpanded = false
-                                            headerImage = nil
-                                            isImageExpanded = false
-                                            isTitleVisible = true
-                                            isEditorFocused = false  // Expanded title format for text-only mode
-                                            
-                                            // Save the document to persist this change
-                                            document.save()
-                                            print("📝 Turned off header image mode on document click (no actual image was uploaded)")
-                                            
-                                            // Don't show tap again popup in this case
-                                            hasShownTapAgainPopup = true
-                                            showTapAgainPopup = false
-                                            
-                                            // Make sure text editor doesn't get focus
-                                            if let window = NSApp.keyWindow {
-                                                window.makeFirstResponder(nil)
-                                            }
-                                        }
-                                        return
-                                    }
-                                    
-                                    // Restore original popup state logic *before* animation
-                                    if !hasShownTapAgainPopup {
-                                        print("🔥 Setting popup state BEFORE animation for document WITH header image")
-                                        hasShownTapAgainPopup = true
-                                        showTapAgainPopup = true
 
-                                        // Schedule the hiding mechanism
-                                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-                                            withAnimation(.easeOut(duration: 0.5)) {
-                                                print("🔽 Hiding 'Tap again to edit' popup for document WITH header image")
-                                                showTapAgainPopup = false
-                                            }
-                                        }
-                                    }
-                                    
-                                    // Animate the header collapse only for documents with actual header images
-                                    withAnimation(.easeInOut(duration: 0.5)) {
-                                        // Just collapse the header
-                                        isImageExpanded = false
-                                        isTitleVisible = true
-                                        
-                                        // Make sure text editor doesn't get focus
-                                        if let window = NSApp.keyWindow {
-                                            window.makeFirstResponder(nil)
-                                        }
-                                    }
-                                }
-                        } else if headerImage == nil && !isHeaderExpanded && !isEditorFocused {
-                            // For documents with no header image, intercept first click to collapse title/subtitle
-                            Rectangle()
-                                .fill(Color.clear)
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    // Debounce mechanism
-                                    // We create a unique key for this document to prevent issues with multiple documents
-                                    let debounceKey = "Letterspace_NoHeaderClick_\(document.id)"
-                                    let lastClickTime = UserDefaults.standard.double(forKey: debounceKey)
-                                    let currentTime = Date().timeIntervalSince1970
-                                    let timeSinceLastClick = currentTime - lastClickTime
-                                    
-                                    // If clicked too recently, ignore this click (500ms debounce)
-                                    if timeSinceLastClick < 0.5 {
-                                        print("🛑 Debouncing document area no-header click - ignoring")
-                                        return
-                                    }
-                                    
-                                    // Update the click timestamp
-                                    UserDefaults.standard.set(currentTime, forKey: debounceKey)
-                                    
-                                    print("⚡ Intercepted first click on editor with no header image")
-                                    withAnimation(.easeInOut(duration: 0.5)) {
-                                        // Just collapse the text header (title/subtitle)
-                                        isEditorFocused = true
-                                        isTitleVisible = true
-                                        
-                                        // Make sure text editor doesn't get focus
-                                        if let window = NSApp.keyWindow {
-                                            window.makeFirstResponder(nil)
-                                        }
-                                        
-                                        // Only show popup if it hasn't been shown before for this document
-                                        if !hasShownTapAgainPopup {
-                                            print("🔥 FORCING 'Tap again to edit' popup for document WITHOUT header image")
-                                            hasShownTapAgainPopup = true
-                                            showTapAgainPopup = true
-                                            
-                                            // Add timer to dismiss popup after 1.2 seconds
-                                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-                                                withAnimation(.easeOut(duration: 0.5)) {
-                                                    print("🔽 Hiding 'Tap again to edit' popup for document WITHOUT header image")
-                                                    showTapAgainPopup = false
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                        } else {
-                            // After first click, clear the flag to allow normal interaction
-                            Color.clear.onAppear {
-                                if UserDefaults.standard.bool(forKey: "Letterspace_FirstClickHandled") {
-                                    // CRITICAL FIX: Reset the flag IMMEDIATELY, not after a delay
-                                    // This ensures the text view can become first responder without waiting
-                                    UserDefaults.standard.set(false, forKey: "Letterspace_FirstClickHandled")
-                                    UserDefaults.standard.synchronize()
-                                    print("⚠️ Immediately reset FirstClickHandled flag in DocumentArea")
-                                    
-                                    // Force the text view to be editable after a very short delay
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                                        #if os(macOS)
-                                        if let window = NSApp.keyWindow,
-                                           let textView = window.contentView?.firstSubview(ofType: NSTextView.self) as? DocumentTextView {
-                                            // Force editing mode and focus
-                                            textView.isEditable = true
-                                            textView.isSelectable = true
-                                            textView.isHeaderImageCurrentlyExpanded = false
-                                            window.makeFirstResponder(textView)
-                                            print("🔄 Forced text view focus from DocumentArea")
-                                        }
-                                        #endif
-                                    }
-                                }
-                            }
-                        }
-                    }
                 #elseif os(iOS)
-                // iOS: SwiftUI-based text editor optimized for touch
-                IOSDocumentEditor(document: $document)
-                    .allowsHitTesting(!isAnimatingHeaderCollapse)
-                    .overlay(
-                        GeometryReader { geometry in
-                            Color.clear // Use Color.clear for geometry reading
-                                .onAppear {
-                                    viewportHeight = geometry.size.height
-                                }
-                                .onChange(of: geometry.size.height) { _, newHeight in
-                                    viewportHeight = newHeight
-                                }
-                        }
-                    )
-                    // Add overlay for intercept first click when header is expanded
-                    .overlay {
-                        if headerImage != nil && isHeaderExpanded && isImageExpanded {
-                            // Transparent clickable overlay on top of editor
-                            Rectangle()
-                                .fill(Color.clear)
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    // Debounce mechanism
-                                    // We create a unique key for this document to prevent issues with multiple documents
-                                    let debounceKey = "Letterspace_HeaderClick_\(document.id)"
-                                    let lastClickTime = UserDefaults.standard.double(forKey: debounceKey)
-                                    let currentTime = Date().timeIntervalSince1970
-                                    let timeSinceLastClick = currentTime - lastClickTime
-                                    
-                                    // If clicked too recently, ignore this click (500ms debounce)
-                                    if timeSinceLastClick < 0.5 {
-                                        print("🛑 Debouncing document area header click - ignoring")
-                                        return
-                                    }
-                                    
-                                    // Update the click timestamp
-                                    UserDefaults.standard.set(currentTime, forKey: debounceKey)
-                                    
-                                    print("⚡ Intercepted first click on editor with expanded header")
-                                    
-                                    // For iOS, if we have a headerImage in memory, just collapse it
-                                    // Only remove header completely if there's no headerImage at all
-                                    if headerImage == nil {
-                                        withAnimation(.easeInOut(duration: 0.5)) {
-                                            // Turn off header mode completely only if no image in memory
-                                            isHeaderExpanded = false
-                                            document.isHeaderExpanded = false
-                                            isImageExpanded = false
-                                            isTitleVisible = true
-                                            isEditorFocused = false  // Expanded title format for text-only mode
-                                            
-                                            // Save the document to persist this change
-                                            document.save()
-                                            print("📝 iOS: Turned off header image mode on document click (no image in memory)")
-                                            
-                                            // Don't show tap again popup in this case
-                                            hasShownTapAgainPopup = true
-                                            showTapAgainPopup = false
-                                        }
-                                        return
-                                    }
-                                    
-                                    // Restore original popup state logic *before* animation
-                                    if !hasShownTapAgainPopup {
-                                        print("🔥 Setting popup state BEFORE animation for document WITH header image")
-                                        hasShownTapAgainPopup = true
-                                        showTapAgainPopup = true
-
-                                        // Schedule the hiding mechanism
-                                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-                                            withAnimation(.easeOut(duration: 0.5)) {
-                                                print("🔽 Hiding 'Tap again to edit' popup for document WITH header image")
-                                                showTapAgainPopup = false
-                                            }
-                                        }
-                                    }
-                                    
-                                    // Animate the header collapse only for documents with actual header images
-                                    withAnimation(.easeInOut(duration: 0.5)) {
-                                        // Just collapse the header
-                                        isImageExpanded = false
-                                        isTitleVisible = true
-                                    }
-                                }
-                        } else if headerImage == nil && !isHeaderExpanded && !isEditorFocused {
-                            // For documents with no header image, intercept first click to collapse title/subtitle
-                            Rectangle()
-                                .fill(Color.clear)
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    // Debounce mechanism
-                                    // We create a unique key for this document to prevent issues with multiple documents
-                                    let debounceKey = "Letterspace_NoHeaderClick_\(document.id)"
-                                    let lastClickTime = UserDefaults.standard.double(forKey: debounceKey)
-                                    let currentTime = Date().timeIntervalSince1970
-                                    let timeSinceLastClick = currentTime - lastClickTime
-                                    
-                                    // If clicked too recently, ignore this click (500ms debounce)
-                                    if timeSinceLastClick < 0.5 {
-                                        print("🛑 Debouncing document area no-header click - ignoring")
-                                        return
-                                    }
-                                    
-                                    // Update the click timestamp
-                                    UserDefaults.standard.set(currentTime, forKey: debounceKey)
-                                    
-                                    print("⚡ Intercepted first click on editor with no header image")
-                                    withAnimation(.easeInOut(duration: 0.5)) {
-                                        // Just collapse the text header (title/subtitle)
-                                        isEditorFocused = true
-                                        isTitleVisible = true
-                                        
-                                        // Only show popup if it hasn't been shown before for this document
-                                        if !hasShownTapAgainPopup {
-                                            print("🔥 FORCING 'Tap again to edit' popup for document WITHOUT header image")
-                                            hasShownTapAgainPopup = true
-                                            showTapAgainPopup = true
-                                            
-                                            // Add timer to dismiss popup after 1.2 seconds
-                                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-                                                withAnimation(.easeOut(duration: 0.5)) {
-                                                    print("🔽 Hiding 'Tap again to edit' popup for document WITHOUT header image")
-                                                    showTapAgainPopup = false
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                        } else {
-                            // After first click, clear the flag to allow normal interaction
-                            Color.clear.onAppear {
-                                if UserDefaults.standard.bool(forKey: "Letterspace_FirstClickHandled") {
-                                    // CRITICAL FIX: Reset the flag IMMEDIATELY, not after a delay
-                                    // This ensures the text view can become first responder without waiting
-                                    UserDefaults.standard.set(false, forKey: "Letterspace_FirstClickHandled")
-                                    UserDefaults.standard.synchronize()
-                                    print("⚠️ Immediately reset FirstClickHandled flag in DocumentArea")
-                                }
-                            }
-                        }
+                // iOS: SwiftUI-based text editor optimized for touch with scroll-based header behavior
+                IOSDocumentEditor(
+                    document: $document,
+                    onScrollChange: { scrollOffset in
+                        handleIOSScrollChange(scrollOffset: scrollOffset)
                     }
+                )
+                .allowsHitTesting(!isAnimatingHeaderCollapse)
+                .overlay(
+                    GeometryReader { geometry in
+                        Color.clear // Use Color.clear for geometry reading
+                            .onAppear {
+                                viewportHeight = geometry.size.height
+                            }
+                            .onChange(of: geometry.size.height) { _, newHeight in
+                                viewportHeight = newHeight
+                            }
+                    }
+                )
 
                 #endif
             }
