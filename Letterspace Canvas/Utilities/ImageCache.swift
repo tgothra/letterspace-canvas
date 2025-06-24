@@ -56,8 +56,8 @@ class ImageCache {
     
     func preloadImages(for document: Letterspace_CanvasDocument) {
         preloadQueue.async {
-            guard let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else { return }
-            let documentPath = documentsPath.appendingPathComponent(document.id)
+            guard let appDirectory = Letterspace_CanvasDocument.getAppDocumentsDirectory() else { return }
+            let documentPath = appDirectory.appendingPathComponent(document.id)
             let imagesPath = documentPath.appendingPathComponent("Images")
             
             // Find all header image elements

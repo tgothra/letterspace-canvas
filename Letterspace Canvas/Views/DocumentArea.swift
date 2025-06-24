@@ -221,9 +221,7 @@ struct DocumentArea: View {
     @State private var documentTitle: String = "Untitled"
     @FocusState private var isTitleFocused: Bool
     @State private var isTitleVisible: Bool = true
-    @State private var showTooltip: Bool = false
-    @State private var hasShownTooltip: Bool = false
-    @State private var hasShownRevealTooltip: Bool = false
+
     @State private var isAnimatingHeaderCollapse = false
     let isDistractionFreeMode: Bool
     @Binding var viewMode: ViewMode
@@ -329,8 +327,8 @@ struct DocumentArea: View {
             
             // Handle result after a slight delay to avoid presentation conflicts
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                handleImageImport(result: result)
-            }
+            handleImageImport(result: result)
+        }
         }
         #endif
     }
@@ -346,8 +344,7 @@ struct DocumentArea: View {
             // Main document content
             documentHStack(geo: geo)
             
-            // Tooltip overlay
-            tooltipOverlay
+            
             
             // "Tap again to edit" popup overlay - only show on macOS
             #if os(macOS)
@@ -445,27 +442,7 @@ struct DocumentArea: View {
                         .offset(y: isDocumentVisible ? 0 : 20)
                     }
                 
-    // Tooltip overlay
-    private var tooltipOverlay: some View {
-                VStack {
-            if showTooltip && headerImage != nil && isImageExpanded && !hasShownTooltip {
-                            Text("Tap image to hide")
-                    .font(.system(size: 14, weight: .medium))
-                                .foregroundColor(.white)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                                .background(
-                                    Capsule()
-                            .fill(Color.black.opacity(0.7))
-                            .shadow(color: Color.black.opacity(0.3), radius: 4, x: 0, y: 2)
-                                )
-                    .transition(.opacity)
-            }
-            Spacer()
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .padding(.top, (headerImage != nil || isHeaderExpanded) ? 35 : 20)
-    }
+    
     
     // "Tap again to edit" popup overlay
     private var tapAgainPopupOverlay: some View {
@@ -536,7 +513,7 @@ struct DocumentArea: View {
                 if let image = NSImage(contentsOf: url) {
                     // Save the image to the Images directory
                     let fileName = UUID().uuidString + ".png"
-                    if let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+                    if let documentsPath = Letterspace_CanvasDocument.getAppDocumentsDirectory() {
                         let documentPath = documentsPath.appendingPathComponent("\(document.id)")
                         let imagesPath = documentPath.appendingPathComponent("Images")
                         
@@ -574,25 +551,20 @@ struct DocumentArea: View {
                                     document.save()
                                     print("Saved document with updated header image")
                                     
+                                    // Cache the image
+                                    let cacheKey = "\(document.id)_\(fileName)"
+                                    ImageCache.shared.setImage(image, for: cacheKey)
+                                    ImageCache.shared.setImage(image, for: fileName)
+                                    
                                     withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
                                         self.headerImage = image // NSImage
-                                        self.isImageExpanded = true
+                                        self.isImageExpanded = true // Always expanded for actual images
                                         self.viewMode = .normal
                                         self.isHeaderExpanded = true
                                         self.isEditorFocused = true
                                         self.isTitleVisible = true
                                         
-                                        // Show "tap to hide" tooltip only when first adding an image
-                                        if !hasShownTooltip {
-                                            showTooltip = true
-                                            
-                                            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                                                withAnimation(.easeOut(duration: 0.3)) {
-                                                    showTooltip = false
-                                                    hasShownTooltip = true  // Mark as shown after first image add
-                                                }
-                                            }
-                                        }
+
                                     }
                                 }
                             }
@@ -602,49 +574,69 @@ struct DocumentArea: View {
                     }
                 }
                 #elseif os(iOS)
-                // iOS: Load as UIImage and save
-                if let image = UIImage(contentsOfFile: url.path) {
-                    let fileName = UUID().uuidString + ".png" // Or .jpeg
-                    if let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+                // iOS: Load image data directly from URL and save
+                do {
+                    let imageData = try Data(contentsOf: url)
+                    guard let image = UIImage(data: imageData) else {
+                        print("iOS: Failed to create UIImage from data")
+                        return
+                    }
+                    
+                                        let fileName = UUID().uuidString + ".png"
+                     if let documentsPath = Letterspace_CanvasDocument.getAppDocumentsDirectory() {
                         let documentPath = documentsPath.appendingPathComponent("\(document.id)")
                         let imagesPath = documentPath.appendingPathComponent("Images")
-                        do {
+                        
                             try FileManager.default.createDirectory(at: documentPath, withIntermediateDirectories: true, attributes: nil)
                             try FileManager.default.createDirectory(at: imagesPath, withIntermediateDirectories: true, attributes: nil)
                             let fileURL = imagesPath.appendingPathComponent(fileName)
                             
-                            // For UIImage, get PNG or JPEG data
-                            if let imageData = image.pngData() { // Or image.jpegData(compressionQuality: 0.8)
-                                try imageData.write(to: fileURL)
+                        print("iOS: Created directories for image storage")
+                        print("iOS: Document path: \(documentPath)")
+                        print("iOS: Images path: \(imagesPath)")
+                        print("iOS: Final file URL: \(fileURL)")
+                        
+                        // Save as PNG data
+                        if let pngData = image.pngData() {
+                            try pngData.write(to: fileURL)
                                 print("iOS: Successfully wrote image data to file")
                                 
                                 // Update document (same logic as macOS)
                                 if var headerElement = document.elements.first(where: { $0.type == .headerImage }) {
+                                print("iOS: Updating existing header element")
                                     headerElement.content = fileName
                                     if let index = document.elements.firstIndex(where: { $0.type == .headerImage }) {
                                         document.elements[index] = headerElement
+                                    print("iOS: Updated header element at index \(index)")
                                     }
                                 } else {
+                                print("iOS: Creating new header element")
                                     let headerElement = DocumentElement(type: .headerImage, content: fileName)
                                     document.elements.insert(headerElement, at: 0)
+                                print("iOS: Inserted new header element at index 0")
                                 }
+                            
+                            // Save document after adding image
                                 document.save()
                                 print("iOS: Saved document with updated header image")
+                            
+                            // Cache the image
+                            let cacheKey = "\(document.id)_\(fileName)"
+                            ImageCache.shared.setImage(image, for: cacheKey)
+                            ImageCache.shared.setImage(image, for: fileName)
                                 
                                 withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
                                     self.headerImage = image // UIImage
-                                    self.isImageExpanded = true
-                                    // ... (rest of UI update, ensure it works with UIImage)
+                                self.isImageExpanded = true // Always expanded for actual images
                                     self.viewMode = .normal
                                     self.isHeaderExpanded = true
                                     self.isEditorFocused = true 
                                     self.isTitleVisible = true
+                            }
                                 }
                             }
                         } catch {
-                            print("iOS: Error saving image: \(error)")
-                        }
-                    }
+                    print("iOS: Error loading or saving image: \(error)")
                 }
                 #endif
             }
@@ -1165,14 +1157,33 @@ struct DocumentArea: View {
         }
         
         #if os(macOS)
+        // Only process if there's actually a header image to avoid unnecessary work
+        guard headerImage != nil || isHeaderExpanded else {
+            return
+        }
+
         // Update current scroll offset
         currentScrollOffset = scrollPosition
         
-        // Calculate header collapse progress (0.0 = fully expanded, 1.0 = fully collapsed)
-        let progress = min(max(scrollPosition / maxScrollForCollapse, 0.0), 1.0)
-        headerCollapseProgress = progress
+        // Calculate dynamic max scroll distance based on actual header height difference
+        // This ensures the scroll distance matches the visual header height change
+        let dynamicMaxScroll = calculateDynamicMaxScrollForCollapse()
         
-        print("🖥️ macOS: Scroll position: \(scrollPosition), Progress: \(progress)")
+        // Calculate header collapse progress (0.0 = fully expanded, 1.0 = fully collapsed)
+        let linearProgress = min(max(scrollPosition / dynamicMaxScroll, 0.0), 1.0)
+        
+        // Apply easing function for smoother, more natural transition
+        // Using ease-out function: f(x) = 1 - (1-x)^2 for smoother deceleration
+        let progress = 1.0 - pow(1.0 - linearProgress, 2.0)
+        
+        // Only update if progress actually changed significantly to reduce state updates
+        let threshold: CGFloat = 0.01
+        if abs(headerCollapseProgress - progress) > threshold {
+            headerCollapseProgress = progress
+        }
+        
+        // Remove debug logging to improve performance
+        // print("🖥️ macOS: Scroll position: \(scrollPosition), Progress: \(progress), DynamicMaxScroll: \(dynamicMaxScroll)")
         
         // Don't automatically change isImageExpanded - let it stay as user set it
         // Only update the visual collapse progress
@@ -1187,18 +1198,58 @@ struct DocumentArea: View {
             return
         }
         
+        // Only process if there's actually a header image to avoid unnecessary work
+        guard headerImage != nil || isHeaderExpanded else {
+            return
+        }
+
         // Update current scroll offset
         currentScrollOffset = scrollOffset
         
-        // Calculate header collapse progress (0.0 = fully expanded, 1.0 = fully collapsed)
-        let progress = min(max(scrollOffset / maxScrollForCollapse, 0.0), 1.0)
-        headerCollapseProgress = progress
+        // Calculate dynamic max scroll distance based on actual header height difference
+        // This ensures the scroll distance matches the visual header height change
+        let dynamicMaxScroll = calculateDynamicMaxScrollForCollapse()
         
-        print("📱 iOS: Scroll offset: \(scrollOffset), Progress: \(progress)")
+        // Calculate header collapse progress (0.0 = fully expanded, 1.0 = fully collapsed)
+        let linearProgress = min(max(scrollOffset / dynamicMaxScroll, 0.0), 1.0)
+        
+        // Apply easing function for smoother, more natural transition
+        // Using ease-out function: f(x) = 1 - (1-x)^2 for smoother deceleration
+        let progress = 1.0 - pow(1.0 - linearProgress, 2.0)
+        
+        // Only update if progress actually changed significantly to reduce state updates
+        let threshold: CGFloat = 0.01
+        if abs(headerCollapseProgress - progress) > threshold {
+            headerCollapseProgress = progress
+        }
+        
+        // Remove debug logging to improve performance
+        // print("📱 iOS: Scroll offset: \(scrollOffset), Progress: \(progress), DynamicMaxScroll: \(dynamicMaxScroll)")
         
         // Don't automatically change isImageExpanded - let it stay as user set it
         // Only update the visual collapse progress
         #endif
+    }
+    
+    // Calculate the appropriate scroll distance for collapse based on actual header dimensions
+    private func calculateDynamicMaxScrollForCollapse() -> CGFloat {
+        guard let headerImage = headerImage else {
+            return maxScrollForCollapse // fallback to default
+        }
+        
+        // Calculate actual header height (same logic as HeaderImageSection)
+        let size = headerImage.size
+        let aspectRatioValue = size.height / size.width
+        let baseHeaderHeight = paperWidth * aspectRatioValue
+        let collapsedHeight: CGFloat = 80 // Same as HeaderImageSection
+        
+        // The scroll distance should correlate to the actual visual height difference
+        let heightDifference = baseHeaderHeight - collapsedHeight
+        
+        // Use a factor to make scroll feel natural and smooth (lower = more scroll needed)
+        let scrollFactor: CGFloat = 1.5 // 150% of height difference for slower, more natural parallax
+        
+        return max(heightDifference * scrollFactor, 150) // Minimum 150px scroll distance
     }
     
     private var headerView: some View {
@@ -1217,47 +1268,23 @@ struct DocumentArea: View {
                     isHeaderExpanded: $isHeaderExpanded,
                     isEditorFocused: $isEditorFocused,
                     onClick: {
-                        // Just a simple handler since we don't need to set scrollOffset anymore
-                        print("Header clicked - now in collapsed state")
+                        // No longer needed - header images don't collapse on tap
                     },
-                    isTitleVisible: $isTitleVisible,
-                    showTooltip: $showTooltip,
-                    hasShownTooltip: $hasShownTooltip,
-                    hasShownRevealTooltip: $hasShownRevealTooltip
+                    headerCollapseProgress: headerCollapseProgress, // Pass scroll-based scaling progress
+                    isTitleVisible: $isTitleVisible
                 )
                 .buttonStyle(.plain)
                 .drawingGroup() // Add hardware acceleration for smoother transitions
                 .padding(.top, 24)
-                // Apply smooth scaling transformation based on collapse progress
-                .frame(height: calculateDynamicHeaderHeight())
+                // Remove fixed height constraint - let HeaderImageSection determine its own height
+                // .frame(height: calculateDynamicHeaderHeight()) // REMOVED: This was forcing 200px height
                 .clipped() // Only clip overflow, not the content itself
-                .animation(.easeOut(duration: 0.1), value: headerCollapseProgress) // Smooth transitions
+                // Remove scroll-based animation to improve iOS performance
+                // .animation(.easeOut(duration: 0.1), value: headerCollapseProgress)
                 .onPreferenceChange(ImagePickerSourceRectKey.self) { rect in
                     imagePickerSourceRect = rect
                 }
-                .onChange(of: isImageExpanded) { _, newValue in
-                    #if os(macOS)
-                    if !newValue && headerImage != nil && !hasShownRevealTooltip {
-                        // Force show our popup when image is collapsed (macOS only - now triggered by scroll)
-                        print("🔥 FORCING 'Tap again to edit' popup when image collapsed via onChange")
-                        hasShownRevealTooltip = true
-                        showTapAgainPopup = true
-                        
-                        // Force UI update with immediate and delayed calls
-                        DispatchQueue.main.async {
-                            showTapAgainPopup = true
-                            
-                            // Automatically hide after a delay with a shorter timeout
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-                                withAnimation(.easeOut(duration: 0.5)) {
-                                    print("🔽 Hiding 'Tap again to edit' popup from onChange handler")
-                                    showTapAgainPopup = false
-                                }
-                            }
-                        }
-                    }
-                    #endif
-                }
+
             } else {
                 // Return an empty view with zero height when no header
                 EmptyView()
@@ -1361,18 +1388,18 @@ struct DocumentArea: View {
                         handleIOSScrollChange(scrollOffset: scrollOffset)
                     }
                 )
-                .allowsHitTesting(!isAnimatingHeaderCollapse)
-                .overlay(
-                    GeometryReader { geometry in
-                        Color.clear // Use Color.clear for geometry reading
-                            .onAppear {
-                                viewportHeight = geometry.size.height
-                            }
-                            .onChange(of: geometry.size.height) { _, newHeight in
-                                viewportHeight = newHeight
-                            }
-                    }
-                )
+                    .allowsHitTesting(!isAnimatingHeaderCollapse)
+                    .overlay(
+                        GeometryReader { geometry in
+                            Color.clear // Use Color.clear for geometry reading
+                                .onAppear {
+                                    viewportHeight = geometry.size.height
+                                }
+                                .onChange(of: geometry.size.height) { _, newHeight in
+                                    viewportHeight = newHeight
+                                }
+                        }
+                    )
 
                 #endif
             }

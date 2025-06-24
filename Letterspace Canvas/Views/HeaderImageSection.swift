@@ -39,13 +39,11 @@ struct HeaderImageSection: View {
     @Binding var isHeaderExpanded: Bool
     @Binding var isEditorFocused: Bool
     let onClick: () -> Void
+    let headerCollapseProgress: CGFloat // Add scroll-based scaling parameter
     @State private var isHoveringPhoto = false
     @State private var isHoveringX = false
     @State private var isHoveringHeader = false
     @Binding var isTitleVisible: Bool
-    @Binding var showTooltip: Bool
-    @Binding var hasShownTooltip: Bool
-    @Binding var hasShownRevealTooltip: Bool
     @State private var isImageLoading = false
     @State private var placeholderOpacity: Double = 0.0
     #if os(macOS)
@@ -57,10 +55,12 @@ struct HeaderImageSection: View {
     // New state to control visibility timing
     @State private var isVisible: Bool = false
     
-    // Add state variables for debouncing
-    @State private var isToggling: Bool = false
-    @State private var lastToggleTime: Date = Date()
-    private let debounceInterval: TimeInterval = 0.5 // 500ms debounce interval
+
+    
+    // iOS-specific state for action sheet
+    #if os(iOS)
+    @State private var showImageActionSheet: Bool = false
+    #endif
     
     // Heights for the collapsed header bar
     private let collapsedBarHeight: CGFloat = 64
@@ -76,147 +76,7 @@ struct HeaderImageSection: View {
     }
     #endif
     
-    private func toggleHeader() {
-        // Implement debouncing to prevent rapid toggling
-        let now = Date()
-        let timeSinceLastToggle = now.timeIntervalSince(lastToggleTime)
-        if isToggling || timeSinceLastToggle < debounceInterval {
-            print("🛑 Debouncing header toggle - ignoring click")
-            return
-        }
-        isToggling = true
-        lastToggleTime = now
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-            isToggling = false
-        }
-        
-        let hasActualImage = checkForActualImage()
-        
-        // Case 1: Currently expanded
-        if isExpanded {
-            if headerImage == nil && !hasActualImage {
-                // Expanded placeholder was clicked (not via image picker)
-                // This typically means user clicked the background of the placeholder.
-                // Action: Show image picker.
-                print("🖼️ User clicked expanded placeholder background.")
-                withAnimation(.spring(response: 1.2, dampingFraction: 0.7)) {
-                    isShowingImagePicker = true // This should be the primary action.
-                }
-                // The .sheet onCancel/onImageSelected will handle collapsing or state changes.
-                return
-            }
-            
-            // Collapsing an actual image or collapsing from an expanded placeholder (if picker was cancelled)
-            #if os(macOS)
-            NotificationCenter.default.post(name: NSNotification.Name("HeaderImageToggling"), object: nil)
-            #endif
-            withAnimation(.easeInOut(duration: 0.35)) {
-                isExpanded = false // Collapse the view
-                if hasActualImage {
-                    isTitleVisible = true // For collapsed actual image bar
-                    isEditorFocused = true // Keep editor active
-                    onClick() // Trigger the onClick handler for actual image collapse
-                    UserDefaults.standard.set(true, forKey: "Letterspace_FirstClickHandled")
-                } else {
-                    // If collapsing from an expanded placeholder (e.g., picker cancelled, no image chosen)
-                    // We want to go to the collapsed placeholder state.
-                    // isHeaderExpanded remains true.
-                    isTitleVisible = true // For collapsed placeholder bar
-                    isEditorFocused = false // Or true, depending on desired focus for collapsed placeholder
-                }
-            }
-            // Focus management for macOS when collapsing actual image
-            if hasActualImage {
-                #if os(macOS)
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    if let window = NSApp.keyWindow,
-                       let documentTextView = window.contentView?.firstSubview(ofType: NSTextView.self) as? DocumentTextView {
-                        documentTextView.isHeaderImageCurrentlyExpanded = false
-                        window.makeFirstResponder(documentTextView)
-                        documentTextView.forceEnableEditing()
-                    }
-                }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-                    if let window = NSApp.keyWindow,
-                       let documentTextView = window.contentView?.firstSubview(ofType: NSTextView.self) as? DocumentTextView {
-                        documentTextView.isHeaderImageCurrentlyExpanded = false
-                        documentTextView.forceEnableEditing()
-                        window.recalculateKeyViewLoop()
-                        window.makeFirstResponder(documentTextView)
-                    }
-                }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                    if UserDefaults.standard.bool(forKey: "Letterspace_FirstClickHandled") {
-                        UserDefaults.standard.set(false, forKey: "Letterspace_FirstClickHandled")
-                        UserDefaults.standard.synchronize()
-                    }
-                }
-                #endif
-            }
-        // Case 2: Currently collapsed
-        } else { // !isExpanded
-            if headerImage == nil { // Collapsed placeholder was tapped
-                print("➕ User clicked collapsed placeholder to add image.")
-                // Action: Expand to show the large placeholderImageView for image selection.
-                // isHeaderExpanded remains true.
-                withAnimation(.easeInOut(duration: 0.35)) {
-                    isExpanded = true
-                    isTitleVisible = true // Title might be part of placeholderImageView or managed by it
-                    #if os(macOS)
-                    if let window = NSApp.keyWindow, window.firstResponder is NSTextView {
-                        window.makeFirstResponder(nil)
-                    }
-                    #endif
-                }
-                return // Explicitly return to avoid falling into the "turn off header" logic below
-            }
 
-            // Expanding an actual, existing image from its collapsed bar state
-            if hasActualImage || headerImage != nil { // Check both file system and memory
-                print("🔄 User tapped collapsed header - scrolling to top and expanding")
-                
-                // First, scroll to top smoothly
-                scrollToTop()
-                
-                // Then expand the header after a brief delay to allow scroll animation
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                    #if os(macOS)
-                    NotificationCenter.default.post(name: NSNotification.Name("HeaderImageToggling"), object: nil)
-                    #endif
-                    withAnimation(.easeInOut(duration: 0.35)) {
-                        isExpanded = true
-                        isTitleVisible = true
-                        isEditorFocused = true
-                        #if os(macOS)
-                        if let window = NSApp.keyWindow, window.firstResponder is NSTextView {
-                            window.makeFirstResponder(nil)
-                        }
-                        #endif
-                    }
-                }
-            } else {
-                // This case should ideally not be hit if the above logic for `headerImage == nil` is correct.
-                // This is the original logic for: !isExpanded && !hasActualImage
-                // which means a collapsed bar (that isn't a placeholder) was tapped, but no image file exists.
-                // This could happen if `isHeaderExpanded` is true, but `document.elements` for header image is empty/file missing.
-                // Action: Turn off header feature completely.
-                print("⚠️ Collapsed bar tapped, but no actual image file. Turning off header feature.")
-                withAnimation(.spring(response: 1.2, dampingFraction: 0.7)) {
-                    // isExpanded = false; // Already false
-                }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    withAnimation(.spring(response: 1.0, dampingFraction: 0.8)) {
-                        isHeaderExpanded = false // Turn off the feature
-                        document.isHeaderExpanded = false
-                        // headerImage = nil; // Should already be nil or effectively nil
-                        isTitleVisible = true
-                        isEditorFocused = false
-                        document.save()
-                    }
-                }
-            }
-        }
-    }
     
     // Helper function to check if document has an actual image file
     private func checkForActualImage() -> Bool {
@@ -264,6 +124,7 @@ struct HeaderImageSection: View {
                             DispatchQueue.main.async {
                                 self.headerImage = loadedImage
                                 self.isImageLoading = false
+                                self.isExpanded = true // Always show images expanded
                             }
                         } else {
                             DispatchQueue.main.async {
@@ -279,6 +140,7 @@ struct HeaderImageSection: View {
                             DispatchQueue.main.async {
                                 self.headerImage = loadedImage
                                 self.isImageLoading = false
+                                self.isExpanded = true // Always show images expanded
                             }
                         } else {
                             DispatchQueue.main.async {
@@ -345,30 +207,49 @@ struct HeaderImageSection: View {
             EmptyView()
         } else { // Header FEATURE is ON
             ZStack {
-                Button(action: toggleHeader) { // This button's action might need to be context-aware
-                    if let headerImage = headerImage { // Actual image EXISTS
-                        if isExpanded {
-                            expandedHeaderView(headerImage)
-                        } else { // isExpanded is false (image exists, but visually collapsed)
-                            collapsedHeaderView(headerImage)
-                        }
+                // Container for header content - no more tap-to-collapse functionality
+                Group {
+                    if let headerImage = headerImage { // Actual image EXISTS - always show expanded view
+                        expandedHeaderView(headerImage)
+                            .onHover { hovering in
+                                // Only show menu hover for expanded actual image
+                                withAnimation(.easeInOut(duration: 0.1)) {
+                                    isHoveringHeader = hovering
+                                }
+                            }
                     } else { // Actual image is NIL (placeholder mode)
                         if isExpanded { // isExpanded is true (show large placeholder)
-                            placeholderImageView
+                            // Make placeholder clickable to add image
+                            Button(action: {
+                                print("🖼️ User clicked expanded placeholder background.")
+                                withAnimation(.spring(response: 1.2, dampingFraction: 0.7)) {
+                                    isShowingImagePicker = true
+                                }
+                            }) {
+                                placeholderImageView
+                            }
+                            .buttonStyle(.plain)
                         } else { // isExpanded is false (show small collapsed placeholder bar)
-                            collapsedPlaceholderView
+                            // Make collapsed placeholder clickable to expand
+                            Button(action: {
+                                print("➕ User clicked collapsed placeholder to expand.")
+                                withAnimation(.easeInOut(duration: 0.35)) {
+                                    isExpanded = true
+                                    isTitleVisible = true
+                                    #if os(macOS)
+                                    if let window = NSApp.keyWindow, window.firstResponder is NSTextView {
+                                        window.makeFirstResponder(nil)
+                                    }
+                                    #endif
+                                }
+                            }) {
+                                collapsedPlaceholderView
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
                 }
-                .buttonStyle(.plain)
-                .frame(width: paperWidth)
-                .onHover { hovering in
-                    if isExpanded && headerImage != nil { // Only show menu hover for expanded actual image
-                        withAnimation(.easeInOut(duration: 0.1)) {
-                            isHoveringHeader = hovering
-                        }
-                    }
-                }
+                .frame(maxWidth: paperWidth, maxHeight: .infinity) // Allow content to expand to full size
                 
                 // Loading indicator (remains the same)
                 if isImageLoading {
@@ -380,7 +261,7 @@ struct HeaderImageSection: View {
                         .edgesIgnoringSafeArea(.all)
                 }
             }
-            .frame(width: paperWidth)
+            .frame(maxWidth: paperWidth, maxHeight: .infinity) // Allow ZStack to expand to content size
             .onAppear {
                 loadHeaderImageIfNeeded()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
@@ -393,6 +274,24 @@ struct HeaderImageSection: View {
                 headerImage = nil
                 loadHeaderImageIfNeeded()
             }
+            #if os(iOS)
+            .confirmationDialog("Header Image Options", isPresented: $showImageActionSheet) {
+                Button("Photo Library") {
+                    // Set source type to photo library
+                    isShowingImagePicker = true
+                }
+                Button("Browse Files") {
+                    // Set source type to files browser
+                    isShowingImagePicker = true
+                }
+                Button("Remove Image", role: .destructive) {
+                    removeHeaderImage()
+                }
+                Button("Cancel", role: .cancel) { }
+            } message: {
+                Text("What would you like to do with this image?")
+            }
+            #endif
 
         }
     }
@@ -400,126 +299,103 @@ struct HeaderImageSection: View {
     // MARK: - Expanded Header View
     @ViewBuilder
     private func expandedHeaderView(_ image: PlatformSpecificImage) -> some View {
-        // Apply modifiers directly inside platform blocks
-        #if os(macOS)
-        Image(nsImage: image)
-            .resizable()
-            .aspectRatio(contentMode: .fit)
-            .frame(width: paperWidth)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.clear)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(Color.clear, lineWidth: 0)
-            )
-            .transition(.asymmetric(
-                insertion: .opacity.combined(with: .move(edge: .top).combined(with: .scale(scale: 0.98))),
-                removal: .opacity.combined(with: .move(edge: .top).combined(with: .scale(scale: 0.98)))
-            ))
-            .animation(.easeInOut(duration: 0.35), value: isExpanded)
-            .drawingGroup()
-            .overlay(alignment: .bottomTrailing) {
-                if isHoveringHeader { headerMenu }
-            }
-        #elseif os(iOS)
-        Image(uiImage: image)
-            .resizable()
-            .aspectRatio(contentMode: .fit)
-            .frame(width: paperWidth)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.clear)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(Color.clear, lineWidth: 0)
-            )
-            .transition(.asymmetric(
-                insertion: .opacity.combined(with: .move(edge: .top).combined(with: .scale(scale: 0.98))),
-                removal: .opacity.combined(with: .move(edge: .top).combined(with: .scale(scale: 0.98)))
-            ))
-            .animation(.easeInOut(duration: 0.35), value: isExpanded)
-            .drawingGroup()
-            .overlay(alignment: .bottomTrailing) {
-                if isHoveringHeader { headerMenu }
-            }
-        #else
-        // Fallback for other platforms or if specific image type isn't available
-        EmptyView() // Or some placeholder text
-        #endif
-    }
+        let size = image.size
+        let aspectRatioValue = size.height / size.width // Calculate aspect ratio once
+        let baseHeaderHeight = paperWidth * aspectRatioValue
+        
+        // Apply scroll-based scaling using headerCollapseProgress
+        // When progress = 0.0 (fully expanded), use full height
+        // When progress = 1.0 (fully collapsed), use collapsed height
+        let collapsedHeight: CGFloat = 80 // Target collapsed height
+        let currentHeight = baseHeaderHeight - (headerCollapseProgress * (baseHeaderHeight - collapsedHeight))
+        
+        // Calculate progressive blur and overlay opacity (start later for more natural timing)
+        let blurRadius = max(0, (headerCollapseProgress - 0.4) / 0.6) * 12 // Start blur at 40% collapse
+        let overlayOpacity = max(0, (headerCollapseProgress - 0.4) / 0.6) * 0.6 // Start overlay at 40% collapse
+        let titleOpacity = max(0, (headerCollapseProgress - 0.5) / 0.5) // Start showing title when 50% collapsed
+        
+        // Adaptive colors based on color scheme
+        let frostColor = colorScheme == .dark ? Color.black : Color.white
+        let textColor = colorScheme == .dark ? Color.white : Color.black
+        let subtitleColor = colorScheme == .dark ? Color.white.opacity(0.8) : Color.black.opacity(0.7)
+        
+        // Calculate scroll-based visual effects based on collapse progress
 
-    // MARK: - Collapsed Header View
-    @ViewBuilder
-    private func collapsedHeaderView(_ image: PlatformSpecificImage) -> some View {
+        // Apply modifiers directly inside platform blocks
         ZStack {
-            // Blurred and cropped background image
             #if os(macOS)
             Image(nsImage: image)
                 .resizable()
                 .aspectRatio(contentMode: .fill)
-                .frame(width: paperWidth, height: collapsedBarHeight)
-                .blur(radius: 8)
-                .overlay(
-                    Rectangle()
-                        .fill(Color.black.opacity(0.3))
-                )
+                .frame(width: paperWidth, height: currentHeight)
+                .blur(radius: blurRadius) // Progressive blur
                 .clipped()
             #elseif os(iOS)
             Image(uiImage: image)
                 .resizable()
                 .aspectRatio(contentMode: .fill)
-                .frame(width: paperWidth, height: collapsedBarHeight)
-                .blur(radius: 8)
-                .overlay(
-                    Rectangle()
-                        .fill(Color.black.opacity(0.3))
-                )
+                .frame(width: paperWidth, height: currentHeight)
+                .blur(radius: blurRadius) // Progressive blur
                 .clipped()
-            #else
-            EmptyView()
             #endif
-            // Common modifiers for the ZStack content (Image part)
-            // These were previously applied to the result of the #if block.
-            // Now they are applied inside, or the structure doesn't need them outside.
-            // .clipShape(RoundedRectangle(cornerRadius: 12)) // Now applied to the ZStack itself for the whole bar
-            // .transition(...) // Applied to the ZStack
-            // .animation(...) // Applied to the ZStack
-            // .drawingGroup() // Applied to the ZStack
-
-            // Title and subtitle in collapsed header bar (remains the same)
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(document.title.isEmpty ? "Untitled" : document.title)
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.white)
-                        .lineLimit(1)
-
-                    if document.subtitle.isNotEmpty {
-                        Text(document.subtitle)
-                            .font(.system(size: 12, weight: .regular))
-                            .foregroundColor(.white.opacity(0.8))
+            
+            // Progressive frost overlay (adaptive to color scheme)
+            Rectangle()
+                .fill(frostColor.opacity(overlayOpacity))
+            
+            // Progressive title/subtitle overlay (appears automatically as collapse progresses)
+            if titleOpacity > 0 {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(document.title.isEmpty ? "Untitled" : document.title)
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(textColor)
                             .lineLimit(1)
+
+                        if document.subtitle.isNotEmpty {
+                            Text(document.subtitle)
+                                .font(.system(size: 12, weight: .regular))
+                                .foregroundColor(subtitleColor)
+                                .lineLimit(1)
+                        }
+                    }
+                    .padding(.leading, 20)
+                    Spacer()
+                }
+                .opacity(titleOpacity)
+            }
+            
+            // Header menu (only show when not heavily collapsed)
+            if headerCollapseProgress < 0.7 && isHoveringHeader {
+                VStack {
+                    Spacer()
+                    HStack {
+                        Spacer()
+                        headerMenu
+                            .padding(.trailing, 16)
+                            .padding(.bottom, 16)
                     }
                 }
-                .padding(.leading, 20)
-                Spacer()
             }
-            .padding(.horizontal)
         }
-        .frame(height: collapsedBarHeight)
-        .clipShape(RoundedRectangle(cornerRadius: 12)) // Clipping the whole bar
+        .frame(width: paperWidth, height: currentHeight)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        #if os(iOS)
+        .onTapGesture {
+            // iOS: Show action sheet when tapping the image
+            print("📸 iOS: User tapped header image - showing action sheet")
+            showImageActionSheet = true
+        }
+        #endif
         .transition(.asymmetric(
-            insertion: .opacity.combined(with: .move(edge: .bottom).combined(with: .scale(scale: 0.98))),
-            removal: .opacity.combined(with: .move(edge: .bottom).combined(with: .scale(scale: 0.98)))
+            insertion: .opacity.combined(with: .move(edge: .top).combined(with: .scale(scale: 0.98))),
+            removal: .opacity.combined(with: .move(edge: .top).combined(with: .scale(scale: 0.98)))
         ))
         .animation(.easeInOut(duration: 0.35), value: isExpanded)
-        .drawingGroup() // Apply drawingGroup to the whole ZStack if needed for performance
+        .drawingGroup()
     }
+
+
 
     // MARK: - Header Menu (for expanded view)
     @ViewBuilder
@@ -542,8 +418,8 @@ struct HeaderImageSection: View {
                                                 Button(action: {
                                                     if let headerElement = document.elements.first(where: { $0.type == .headerImage }),
                                                        !headerElement.content.isEmpty,
-                                                       let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
-                                                        let documentPath = documentsPath.appendingPathComponent("\(document.id)")
+                                                       let appDirectory = Letterspace_CanvasDocument.getAppDocumentsDirectory() {
+                                                        let documentPath = appDirectory.appendingPathComponent("\(document.id)")
                                                         let imagesPath = documentPath.appendingPathComponent("Images")
                                                         let imageUrl = imagesPath.appendingPathComponent(headerElement.content)
                                                         
@@ -817,3 +693,4 @@ struct NoFlashButtonStyle: ButtonStyle {
             .animation(.easeInOut(duration: 0.35), value: configuration.isPressed)
     }
 }
+

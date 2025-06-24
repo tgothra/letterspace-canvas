@@ -377,12 +377,17 @@ struct Letterspace_CanvasDocument: FileDocument, Codable, Identifiable {
     
     // MARK: - Document Directory Helper
     
-    /// Gets the documents directory - use local Documents for stability
+    /// Gets the documents directory - use iCloud Documents for syncing
     static func getDocumentsDirectory() -> URL? {
-        // For now, use local Documents directory on all platforms for stability
-        // This avoids iCloud sync issues that can cause app termination
+        // Try to get iCloud Documents directory first for cross-device sync
+        if let iCloudURL = FileManager.default.url(forUbiquityContainerIdentifier: nil)?.appendingPathComponent("Documents") {
+            print("📂 Using iCloud Documents directory: \(iCloudURL.path)")
+            return iCloudURL
+        }
+        
+        // Fallback to local Documents if iCloud is not available
         let localDocuments = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
-        print("📂 Using local Documents directory: \(localDocuments?.path ?? "nil")")
+        print("📂 iCloud not available, using local Documents directory: \(localDocuments?.path ?? "nil")")
         return localDocuments
     }
     

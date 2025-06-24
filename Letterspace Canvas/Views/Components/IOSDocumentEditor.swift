@@ -12,6 +12,8 @@ struct IOSDocumentEditor: View {
     @State private var lastKnownModifiedDate: Date = Date()
     @State private var refreshTimer: Timer?
     
+
+    
     // Initialize with optional scroll callback
     init(document: Binding<Letterspace_CanvasDocument>, onScrollChange: ((CGFloat) -> Void)? = nil) {
         self._document = document
@@ -30,6 +32,7 @@ struct IOSDocumentEditor: View {
                     ),
                     colorScheme: colorScheme,
                     availableHeight: geometry.size.height,
+
                     onTextChange: { newValue in
                         updateDocumentContent(newValue)
                     },
@@ -71,6 +74,7 @@ struct IOSDocumentEditor: View {
             // Refresh when app becomes active (user switches back from macOS)
             checkForExternalChanges()
         }
+
         .onTapGesture {
             // Focus the text editor when tapped
             isFocused = true
@@ -99,6 +103,14 @@ struct IOSDocumentEditor: View {
             textContent = "Start typing your document here...\n\nThis text editor is synchronized with the macOS version."
             print("📖 iOS: Created new document with placeholder content")
         }
+        
+        // Force update content size after loading document to ensure proper scrolling
+        DispatchQueue.main.async {
+            // Instead of accessing coordinator, we'll rely on the text content change to trigger updates
+            // which will call updateTextViewContentSize in the representable
+            self.textContent = self.textContent // Force a refresh
+            print("🔄 Triggered content refresh after document load")
+        }
     }
     
     private func updateDocumentContent(_ newContent: String) {
@@ -122,7 +134,8 @@ struct IOSDocumentEditor: View {
         // Save the document immediately
         document.save()
         
-        print("📝 iOS: Updated document content (\(newContent.count) characters) and saved to iCloud Documents")
+        // Remove debug logging on every keystroke to improve performance
+        // print("📝 iOS: Updated document content (\(newContent.count) characters) and saved to iCloud Documents")
     }
     
     private func startFileMonitoring() {
@@ -206,6 +219,13 @@ struct IOSDocumentEditor: View {
             document = updatedDocument
             loadDocumentContent()
             lastKnownModifiedDate = updatedDocument.modifiedAt
+            
+            // Force update text view content size after external document reload
+            DispatchQueue.main.async {
+                // Trigger content refresh to force updateTextViewContentSize
+                self.textContent = self.textContent
+                print("🔄 Triggered content refresh after external document reload")
+            }
         } else {
             print("📝 Document unchanged, no update needed")
         }
@@ -218,6 +238,7 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
     @Binding var isFocused: Bool
     let colorScheme: ColorScheme
     let availableHeight: CGFloat
+
     let onTextChange: (String) -> Void
     let onScrollChange: ((CGFloat) -> Void)?
     
@@ -225,12 +246,15 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
         let scrollView = UIScrollView()
         let textView = UITextView()
         
-        // Configure scroll view
+        // Configure scroll view with enhanced settings for reliable scrolling
         scrollView.showsVerticalScrollIndicator = true
         scrollView.showsHorizontalScrollIndicator = false
         scrollView.alwaysBounceVertical = true
         scrollView.keyboardDismissMode = .interactive
         scrollView.delegate = context.coordinator
+        scrollView.isScrollEnabled = true // Explicitly enable scrolling
+        scrollView.bounces = true // Enable bouncing
+        scrollView.scrollsToTop = true // Enable scroll to top gesture
         
         // Configure text view
         textView.delegate = context.coordinator
@@ -238,19 +262,22 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
         textView.backgroundColor = UIColor.clear
         textView.textColor = colorScheme == .dark ? UIColor.white : UIColor.black
         textView.isScrollEnabled = false // Disable text view scrolling, let scroll view handle it
+        textView.isEditable = true // Ensure text view is editable
+        textView.isSelectable = true // Ensure text view is selectable
+        textView.isUserInteractionEnabled = true // Ensure user can interact
         textView.textContainerInset = UIEdgeInsets(top: 16, left: 24, bottom: 16, right: 24)
         textView.textContainer.lineFragmentPadding = 0
         textView.text = text
         
-        // Add text view to scroll view
+        // Add text view to scroll view with manual frame positioning (no Auto Layout)
+        // This prevents conflicts with updateTextViewContentSize which sets frames manually
         scrollView.addSubview(textView)
-        textView.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            textView.topAnchor.constraint(equalTo: scrollView.topAnchor),
-            textView.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor),
-            textView.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor),
-            textView.widthAnchor.constraint(equalTo: scrollView.widthAnchor)
-        ])
+        textView.translatesAutoresizingMaskIntoConstraints = true // Enable manual frame positioning
+        
+        // Set initial frame based on scroll view bounds
+        let initialWidth = scrollView.bounds.width > 0 ? scrollView.bounds.width : 800
+        let initialHeight = scrollView.bounds.height > 0 ? scrollView.bounds.height : 600
+        textView.frame = CGRect(x: 0, y: 15, width: initialWidth, height: initialHeight - 15)
         
         // Store references for coordinator
         context.coordinator.scrollView = scrollView
@@ -276,8 +303,11 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
             context.coordinator.updateTextViewContentSize()
         }
         
-        // Update colors
-        textView.textColor = colorScheme == .dark ? UIColor.white : UIColor.black
+        // Update colors only if needed
+        let expectedColor = colorScheme == .dark ? UIColor.white : UIColor.black
+        if textView.textColor != expectedColor {
+            textView.textColor = expectedColor
+        }
         
         // Update focus state
         if isFocused && !textView.isFirstResponder {
@@ -286,9 +316,12 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
             textView.resignFirstResponder()
         }
         
-        // Update available height
-        context.coordinator.availableHeight = availableHeight
-        context.coordinator.updateTextViewContentSize()
+        // Only update content size if available height actually changed
+        if context.coordinator.availableHeight != availableHeight {
+            context.coordinator.availableHeight = availableHeight
+            context.coordinator.updateTextViewContentSize()
+            print("📐 iOS: Available height changed from \(context.coordinator.availableHeight) to \(availableHeight)")
+        }
     }
     
     func makeCoordinator() -> Coordinator {
@@ -327,7 +360,7 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
         }
         
         func scrollToTop() {
-            print("🔝 iOS: Received ScrollToTop notification")
+            // print("🔝 iOS: Received ScrollToTop notification")
             guard let scrollView = scrollView else { return }
             
             // Dismiss keyboard first if active
@@ -356,29 +389,58 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
         func updateTextViewContentSize() {
             guard let textView = textView, let scrollView = scrollView else { return }
             
-            // Calculate the text size
-            let textSize = textView.sizeThatFits(CGSize(width: textView.bounds.width, height: CGFloat.greatestFiniteMagnitude))
+            // Ensure scroll view is properly configured for scrolling
+            scrollView.isScrollEnabled = true
+            scrollView.alwaysBounceVertical = true
+            scrollView.showsVerticalScrollIndicator = true
+            
+            // Calculate the text size based on the actual scroll view width
+            let scrollViewWidth = scrollView.bounds.width > 0 ? scrollView.bounds.width : scrollView.frame.width
+            if scrollViewWidth <= 0 {
+                // If we still don't have a valid width, try again later
+                DispatchQueue.main.async {
+                    self.updateTextViewContentSize()
+                }
+                return
+            }
+            
+            let textWidth = scrollViewWidth - (textView.textContainerInset.left + textView.textContainerInset.right)
+            
+            let textSize = textView.sizeThatFits(CGSize(width: textWidth, height: CGFloat.greatestFiniteMagnitude))
             
             // Calculate total content height:
-            // - 15px top padding for comfortable scrolling
+            // - 15px top padding for comfortable scrolling (keep fixed for consistent behavior)
             // - Text height
             // - Text container insets (top + bottom)
             // - 300px bottom padding for comfortable scrolling
             let topPadding: CGFloat = 15
             let textContainerInsets = textView.textContainerInset.top + textView.textContainerInset.bottom
             let bottomPadding: CGFloat = 300
-            let totalContentHeight = max(topPadding + textSize.height + textContainerInsets + bottomPadding, availableHeight)
+            let calculatedContentHeight = topPadding + textSize.height + textContainerInsets + bottomPadding
+            let totalContentHeight = max(calculatedContentHeight, availableHeight)
             
-            // Position text view with top padding
-            textView.frame = CGRect(x: 0, y: topPadding, width: scrollView.bounds.width, height: textSize.height + textContainerInsets)
+            // Position text view with proper width and height
+            let textViewWidth = scrollViewWidth
+            let textViewHeight = max(textSize.height + textContainerInsets, scrollView.bounds.height - topPadding)
+            textView.frame = CGRect(x: 0, y: topPadding, width: textViewWidth, height: textViewHeight)
             
             // Update scroll view content size
-            scrollView.contentSize = CGSize(width: scrollView.bounds.width, height: totalContentHeight)
+            let newContentSize = CGSize(width: scrollViewWidth, height: totalContentHeight)
+            if scrollView.contentSize != newContentSize {
+                scrollView.contentSize = newContentSize
+                print("📏 iOS: Updated scroll content size - Width: \(scrollViewWidth), Height: \(totalContentHeight) (text: \(textSize.height), total calc: \(calculatedContentHeight))")
+            }
             
-            print("📏 iOS: Updated content size - TopPad: \(topPadding), Text: \(textSize.height), Insets: \(textContainerInsets), BottomPad: \(bottomPadding), Total: \(totalContentHeight)")
+            // Ensure the scroll view can actually scroll by verifying content size > frame size
+            if totalContentHeight <= scrollView.frame.height {
+                print("⚠️ iOS: Content height (\(totalContentHeight)) <= scroll view height (\(scrollView.frame.height)), may not scroll properly")
+            }
         }
         
         // MARK: - UITextViewDelegate
+        private var lastTextLength: Int = 0
+        private let textLengthThreshold: Int = 50 // Only update content size every 50 characters
+        
         func textViewDidChange(_ textView: UITextView) {
             // Update binding
             text = textView.text
@@ -386,8 +448,12 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
             // Call change handler
             onTextChange?(textView.text)
             
-            // Update content size when text changes
-            updateTextViewContentSize()
+            // Only update content size if text length changed significantly to improve performance
+            let currentLength = textView.text.count
+            if abs(currentLength - lastTextLength) > textLengthThreshold {
+                lastTextLength = currentLength
+                updateTextViewContentSize()
+            }
         }
         
         func textViewDidBeginEditing(_ textView: UITextView) {
@@ -399,12 +465,19 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
         }
         
         // MARK: - UIScrollViewDelegate
+        private var lastScrollOffset: CGFloat = 0
+
+        private let scrollThreshold: CGFloat = 2.0 // Only update every 2 points of scroll
+        
         func scrollViewDidScroll(_ scrollView: UIScrollView) {
             // Get the current scroll offset (positive when scrolled down)
             let scrollOffset = scrollView.contentOffset.y
             
-            // Call the scroll change handler if provided
-            onScrollChange?(scrollOffset)
+            // Only call handler if scroll changed significantly to improve performance
+            if abs(scrollOffset - lastScrollOffset) > scrollThreshold {
+                lastScrollOffset = scrollOffset
+                onScrollChange?(scrollOffset)
+            }
         }
     }
 }
