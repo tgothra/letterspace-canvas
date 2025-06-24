@@ -1635,23 +1635,20 @@ struct DocumentArea: View {
                                     
                                     print("⚡ Intercepted first click on editor with expanded header")
                                     
-                                    // Check if there's an actual uploaded header image
-                                    let hasRealHeaderImage = hasActualHeaderImage()
-                                    
-                                    // If no actual image exists, completely turn off header mode
-                                    if !hasRealHeaderImage {
+                                    // For iOS, if we have a headerImage in memory, just collapse it
+                                    // Only remove header completely if there's no headerImage at all
+                                    if headerImage == nil {
                                         withAnimation(.easeInOut(duration: 0.5)) {
-                                            // Turn off header mode completely
+                                            // Turn off header mode completely only if no image in memory
                                             isHeaderExpanded = false
                                             document.isHeaderExpanded = false
-                                            headerImage = nil
                                             isImageExpanded = false
                                             isTitleVisible = true
                                             isEditorFocused = false  // Expanded title format for text-only mode
                                             
                                             // Save the document to persist this change
                                             document.save()
-                                            print("📝 Turned off header image mode on document click (no actual image was uploaded)")
+                                            print("📝 iOS: Turned off header image mode on document click (no image in memory)")
                                             
                                             // Don't show tap again popup in this case
                                             hasShownTapAgainPopup = true
@@ -1774,10 +1771,32 @@ struct DocumentArea: View {
         .simultaneousGesture(
             TapGesture()
                 .onEnded { _ in
-                    // If header is expanded without an actual image, turn it off
-                    // This provides an extra layer of protection for this case
+                    // For iOS, be less aggressive - only turn off header if no image in memory
+                    // For macOS, keep the original file-based check
+                    #if os(iOS)
+                    if isHeaderExpanded && headerImage == nil {
+                        print("🔄 iOS: Global document tap detected with header but no image in memory")
+                        
+                        // Add slight delay to allow other gestures to process first
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            withAnimation(.easeInOut(duration: 0.5)) {
+                                // Turn off header mode completely
+                                isHeaderExpanded = false
+                                document.isHeaderExpanded = false
+                                isImageExpanded = false
+                                isTitleVisible = true
+                                isEditorFocused = false  // Text-only expanded title format
+                                
+                                // Save the document to persist this change
+                                document.save()
+                                print("📝 iOS: Turned off header image mode on global document tap (no image in memory)")
+                            }
+                        }
+                    }
+                    #else
+                    // macOS: Use the more thorough file-based check
                     if isHeaderExpanded && !hasActualHeaderImage() {
-                        print("🔄 Global document tap detected with header placeholder but no actual image")
+                        print("🔄 macOS: Global document tap detected with header placeholder but no actual image")
                         
                         // Add slight delay to allow other gestures to process first
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
@@ -1792,10 +1811,11 @@ struct DocumentArea: View {
                                 
                                 // Save the document to persist this change
                                 document.save()
-                                print("📝 Turned off header image mode on global document tap (no actual image uploaded)")
+                                print("📝 macOS: Turned off header image mode on global document tap (no actual image uploaded)")
                             }
                         }
                     }
+                    #endif
                 }
         )
     }
