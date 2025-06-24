@@ -10,6 +10,7 @@ private struct BookmarkNavigationKeys {
     static let lastTopMarginPercentageKey = "lastTopMarginPercentageKey"
     static let bookmarkMaintenanceTimerKey = "bookmarkMaintenanceTimerKey"
     static let bookmarkScrollObserverKey = "bookmarkScrollObserverKey"
+    static let scrollToTopObserverKey = "scrollToTopObserverKey"
     static let maintenanceChecksCountKey = "maintenanceChecksCountKey"
 }
 
@@ -67,6 +68,15 @@ extension DocumentTextView {
         }
         set {
             objc_setAssociatedObject(self, BookmarkNavigationKeys.bookmarkScrollObserverKey, newValue, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+        }
+    }
+
+    var scrollToTopObserver: NSObjectProtocol? {
+        get {
+            return objc_getAssociatedObject(self, BookmarkNavigationKeys.scrollToTopObserverKey) as? NSObjectProtocol
+        }
+        set {
+            objc_setAssociatedObject(self, BookmarkNavigationKeys.scrollToTopObserverKey, newValue, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
         }
     }
 
@@ -420,13 +430,18 @@ extension DocumentTextView {
     }
 
     internal func registerForBookmarkNavigation() {
-        // Remove any existing observer
+        // Remove any existing observers
         if let observer = bookmarkScrollObserver {
             NotificationCenter.default.removeObserver(observer)
             bookmarkScrollObserver = nil
         }
         
-        // Create new observer
+        if let observer = scrollToTopObserver {
+            NotificationCenter.default.removeObserver(observer)
+            scrollToTopObserver = nil
+        }
+        
+        // Create bookmark navigation observer
         bookmarkScrollObserver = NotificationCenter.default.addObserver(
             forName: NSNotification.Name("ScrollToBookmark"),
             object: nil,
@@ -459,11 +474,21 @@ extension DocumentTextView {
                         guard let self = self else { return }
                         self.processBookmarkNavigation(notification: notification)
             }
-        } else {
+                        } else {
                     print("📝 Header is not expanded or not visible - navigating immediately")
                     // Navigate immediately if header doesn't need to collapse
                     self.processBookmarkNavigation(notification: notification)
                 }
+            }
+        
+        // Create scroll to top observer
+        scrollToTopObserver = NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("ScrollToTop"),
+            object: nil,
+            queue: .main) { [weak self] notification in
+                guard let self = self else { return }
+                print("🔝 Received ScrollToTop notification")
+                self.scrollToDocumentTop()
             }
     }
 
@@ -651,6 +676,33 @@ extension DocumentTextView {
         // --- End of method ---
     }
 
+    // MARK: - Scroll to Top Function
+    internal func scrollToDocumentTop() {
+        print("🔝 Scrolling to top of document")
+        
+        guard let enclosingScrollView = self.enclosingScrollView else {
+            print("⚠️ No enclosing scroll view found")
+            return
+        }
+        
+        let scrollPoint = NSPoint(x: 0, y: 0)
+        
+        // Use internalScrollInProgress flag to prevent unwanted side effects
+        self.internalScrollInProgress = true
+        print("🚩 Setting internalScrollInProgress = true (scroll to top)")
+        
+        // Animate the scroll to top
+        NSAnimationContext.runAnimationGroup({ context in
+            context.duration = 0.4
+            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            enclosingScrollView.contentView.animator().setBoundsOrigin(scrollPoint)
+        }, completionHandler: { [weak self] in
+            enclosingScrollView.reflectScrolledClipView(enclosingScrollView.contentView)
+            self?.internalScrollInProgress = false
+            print("🚩 Resetting internalScrollInProgress = false (scroll to top complete)")
+        })
+    }
+
     // MARK: - Deinitialization Helper for Timers
     internal func cleanupBookmarkNavigation() {
         bookmarkMaintenanceTimer?.invalidate()
@@ -658,6 +710,10 @@ extension DocumentTextView {
         if let observer = bookmarkScrollObserver {
             NotificationCenter.default.removeObserver(observer)
             bookmarkScrollObserver = nil
+        }
+        if let observer = scrollToTopObserver {
+            NotificationCenter.default.removeObserver(observer)
+            scrollToTopObserver = nil
         }
     }
 

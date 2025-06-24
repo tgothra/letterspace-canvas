@@ -172,19 +172,27 @@ struct HeaderImageSection: View {
             }
 
             // Expanding an actual, existing image from its collapsed bar state
-            if hasActualImage { // This check is important here
-                #if os(macOS)
-                NotificationCenter.default.post(name: NSNotification.Name("HeaderImageToggling"), object: nil)
-                #endif
-                withAnimation(.easeInOut(duration: 0.35)) {
-                    isExpanded = true
-                    isTitleVisible = true // Title is usually part of expanded image view context
-                    isEditorFocused = true // Maintain editor focus compatibility
+            if hasActualImage || headerImage != nil { // Check both file system and memory
+                print("🔄 User tapped collapsed header - scrolling to top and expanding")
+                
+                // First, scroll to top smoothly
+                scrollToTop()
+                
+                // Then expand the header after a brief delay to allow scroll animation
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                     #if os(macOS)
-                    if let window = NSApp.keyWindow, window.firstResponder is NSTextView {
-                        window.makeFirstResponder(nil)
-                    }
+                    NotificationCenter.default.post(name: NSNotification.Name("HeaderImageToggling"), object: nil)
                     #endif
+                    withAnimation(.easeInOut(duration: 0.35)) {
+                        isExpanded = true
+                        isTitleVisible = true
+                        isEditorFocused = true
+                        #if os(macOS)
+                        if let window = NSApp.keyWindow, window.firstResponder is NSTextView {
+                            window.makeFirstResponder(nil)
+                        }
+                        #endif
+                    }
                 }
             } else {
                 // This case should ideally not be hit if the above logic for `headerImage == nil` is correct.
@@ -674,6 +682,117 @@ struct HeaderImageSection: View {
         .animation(.easeInOut(duration: 0.35), value: isExpanded)
             .drawingGroup()
     }
+    
+    // MARK: - Scroll to Top Function
+    private func scrollToTop() {
+        print("🔝 Scrolling to top of document")
+        
+        #if os(macOS)
+        // For macOS, find the NSScrollView more reliably
+        DispatchQueue.main.async {
+            if let window = NSApp.keyWindow {
+                // Try multiple approaches to find the scroll view
+                var scrollView: NSScrollView?
+                
+                // Method 1: Look for DocumentTextView and get its enclosing scroll view
+                if let nsScrollView = window.contentView?.subviews.first(where: { $0 is NSScrollView }) as? NSScrollView,
+                   let textView = nsScrollView.documentView as? NSTextView {
+                    scrollView = textView.enclosingScrollView
+                    print("🔍 Found scroll view via DocumentTextView")
+                }
+                
+                // Method 2: Look directly for NSScrollView
+                if scrollView == nil {
+                    scrollView = window.contentView?.subviews.first { $0 is NSScrollView } as? NSScrollView
+                    print("🔍 Found scroll view directly")
+                }
+                
+                // Method 3: Recursive search for NSScrollView
+                if scrollView == nil {
+                    func findScrollView(in view: NSView) -> NSScrollView? {
+                        if let scrollView = view as? NSScrollView {
+                            return scrollView
+                        }
+                        for subview in view.subviews {
+                            if let found = findScrollView(in: subview) {
+                                return found
+                            }
+                        }
+                        return nil
+                    }
+                    
+                    if let contentView = window.contentView {
+                        scrollView = findScrollView(in: contentView)
+                        print("🔍 Found scroll view via recursive search")
+                    }
+                }
+                
+                if let scrollView = scrollView {
+                    // First, dismiss any active text editing focus to prevent conflicts
+                    if let textView = scrollView.documentView as? NSTextView,
+                       window.firstResponder == textView {
+                        print("📝 Dismissing text editor focus before scroll to top")
+                        window.makeFirstResponder(nil)
+                        
+                        // Wait a brief moment for focus dismissal to complete
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            self.performScrollToTop(scrollView: scrollView)
+                        }
+                    } else {
+                        // No active text editing, scroll immediately
+                        self.performScrollToTop(scrollView: scrollView)
+                    }
+                } else {
+                    print("⚠️ Could not find NSScrollView for scroll to top")
+                }
+            }
+        }
+        #elseif os(iOS)
+        // For iOS, post a notification to scroll to top
+        // This follows the same pattern as ScrollToBookmark
+        NotificationCenter.default.post(
+            name: NSNotification.Name("ScrollToTop"),
+            object: nil,
+            userInfo: nil
+        )
+        #endif
+    }
+    
+    #if os(macOS)
+    // Helper function to perform the actual scroll to top animation
+    private func performScrollToTop(scrollView: NSScrollView) {
+        // Account for all the various insets and padding:
+        // - ScrollView content insets: top 16
+        // - DocumentArea top padding when header expanded: 24  
+        // - TextContainer inset: 24
+        let contentInsets = scrollView.contentInsets
+        let documentAreaPadding: CGFloat = 24 // From DocumentArea when header is expanded
+        let textContainerInset: CGFloat = 24 // From DocumentTextView textContainerInset
+        
+        // Calculate total offset needed to get to true top
+        let totalOffset = contentInsets.top + documentAreaPadding + textContainerInset
+        let scrollPoint = NSPoint(x: 0, y: -totalOffset)
+        
+        print("🔝 Animating scroll to top: \(scrollPoint)")
+        print("📏 Content insets: \(contentInsets), Document padding: \(documentAreaPadding), Text inset: \(textContainerInset)")
+        print("📏 Total offset: \(totalOffset)")
+        
+        // Get current scroll position for debugging
+        let currentPosition = scrollView.contentView.bounds.origin
+        print("🔍 Current scroll position: \(currentPosition)")
+        
+        // Animate the scroll to top
+        NSAnimationContext.runAnimationGroup({ context in
+            context.duration = 0.4
+            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            scrollView.contentView.animator().setBoundsOrigin(scrollPoint)
+        }, completionHandler: {
+            scrollView.reflectScrolledClipView(scrollView.contentView)
+            let finalPosition = scrollView.contentView.bounds.origin
+            print("🔝 Scroll to top animation completed. Final position: \(finalPosition)")
+        })
+    }
+    #endif
 }
 
 

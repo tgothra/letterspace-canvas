@@ -15,26 +15,35 @@ struct IOSDocumentEditor: View {
         VStack(spacing: 0) {
             // Main text editing area
             GeometryReader { geometry in
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
-                        // Text editor
-                        TextEditor(text: $textContent)
-                            .font(.system(size: 16, weight: .regular))
-                            .lineSpacing(4)
-                            .foregroundColor(colorScheme == .dark ? .white : .black)
-                            .focused($isFocused)
-                            .scrollContentBackground(.hidden) // Hide default background
-                            .background(Color.clear)
-                            .frame(minHeight: geometry.size.height) // Fill entire available height
-                            .padding(.horizontal, 24)
-                            .padding(.top, 16) // Only top padding to avoid bottom gap
-                            .onChange(of: textContent) { _, newValue in
-                                // Update document content when text changes
-                                updateDocumentContent(newValue)
-                            }
+                ScrollViewReader { scrollProxy in
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 0) {
+                            // Text editor
+                            TextEditor(text: $textContent)
+                                .font(.system(size: 16, weight: .regular))
+                                .lineSpacing(4)
+                                .foregroundColor(colorScheme == .dark ? .white : .black)
+                                .focused($isFocused)
+                                .scrollContentBackground(.hidden) // Hide default background
+                                .background(Color.clear)
+                                .frame(minHeight: geometry.size.height) // Fill entire available height
+                                .padding(.horizontal, 24)
+                                .padding(.top, 16) // Only top padding to avoid bottom gap
+                                .onChange(of: textContent) { _, newValue in
+                                    // Update document content when text changes
+                                    updateDocumentContent(newValue)
+                                }
+                                .id("textEditor") // Add ID for scroll targeting
+                        }
+                    }
+                    .scrollDismissesKeyboard(.interactively)
+                    .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ScrollToTop"))) { _ in
+                        print("🔝 iOS: Received ScrollToTop notification")
+                        withAnimation(.easeInOut(duration: 0.4)) {
+                            scrollProxy.scrollTo("textEditor", anchor: .top)
+                        }
                     }
                 }
-                .scrollDismissesKeyboard(.interactively)
             }
         }
         .background(
