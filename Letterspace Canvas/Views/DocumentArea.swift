@@ -332,14 +332,22 @@ struct DocumentArea: View {
             documentContainer(geo: geo)
         }
         #if os(iOS)
-        .confirmationDialog("Choose Image Source", isPresented: $isShowingImageSourcePicker) {
-            Button("Photo Library") {
-                isShowingPhotoPicker = true
-            }
-            Button("Files") {
-                isShowingImagePicker = true
-            }
-            Button("Cancel", role: .cancel) { }
+        .sheet(isPresented: $isShowingImageSourcePicker) {
+            ImageSourcePickerView(
+                isPresented: $isShowingImageSourcePicker,
+                onPhotoLibrarySelected: {
+                    isShowingImageSourcePicker = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        isShowingPhotoPicker = true
+                    }
+                },
+                onFilesSelected: {
+                    isShowingImageSourcePicker = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        isShowingImagePicker = true
+                    }
+                }
+            )
         }
         .sheet(isPresented: $isShowingPhotoPicker) {
             iOSPhotoPicker(isPresented: $isShowingPhotoPicker) { image in
@@ -2412,6 +2420,104 @@ private func createHeaderTransition() -> AnyTransition {
 }
 
 #if os(iOS)
+// MARK: - Image Source Picker View
+struct ImageSourcePickerView: View {
+    @Binding var isPresented: Bool
+    let onPhotoLibrarySelected: () -> Void
+    let onFilesSelected: () -> Void
+    @Environment(\.colorScheme) var colorScheme
+    
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 20) {
+                Spacer()
+                
+                VStack(spacing: 16) {
+                    Text("Choose Image Source")
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                        .padding(.bottom, 8)
+                    
+                    Button(action: {
+                        print("📸 iOS: Photo Library button tapped")
+                        onPhotoLibrarySelected()
+                    }) {
+                        HStack {
+                            Image(systemName: "photo.on.rectangle")
+                                .font(.title2)
+                                .foregroundColor(.blue)
+                            
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Photo Library")
+                                    .font(.headline)
+                                    .foregroundColor(.primary)
+                                
+                                Text("Choose from your photos")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            
+                            Spacer()
+                            
+                            Image(systemName: "chevron.right")
+                                .foregroundColor(.secondary)
+                        }
+                        .padding()
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(colorScheme == .dark ? Color(.systemGray6) : Color(.systemGray6))
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    
+                    Button(action: {
+                        print("📸 iOS: Files button tapped")
+                        onFilesSelected()
+                    }) {
+                        HStack {
+                            Image(systemName: "folder")
+                                .font(.title2)
+                                .foregroundColor(.blue)
+                            
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Files")
+                                    .font(.headline)
+                                    .foregroundColor(.primary)
+                                
+                                Text("Browse files and documents")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            
+                            Spacer()
+                            
+                            Image(systemName: "chevron.right")
+                                .foregroundColor(.secondary)
+                        }
+                        .padding()
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(colorScheme == .dark ? Color(.systemGray6) : Color(.systemGray6))
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal)
+                
+                Spacer()
+            }
+            .navigationTitle("Add Header Image")
+            .navigationBarTitleDisplayMode(.inline)
+            .navigationBarItems(
+                trailing: Button("Cancel") {
+                    print("📸 iOS: Cancel button tapped")
+                    isPresented = false
+                }
+            )
+        }
+    }
+}
+
 // MARK: - iOS Photo Picker
 struct iOSPhotoPicker: UIViewControllerRepresentable {
     @Binding var isPresented: Bool
