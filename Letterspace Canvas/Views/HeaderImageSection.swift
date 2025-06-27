@@ -210,13 +210,13 @@ struct HeaderImageSection: View {
                 // Container for header content - no more tap-to-collapse functionality
                 Group {
                     if let headerImage = headerImage { // Actual image EXISTS - always show expanded view
-                        expandedHeaderView(headerImage)
+                            expandedHeaderView(headerImage)
                             .onHover { hovering in
                                 // Only show menu hover for expanded actual image
                                 withAnimation(.easeInOut(duration: 0.1)) {
                                     isHoveringHeader = hovering
                                 }
-                            }
+                        }
                     } else { // Actual image is NIL (placeholder mode)
                         if isExpanded { // isExpanded is true (show large placeholder)
                             // Make placeholder clickable to add image
@@ -226,7 +226,7 @@ struct HeaderImageSection: View {
                                     isShowingImagePicker = true
                                 }
                             }) {
-                                placeholderImageView
+                            placeholderImageView
                             }
                             .buttonStyle(.plain)
                         } else { // isExpanded is false (show small collapsed placeholder bar)
@@ -243,9 +243,9 @@ struct HeaderImageSection: View {
                                     #endif
                                 }
                             }) {
-                                collapsedPlaceholderView
-                            }
-                            .buttonStyle(.plain)
+                            collapsedPlaceholderView
+                }
+                .buttonStyle(.plain)
                         }
                     }
                 }
@@ -306,76 +306,104 @@ struct HeaderImageSection: View {
         // Apply scroll-based scaling using headerCollapseProgress
         // When progress = 0.0 (fully expanded), use full height
         // When progress = 1.0 (fully collapsed), use collapsed height
-        let collapsedHeight: CGFloat = 80 // Target collapsed height
+        let collapsedHeight: CGFloat = 64 // Target collapsed height (matches collapsed bar)
         let currentHeight = baseHeaderHeight - (headerCollapseProgress * (baseHeaderHeight - collapsedHeight))
         
-        // Calculate progressive blur and overlay opacity (start later for more natural timing)
-        let blurRadius = max(0, (headerCollapseProgress - 0.4) / 0.6) * 12 // Start blur at 40% collapse
-        let overlayOpacity = max(0, (headerCollapseProgress - 0.4) / 0.6) * 0.6 // Start overlay at 40% collapse
-        let titleOpacity = max(0, (headerCollapseProgress - 0.5) / 0.5) // Start showing title when 50% collapsed
+        // Calculate staggered transition timing for smoother effect
+        let imageExitThreshold: CGFloat = 0.7 // Image starts fading out at 70%
+        let barEntryThreshold: CGFloat = 0.85 // Collapsed bar starts fading in at 85%
         
-        // Adaptive colors based on color scheme
-        let frostColor = colorScheme == .dark ? Color.black : Color.white
+        // Image fades out from 70% to 80%
+        let imageExitProgress = max(0, min(1, (headerCollapseProgress - imageExitThreshold) / 0.1))
+        let expandedOpacity = 1.0 - imageExitProgress
+        
+        // Bar fades in from 85% to 95%
+        let barEntryProgress = max(0, min(1, (headerCollapseProgress - barEntryThreshold) / 0.1))
+        let collapsedOpacity = barEntryProgress
+        
+        // Colors for collapsed state
+        let collapsedBarColor = colorScheme == .dark ? Color(.sRGB, red: 0.15, green: 0.15, blue: 0.15, opacity: 1.0) : Color(.sRGB, red: 0.95, green: 0.95, blue: 0.95, opacity: 1.0)
         let textColor = colorScheme == .dark ? Color.white : Color.black
         let subtitleColor = colorScheme == .dark ? Color.white.opacity(0.8) : Color.black.opacity(0.7)
         
         // Calculate scroll-based visual effects based on collapse progress
 
-        // Apply modifiers directly inside platform blocks
+        // Clean design without expensive effects - smooth transitions
         ZStack {
+            // Expanded state: clean image without blur or overlay
+            Group {
+        #if os(macOS)
+        Image(nsImage: image)
+            .resizable()
+            .aspectRatio(contentMode: .fill)
+                    .frame(width: paperWidth, height: currentHeight)
+            .clipped()
+        #elseif os(iOS)
+        Image(uiImage: image)
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                    .frame(width: paperWidth, height: currentHeight)
+                                    .clipped()
+                #endif
+                
+                // Header menu (fade out as we approach collapsed state)
+                if isHoveringHeader {
+                    VStack {
+                        Spacer()
+                        HStack {
+                            Spacer()
+                            headerMenu
+                                .padding(.trailing, 16)
+                                .padding(.bottom, 16)
+                        }
+                    }
+                    .opacity(expandedOpacity)
+                }
+            }
+            .opacity(expandedOpacity)
+            
+            // Collapsed state: solid bar with image thumbnail on left + title on right
+            if collapsedOpacity > 0 {
+                HStack(spacing: 12) {
+                    // Image thumbnail on the left
             #if os(macOS)
             Image(nsImage: image)
                 .resizable()
                 .aspectRatio(contentMode: .fill)
-                .frame(width: paperWidth, height: currentHeight)
-                .blur(radius: blurRadius) // Progressive blur
-                .clipped()
+                        .frame(width: 40, height: 40)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
             #elseif os(iOS)
             Image(uiImage: image)
                 .resizable()
                 .aspectRatio(contentMode: .fill)
-                .frame(width: paperWidth, height: currentHeight)
-                .blur(radius: blurRadius) // Progressive blur
-                .clipped()
+                        .frame(width: 40, height: 40)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
             #endif
-            
-            // Progressive frost overlay (adaptive to color scheme)
-            Rectangle()
-                .fill(frostColor.opacity(overlayOpacity))
-            
-            // Progressive title/subtitle overlay (appears automatically as collapse progresses)
-            if titleOpacity > 0 {
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(document.title.isEmpty ? "Untitled" : document.title)
-                            .font(.system(size: 16, weight: .semibold))
+                    
+                    // Title and subtitle on the right
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(document.title.isEmpty ? "Untitled" : document.title)
+                        .font(.system(size: 16, weight: .semibold))
                             .foregroundColor(textColor)
-                            .lineLimit(1)
+                        .lineLimit(1)
 
-                        if document.subtitle.isNotEmpty {
-                            Text(document.subtitle)
-                                .font(.system(size: 12, weight: .regular))
+                    if document.subtitle.isNotEmpty {
+                        Text(document.subtitle)
+                            .font(.system(size: 12, weight: .regular))
                                 .foregroundColor(subtitleColor)
-                                .lineLimit(1)
+                            .lineLimit(1)
                         }
                     }
-                    .padding(.leading, 20)
+                    
                     Spacer()
                 }
-                .opacity(titleOpacity)
-            }
-            
-            // Header menu (only show when not heavily collapsed)
-            if headerCollapseProgress < 0.7 && isHoveringHeader {
-                VStack {
-                    Spacer()
-                    HStack {
-                        Spacer()
-                        headerMenu
-                            .padding(.trailing, 16)
-                            .padding(.bottom, 16)
-                    }
-                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 12)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(collapsedBarColor)
+                )
+                .opacity(collapsedOpacity)
             }
         }
         .frame(width: paperWidth, height: currentHeight)
@@ -474,48 +502,48 @@ struct HeaderImageSection: View {
     @ViewBuilder
     private var placeholderImageView: some View {
         // This is shown when headerImage is nil but isExpanded is true
-        Rectangle()
-            .fill(colorScheme == .dark ? Color(.sRGB, red: 0.15, green: 0.15, blue: 0.15, opacity: 1.0) : Color(.sRGB, red: 0.95, green: 0.95, blue: 0.95, opacity: 1.0))
-            .frame(maxWidth: paperWidth)
+                            Rectangle()
+                                .fill(colorScheme == .dark ? Color(.sRGB, red: 0.15, green: 0.15, blue: 0.15, opacity: 1.0) : Color(.sRGB, red: 0.95, green: 0.95, blue: 0.95, opacity: 1.0))
+                                .frame(maxWidth: paperWidth)
             // The height might need to be dynamic based on viewMode or a fixed value for placeholder
             .frame(height: viewMode == .minimal ? 160 : 300) // Adjusted height for placeholder
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .transition(.asymmetric(
-                insertion: .opacity.combined(with: .move(edge: .top).combined(with: .scale(scale: 0.98))),
-                removal: .opacity.combined(with: .move(edge: .top).combined(with: .scale(scale: 0.98)))
-            ))
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                .transition(.asymmetric(
+                                    insertion: .opacity.combined(with: .move(edge: .top).combined(with: .scale(scale: 0.98))),
+                                    removal: .opacity.combined(with: .move(edge: .top).combined(with: .scale(scale: 0.98)))
+                                ))
             .animation(.easeInOut(duration: 0.35), value: isExpanded) // Make sure this animation is desired here
-            .drawingGroup()
+                                .drawingGroup()
             .background(
                 GeometryReader { geometry in
                     Color.clear
                         .preference(key: ImagePickerSourceRectKey.self, value: geometry.frame(in: .global))
                 }
             )
-            .overlay(
-                Button(action: {
+                                .overlay(
+                                    Button(action: {
                     // Action to show the image picker
                     print("📸 iOS: Add Header Image button tapped")
                     print("📸 iOS: Before - isShowingImagePicker: \(isShowingImagePicker)")
-                    withAnimation(.easeInOut(duration: 0.35)) {
-                        isShowingImagePicker = true
-                    }
+                                        withAnimation(.easeInOut(duration: 0.35)) {
+                                            isShowingImagePicker = true
+                                        }
                     print("📸 iOS: After - isShowingImagePicker: \(isShowingImagePicker)")
-                }) {
-                    VStack {
-                        Image(systemName: "photo")
-                            .font(.system(size: 48))
-                            .foregroundColor(colorScheme == .dark ? .white.opacity(0.2) : .black.opacity(0.2))
-                            .padding(.bottom, 8)
-                        
-                        Text("Add Header Image")
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundColor(colorScheme == .dark ? .white.opacity(0.2) : .black.opacity(0.2))
-                    }
+                                    }) {
+                                        VStack {
+                                            Image(systemName: "photo")
+                                                .font(.system(size: 48))
+                                                .foregroundColor(colorScheme == .dark ? .white.opacity(0.2) : .black.opacity(0.2))
+                                                .padding(.bottom, 8)
+                                            
+                                            Text("Add Header Image")
+                                                .font(.system(size: 16, weight: .medium))
+                                                .foregroundColor(colorScheme == .dark ? .white.opacity(0.2) : .black.opacity(0.2))
+                                        }
                     .contentShape(Rectangle()) // Ensure the whole area is tappable
-                }
-                .buttonStyle(.plain)
-            )
+                                    }
+                                    .buttonStyle(.plain)
+                                )
     }
 
     // MARK: - Collapsed Placeholder View
@@ -572,8 +600,8 @@ struct HeaderImageSection: View {
     // MARK: - Scroll to Top Function
     private func scrollToTop() {
         print("🔝 Scrolling to top of document")
-        
-        #if os(macOS)
+
+#if os(macOS)
         // For macOS, find the NSScrollView more reliably
         DispatchQueue.main.async {
             if let window = NSApp.keyWindow {
@@ -678,7 +706,7 @@ struct HeaderImageSection: View {
             print("🔝 Scroll to top animation completed. Final position: \(finalPosition)")
         })
     }
-    #endif
+#endif
 }
 
 

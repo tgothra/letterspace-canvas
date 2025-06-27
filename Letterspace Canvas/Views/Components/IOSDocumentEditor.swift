@@ -32,7 +32,6 @@ struct IOSDocumentEditor: View {
                     ),
                     colorScheme: colorScheme,
                     availableHeight: geometry.size.height,
-
                     onTextChange: { newValue in
                         updateDocumentContent(newValue)
                     },
@@ -322,6 +321,8 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
             context.coordinator.updateTextViewContentSize()
             print("📐 iOS: Available height changed from \(context.coordinator.availableHeight) to \(availableHeight)")
         }
+        
+
     }
     
     func makeCoordinator() -> Coordinator {
@@ -336,6 +337,7 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
         var scrollView: UIScrollView?
         var textView: UITextView?
         var availableHeight: CGFloat = 0
+
         private var scrollToTopObserver: NSObjectProtocol?
         
         init(text: Binding<String>, isFocused: Binding<Bool>) {
@@ -408,12 +410,8 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
             
             let textSize = textView.sizeThatFits(CGSize(width: textWidth, height: CGFloat.greatestFiniteMagnitude))
             
-            // Calculate total content height:
-            // - 15px top padding for comfortable scrolling (keep fixed for consistent behavior)
-            // - Text height
-            // - Text container insets (top + bottom)
-            // - 300px bottom padding for comfortable scrolling
-            let topPadding: CGFloat = 15
+            // Use static top padding to keep text stationary during header collapse
+            let topPadding: CGFloat = 25 // Fixed top padding with extra breathing room
             let textContainerInsets = textView.textContainerInset.top + textView.textContainerInset.bottom
             let bottomPadding: CGFloat = 300
             let calculatedContentHeight = topPadding + textSize.height + textContainerInsets + bottomPadding

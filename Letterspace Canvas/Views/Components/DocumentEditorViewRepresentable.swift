@@ -7,7 +7,7 @@ import ObjectiveC
 // MARK: - Document Editor View
 struct DocumentEditorView: NSViewRepresentable {
     @Binding var document: Letterspace_CanvasDocument
-    @Binding var selectedBlock: UUID?
+    @Binding var selectedBlock: UUID? // Add header collapse progress parameter
     @State private var showToolbar = false
     @Environment(\.colorScheme) var colorScheme
     @State private var isLoading = true
@@ -194,6 +194,8 @@ struct DocumentEditorView: NSViewRepresentable {
         textView.textContainer?.containerSize = NSSize(width: 752, height: CGFloat.greatestFiniteMagnitude)
         textView.textContainer?.widthTracksTextView = false
         
+
+        
         // Update content size to ensure bottom padding is maintained
         DispatchQueue.main.async {
             context.coordinator.updateTextViewContentSize()
@@ -324,6 +326,7 @@ struct DocumentEditorView: NSViewRepresentable {
     class Coordinator: NSObject, NSTextViewDelegate {
         var parent: DocumentEditorView
         weak var textView: DocumentTextView?
+
         var hideSearchTimer: Timer?
         var searchQueryField: NSTextField?
         var searchPlaceholderLabel: NSTextField?
@@ -457,19 +460,25 @@ struct DocumentEditorView: NSViewRepresentable {
             print("📍 Selection changed")
         }
         
-        // Update text view content size to ensure bottom padding
+        // Update text view content size to ensure bottom padding with dynamic top padding
         func updateTextViewContentSize() {
             guard let textView = self.textView,
                   let layoutManager = textView.layoutManager,
                   let textContainer = textView.textContainer,
                   let scrollView = textView.enclosingScrollView else { return }
             
+            // Use static top padding to keep text stationary during header collapse
+            let staticTopPadding: CGFloat = 80 // Fixed top padding with extra breathing room
+            
+            // Update text container inset with static top padding
+            textView.textContainerInset = NSSize(width: 19, height: staticTopPadding)
+            
             // Force layout update
             layoutManager.ensureLayout(for: textContainer)
             
             // Calculate the actual text height
             let textHeight = layoutManager.usedRect(for: textContainer).height
-            let totalHeight = textHeight + textView.textContainerInset.height * 2 + 300 // Add 300px bottom padding
+            let totalHeight = textHeight + staticTopPadding + staticTopPadding + 300 // Add static top + bottom padding + extra bottom padding
             
             // Update the text view frame to include bottom padding
             let newHeight = max(totalHeight, scrollView.frame.height)
@@ -478,7 +487,7 @@ struct DocumentEditorView: NSViewRepresentable {
                 
                 // Notify the scroll view of the content size change
                 scrollView.reflectScrolledClipView(scrollView.contentView)
-                print("📏 Updated text view height to: \(newHeight) (text: \(textHeight) + padding: 300)")
+                print("📏 macOS: Updated text view height to: \(newHeight) (text: \(textHeight), top padding: \(staticTopPadding))")
             }
         }
         

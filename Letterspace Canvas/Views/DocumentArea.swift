@@ -239,6 +239,7 @@ struct DocumentArea: View {
     // Manual scroll-to-collapse state variables
     @State private var currentScrollOffset: CGFloat = 0.0
     @State private var headerCollapseProgress: CGFloat = 0.0 // 0.0 = fully expanded, 1.0 = fully collapsed
+    @State private var smoothedHeaderProgress: CGFloat = 0.0 // Smoothed version for ultra-smooth slow scrolling
     
     // Remove unused state variables
     private let sidebarWidth: CGFloat = 220
@@ -429,7 +430,7 @@ struct DocumentArea: View {
             // Document content always appears below the header (no overlapping)
             AnimatedDocumentContainer(document: $document) {
                             documentContentView
-                                .frame(minHeight: geo.size.height)
+                    .frame(minHeight: geo.size.height)
             }
             // Only add padding when a header exists or is enabled - increased for better spacing
             .padding(.top, (headerImage != nil || isHeaderExpanded) ? 24 : 0)
@@ -1172,14 +1173,17 @@ struct DocumentArea: View {
         // Calculate header collapse progress (0.0 = fully expanded, 1.0 = fully collapsed)
         let linearProgress = min(max(scrollPosition / dynamicMaxScroll, 0.0), 1.0)
         
-        // Apply easing function for smoother, more natural transition
-        // Using ease-out function: f(x) = 1 - (1-x)^2 for smoother deceleration
-        let progress = 1.0 - pow(1.0 - linearProgress, 2.0)
+        // Apply very gentle easing function for ultra-smooth transition
+        // Using a much gentler ease-out: f(x) = 1 - (1-x)^1.2 for smoother slow scrolling
+        let progress = 1.0 - pow(1.0 - linearProgress, 1.2)
         
-        // Only update if progress actually changed significantly to reduce state updates
-        let threshold: CGFloat = 0.01
+        // Much lower threshold for ultra-smooth updates during slow scrolling
+        let threshold: CGFloat = 0.001 // Ultra-low threshold for smooth slow scrolling
         if abs(headerCollapseProgress - progress) > threshold {
             headerCollapseProgress = progress
+            
+            // Apply additional smoothing for ultra-smooth slow scrolling
+            applySmoothingToHeaderProgress()
         }
         
         // Remove debug logging to improve performance
@@ -1213,14 +1217,17 @@ struct DocumentArea: View {
         // Calculate header collapse progress (0.0 = fully expanded, 1.0 = fully collapsed)
         let linearProgress = min(max(scrollOffset / dynamicMaxScroll, 0.0), 1.0)
         
-        // Apply easing function for smoother, more natural transition
-        // Using ease-out function: f(x) = 1 - (1-x)^2 for smoother deceleration
-        let progress = 1.0 - pow(1.0 - linearProgress, 2.0)
+        // Apply very gentle easing function for ultra-smooth transition
+        // Using a much gentler ease-out: f(x) = 1 - (1-x)^1.2 for smoother slow scrolling
+        let progress = 1.0 - pow(1.0 - linearProgress, 1.2)
         
-        // Only update if progress actually changed significantly to reduce state updates
-        let threshold: CGFloat = 0.01
+        // Much lower threshold for ultra-smooth updates during slow scrolling
+        let threshold: CGFloat = 0.001 // Ultra-low threshold for smooth slow scrolling
         if abs(headerCollapseProgress - progress) > threshold {
             headerCollapseProgress = progress
+            
+            // Apply additional smoothing for ultra-smooth slow scrolling
+            applySmoothingToHeaderProgress()
         }
         
         // Remove debug logging to improve performance
@@ -1247,9 +1254,17 @@ struct DocumentArea: View {
         let heightDifference = baseHeaderHeight - collapsedHeight
         
         // Use a factor to make scroll feel natural and smooth (lower = more scroll needed)
-        let scrollFactor: CGFloat = 1.5 // 150% of height difference for slower, more natural parallax
+        // Increased factor to slow down both text scroll AND header collapse
+        let scrollFactor: CGFloat = 0.8 // 80% of height difference for slower, more gradual collapse
         
-        return max(heightDifference * scrollFactor, 150) // Minimum 150px scroll distance
+        return max(heightDifference * scrollFactor, 250) // Increased minimum to 250px for slower collapse
+    }
+    
+    // Apply smoothing to header progress for ultra-smooth slow scrolling
+    private func applySmoothingToHeaderProgress() {
+        withAnimation(.linear(duration: 0.1)) {
+            smoothedHeaderProgress = headerCollapseProgress
+        }
     }
     
     private var headerView: some View {
@@ -1270,7 +1285,7 @@ struct DocumentArea: View {
                     onClick: {
                         // No longer needed - header images don't collapse on tap
                     },
-                    headerCollapseProgress: headerCollapseProgress, // Pass scroll-based scaling progress
+                    headerCollapseProgress: smoothedHeaderProgress, // Pass smoothed scaling progress for ultra-smooth slow scrolling
                     isTitleVisible: $isTitleVisible
                 )
                 .buttonStyle(.plain)
