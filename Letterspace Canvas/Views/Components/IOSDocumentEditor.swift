@@ -297,8 +297,10 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
         textView.returnKeyType = .default
         textView.keyboardAppearance = .default
         
+        // Set up formatting toolbar as keyboard accessory
+        context.coordinator.setupFormattingToolbar(for: textView, colorScheme: colorScheme)
+        
         // Optimize for faster keyboard presentation
-        textView.inputAccessoryView = nil // Remove any accessory views that might interfere
         textView.resignFirstResponder() // Start unfocused
         
         // Pre-warm the input system for faster keyboard response (iOS optimization)
@@ -545,6 +547,250 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                 NotificationCenter.default.post(name: NSNotification.Name("ResumeBackgroundOperations"), object: nil)
             }
+        }
+        
+        // MARK: - Formatting Toolbar Setup
+        func setupFormattingToolbar(for textView: UITextView, colorScheme: ColorScheme) {
+            let toolbar = IOSTextFormattingToolbar(
+                onBold: { [weak self] in
+                    self?.toggleBold()
+                },
+                onItalic: { [weak self] in
+                    self?.toggleItalic()
+                },
+                onUnderline: { [weak self] in
+                    self?.toggleUnderline()
+                },
+                onLink: { [weak self] in
+                    self?.insertLink()
+                },
+                onTextColor: { [weak self] color in
+                    self?.applyTextColor(color)
+                },
+                onHighlight: { [weak self] color in
+                    self?.applyHighlight(color)
+                },
+                onBulletList: { [weak self] in
+                    self?.toggleBulletList()
+                },
+                onAlignment: { [weak self] alignment in
+                    self?.applyAlignment(alignment)
+                },
+                onDismiss: { [weak textView] in
+                    textView?.resignFirstResponder()
+                },
+                isBold: getCurrentFormatting().isBold,
+                isItalic: getCurrentFormatting().isItalic,
+                isUnderlined: getCurrentFormatting().isUnderlined,
+                hasLink: getCurrentFormatting().hasLink,
+                hasBulletList: getCurrentFormatting().hasBulletList
+            )
+            
+            let hostingController = IOSFormattingToolbarHostingController(toolbar: toolbar)
+            textView.inputAccessoryView = hostingController.view
+        }
+        
+        // MARK: - Text Formatting Methods
+        private func toggleBold() {
+            guard let textView = textView, textView.selectedRange.location != NSNotFound else { return }
+            
+            let selectedRange = textView.selectedRange
+            let attributedText = NSMutableAttributedString(attributedString: textView.attributedText)
+            
+            attributedText.enumerateAttribute(.font, in: selectedRange) { fontAttribute, range, _ in
+                if let currentFont = fontAttribute as? UIFont {
+                    let traits = currentFont.fontDescriptor.symbolicTraits
+                    let isBold = traits.contains(.traitBold)
+                    
+                    let newFont: UIFont
+                    if isBold {
+                        // Remove bold
+                        if let descriptor = currentFont.fontDescriptor.withSymbolicTraits(traits.subtracting(.traitBold)) {
+                            newFont = UIFont(descriptor: descriptor, size: currentFont.pointSize)
+                        } else {
+                            newFont = currentFont
+                        }
+                    } else {
+                        // Add bold
+                        if let descriptor = currentFont.fontDescriptor.withSymbolicTraits(traits.union(.traitBold)) {
+                            newFont = UIFont(descriptor: descriptor, size: currentFont.pointSize)
+                        } else {
+                            newFont = currentFont
+                        }
+                    }
+                    attributedText.addAttribute(.font, value: newFont, range: range)
+                }
+            }
+            
+            textView.attributedText = attributedText
+            textView.selectedRange = selectedRange
+            text = textView.text
+        }
+        
+        private func toggleItalic() {
+            guard let textView = textView, textView.selectedRange.location != NSNotFound else { return }
+            
+            let selectedRange = textView.selectedRange
+            let attributedText = NSMutableAttributedString(attributedString: textView.attributedText)
+            
+            attributedText.enumerateAttribute(.font, in: selectedRange) { fontAttribute, range, _ in
+                if let currentFont = fontAttribute as? UIFont {
+                    let traits = currentFont.fontDescriptor.symbolicTraits
+                    let isItalic = traits.contains(.traitItalic)
+                    
+                    let newFont: UIFont
+                    if isItalic {
+                        // Remove italic
+                        if let descriptor = currentFont.fontDescriptor.withSymbolicTraits(traits.subtracting(.traitItalic)) {
+                            newFont = UIFont(descriptor: descriptor, size: currentFont.pointSize)
+                        } else {
+                            newFont = currentFont
+                        }
+                    } else {
+                        // Add italic
+                        if let descriptor = currentFont.fontDescriptor.withSymbolicTraits(traits.union(.traitItalic)) {
+                            newFont = UIFont(descriptor: descriptor, size: currentFont.pointSize)
+                        } else {
+                            newFont = currentFont
+                        }
+                    }
+                    attributedText.addAttribute(.font, value: newFont, range: range)
+                }
+            }
+            
+            textView.attributedText = attributedText
+            textView.selectedRange = selectedRange
+            text = textView.text
+        }
+        
+        private func toggleUnderline() {
+            guard let textView = textView, textView.selectedRange.location != NSNotFound else { return }
+            
+            let selectedRange = textView.selectedRange
+            let attributedText = NSMutableAttributedString(attributedString: textView.attributedText)
+            
+            attributedText.enumerateAttribute(.underlineStyle, in: selectedRange) { underlineAttribute, range, _ in
+                let currentUnderline = underlineAttribute as? Int ?? 0
+                let newUnderline = currentUnderline == 0 ? NSUnderlineStyle.single.rawValue : 0
+                attributedText.addAttribute(.underlineStyle, value: newUnderline, range: range)
+            }
+            
+            textView.attributedText = attributedText
+            textView.selectedRange = selectedRange
+            text = textView.text
+        }
+        
+        private func insertLink() {
+            // TODO: Implement link insertion
+            print("Insert link tapped")
+        }
+        
+        private func applyTextColor(_ color: Color) {
+            guard let textView = textView, textView.selectedRange.location != NSNotFound else { return }
+            
+            let selectedRange = textView.selectedRange
+            let attributedText = NSMutableAttributedString(attributedString: textView.attributedText)
+            let uiColor = UIColor(color)
+            
+            attributedText.addAttribute(.foregroundColor, value: uiColor, range: selectedRange)
+            
+            textView.attributedText = attributedText
+            textView.selectedRange = selectedRange
+            text = textView.text
+        }
+        
+        private func applyHighlight(_ color: Color) {
+            guard let textView = textView, textView.selectedRange.location != NSNotFound else { return }
+            
+            let selectedRange = textView.selectedRange
+            let attributedText = NSMutableAttributedString(attributedString: textView.attributedText)
+            
+            if color == .clear {
+                attributedText.removeAttribute(.backgroundColor, range: selectedRange)
+            } else {
+                let uiColor = UIColor(color).withAlphaComponent(0.3)
+                attributedText.addAttribute(.backgroundColor, value: uiColor, range: selectedRange)
+            }
+            
+            textView.attributedText = attributedText
+            textView.selectedRange = selectedRange
+            text = textView.text
+        }
+        
+        private func toggleBulletList() {
+            // TODO: Implement bullet list functionality
+            print("Toggle bullet list tapped")
+        }
+        
+        private func applyAlignment(_ alignment: TextAlignment) {
+            guard let textView = textView else { return }
+            
+            let selectedRange = textView.selectedRange
+            let attributedText = NSMutableAttributedString(attributedString: textView.attributedText)
+            
+            let paragraphStyle = NSMutableParagraphStyle()
+            switch alignment {
+            case .leading:
+                paragraphStyle.alignment = .left
+            case .center:
+                paragraphStyle.alignment = .center
+            case .trailing:
+                paragraphStyle.alignment = .right
+            }
+            
+            // Find the paragraph range
+            let text = attributedText.string
+            let paragraphRange = (text as NSString).paragraphRange(for: selectedRange)
+            
+            attributedText.addAttribute(.paragraphStyle, value: paragraphStyle, range: paragraphRange)
+            
+            textView.attributedText = attributedText
+            textView.selectedRange = selectedRange
+            self.text = textView.text
+        }
+        
+        private func getCurrentFormatting() -> TextFormatting {
+            guard let textView = textView, textView.selectedRange.location != NSNotFound else {
+                return TextFormatting()
+            }
+            
+            var formatting = TextFormatting()
+            let selectedRange = textView.selectedRange
+            
+            if selectedRange.length > 0 {
+                // Check formatting of selected text
+                let attributes = textView.attributedText.attributes(at: selectedRange.location, effectiveRange: nil)
+                
+                if let font = attributes[.font] as? UIFont {
+                    let traits = font.fontDescriptor.symbolicTraits
+                    formatting.isBold = traits.contains(.traitBold)
+                    formatting.isItalic = traits.contains(.traitItalic)
+                }
+                
+                formatting.isUnderlined = (attributes[.underlineStyle] as? Int ?? 0) != 0
+                formatting.hasLink = attributes[.link] != nil
+                
+                if let textColor = attributes[.foregroundColor] as? UIColor {
+                    formatting.textColor = Color(textColor)
+                }
+                
+                if let backgroundColor = attributes[.backgroundColor] as? UIColor {
+                    formatting.highlightColor = Color(backgroundColor)
+                }
+            }
+            
+            return formatting
+        }
+        
+        // Helper struct for formatting state
+        private struct TextFormatting {
+            var isBold: Bool = false
+            var isItalic: Bool = false
+            var isUnderlined: Bool = false
+            var hasLink: Bool = false
+            var textColor: Color? = nil
+            var highlightColor: Color? = nil
+            var hasBulletList: Bool = false
         }
         
         // MARK: - UIScrollViewDelegate
