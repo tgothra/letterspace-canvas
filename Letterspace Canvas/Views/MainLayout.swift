@@ -3409,13 +3409,17 @@ struct MainLayout: View {
                             DragGesture()
                                 .onChanged { value in
                                     if value.translation.width < 0 {
-                                        toolbarDragAmount = value.translation
+                                        // Slow down the manual drag by applying a damping factor
+                                        toolbarDragAmount = CGSize(
+                                            width: value.translation.width * 0.4, // 40% of actual drag distance
+                                            height: value.translation.height
+                                        )
                                     }
                                 }
                                 .onEnded { value in
                                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                                         toolbarDragAmount = .zero
-                                        // Swipe left to show toolbar
+                                        // Swipe left to show toolbar (using original translation for threshold)
                                         if value.translation.width < -50 {
                                             isFloatingToolbarCollapsed = false
                                             UserDefaults.standard.set(false, forKey: "floatingToolbarIsCollapsed")

@@ -80,20 +80,27 @@ struct FloatingContextualToolbar: View {
     var body: some View {
         HStack(spacing: 0) {
             if !isCollapsed {
-                // Active panel (when shown) - slides in from right
-                if let activePanel = activePanel {
-                    toolPanel(for: activePanel)
-                        .transition(.asymmetric(
-                            insertion: .move(edge: .trailing).combined(with: .opacity),
-                            removal: .move(edge: .trailing).combined(with: .opacity)
-                        ))
+                if isDistractionFreeMode {
+                    // In distraction-free mode, show bookmarks content directly
+                    bookmarksPanel
+                        .transition(.move(edge: .trailing).combined(with: .opacity))
                         .zIndex(1)
+                } else {
+                    // Normal mode: show active panel if selected
+                    if let activePanel = activePanel {
+                        toolPanel(for: activePanel)
+                            .transition(.asymmetric(
+                                insertion: .move(edge: .trailing).combined(with: .opacity),
+                                removal: .move(edge: .trailing).combined(with: .opacity)
+                            ))
+                            .zIndex(1)
+                    }
+                    
+                    // Floating tool buttons (when expanded)
+                    floatingToolButtons
+                        .zIndex(2)
+                        .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
-                
-                // Floating tool buttons (when expanded)
-                floatingToolButtons
-                    .zIndex(2)
-                    .transition(.move(edge: .trailing).combined(with: .opacity))
             } else {
                 // Collapsed indicator - thin vertical line on the right edge
                 collapsedIndicator
@@ -191,18 +198,125 @@ struct FloatingContextualToolbar: View {
             DragGesture()
                 .onChanged { value in
                     if value.translation.width > 0 {
-                        dragAmount = value.translation
+                        // Slow down the manual drag by applying a damping factor
+                        dragAmount = CGSize(
+                            width: value.translation.width * 0.4, // 40% of actual drag distance
+                            height: value.translation.height
+                        )
                     }
                 }
                 .onEnded { value in
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                         dragAmount = .zero
-                        // Swipe right to hide toolbar
+                        // Swipe right to hide toolbar (using original translation for threshold)
                         if value.translation.width > 50 {
                             isCollapsed = true
                             UserDefaults.standard.set(true, forKey: "floatingToolbarIsCollapsed")
                             // Close any active panel when collapsing
                             activePanel = nil
+                        }
+                    }
+                }
+        )
+    }
+    
+    // MARK: - Distraction-Free Bookmarks Panel
+    private var bookmarksPanel: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Header
+            HStack {
+                Image(systemName: "bookmark")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(Color.accentColor)
+                
+                Text("Bookmarks")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(theme.primary)
+                
+                Spacer()
+                
+                Button(action: {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        isCollapsed = true
+                        UserDefaults.standard.set(true, forKey: "floatingToolbarIsCollapsed")
+                    }
+                }) {
+                    Image(systemName: "arrow.right")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(theme.secondary)
+                        .frame(width: 24, height: 24)
+                        .background(Circle().fill(theme.secondary.opacity(0.1)))
+                }
+                .buttonStyle(PlainButtonStyle())
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            
+            Divider()
+                .foregroundStyle(theme.secondary.opacity(0.2))
+            
+            // Bookmarks content
+            ScrollView {
+                bookmarksContent
+                    .padding(16)
+            }
+            .frame(maxHeight: 500)
+        }
+        .frame(width: 320, alignment: .leading)
+        .background(
+            // Glassmorphism effect for panel (matching toolbar)
+            ZStack {
+                // Base blur
+                Rectangle()
+                    .fill(.ultraThinMaterial)
+                
+                // Gradient overlay
+                LinearGradient(
+                    gradient: Gradient(colors: [
+                        theme.background.opacity(0.3),
+                        theme.background.opacity(0.1)
+                    ]),
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            }
+        )
+        .overlay(
+            // Border
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(
+                    LinearGradient(
+                        gradient: Gradient(colors: [
+                            Color.white.opacity(0.2),
+                            Color.white.opacity(0.05)
+                        ]),
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1
+                )
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .shadow(color: Color.black.opacity(0.2), radius: 20, x: -4, y: 0)
+        // Add swipe gesture to hide panel when expanded
+        .gesture(
+            DragGesture()
+                .onChanged { value in
+                    if value.translation.width > 0 {
+                        // Slow down the manual drag by applying a damping factor
+                        dragAmount = CGSize(
+                            width: value.translation.width * 0.4, // 40% of actual drag distance
+                            height: value.translation.height
+                        )
+                    }
+                }
+                .onEnded { value in
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        dragAmount = .zero
+                        // Swipe right to hide panel (using original translation for threshold)
+                        if value.translation.width > 50 {
+                            isCollapsed = true
+                            UserDefaults.standard.set(true, forKey: "floatingToolbarIsCollapsed")
                         }
                     }
                 }
@@ -221,13 +335,17 @@ struct FloatingContextualToolbar: View {
                 DragGesture()
                     .onChanged { value in
                         if value.translation.width < 0 {
-                            dragAmount = value.translation
+                            // Slow down the manual drag by applying a damping factor
+                            dragAmount = CGSize(
+                                width: value.translation.width * 0.4, // 40% of actual drag distance
+                                height: value.translation.height
+                            )
                         }
                     }
                     .onEnded { value in
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                             dragAmount = .zero
-                            // Swipe left to show toolbar
+                            // Swipe left to show toolbar (using original translation for threshold)
                             if value.translation.width < -50 {
                                 isCollapsed = false
                                 UserDefaults.standard.set(false, forKey: "floatingToolbarIsCollapsed")
