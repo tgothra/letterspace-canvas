@@ -382,7 +382,7 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
         var textView: UITextView?
         var availableHeight: CGFloat = 0
         var isCurrentlyEditing: Bool = false
-        var formattingToolbarController: IOSFormattingToolbarHostingController?
+
 
         private var scrollToTopObserver: NSObjectProtocol?
         
@@ -517,9 +517,6 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
             isFocused = true
             print("📝 Text view began editing")
             
-            // Refresh formatting toolbar with current selection state
-            refreshFormattingToolbar()
-            
             // Temporarily pause heavy background operations during initial editing
             pauseBackgroundOperations()
         }
@@ -540,12 +537,7 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
             return true // Always allow editing
         }
         
-        func textViewDidChangeSelection(_ textView: UITextView) {
-            // Refresh formatting toolbar when selection changes to reflect current formatting
-            if textView.isFirstResponder {
-                refreshFormattingToolbar()
-            }
-        }
+
         
         // MARK: - Background Operations Management
         private func pauseBackgroundOperations() {
@@ -562,7 +554,6 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
         
         // MARK: - Formatting Toolbar Setup
         func setupFormattingToolbar(for textView: UITextView, colorScheme: ColorScheme) {
-            // Create toolbar with initial formatting state
             let toolbar = IOSTextFormattingToolbar(
                 onBold: { [weak self] in
                     self?.toggleBold()
@@ -600,52 +591,6 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
             
             let hostingController = IOSFormattingToolbarHostingController(toolbar: toolbar)
             textView.inputAccessoryView = hostingController.view
-            
-            // Store reference to update toolbar state when keyboard appears
-            self.formattingToolbarController = hostingController
-        }
-        
-        // Add method to refresh toolbar formatting state
-        func refreshFormattingToolbar() {
-            guard let controller = formattingToolbarController else { return }
-            
-            let currentFormatting = getCurrentFormatting()
-            let updatedToolbar = IOSTextFormattingToolbar(
-                onBold: { [weak self] in
-                    self?.toggleBold()
-                },
-                onItalic: { [weak self] in
-                    self?.toggleItalic()
-                },
-                onUnderline: { [weak self] in
-                    self?.toggleUnderline()
-                },
-                onLink: { [weak self] in
-                    self?.insertLink()
-                },
-                onTextColor: { [weak self] color in
-                    self?.applyTextColor(color)
-                },
-                onHighlight: { [weak self] color in
-                    self?.applyHighlight(color)
-                },
-                onBulletList: { [weak self] in
-                    self?.toggleBulletList()
-                },
-                onAlignment: { [weak self] alignment in
-                    self?.applyAlignment(alignment)
-                },
-                onDismiss: { [weak self] in
-                    self?.textView?.resignFirstResponder()
-                },
-                isBold: currentFormatting.isBold,
-                isItalic: currentFormatting.isItalic,
-                isUnderlined: currentFormatting.isUnderlined,
-                hasLink: currentFormatting.hasLink,
-                hasBulletList: currentFormatting.hasBulletList
-            )
-            
-            controller.rootView = updatedToolbar
         }
         
         // MARK: - Text Formatting Methods
