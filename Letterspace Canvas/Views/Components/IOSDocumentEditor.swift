@@ -251,16 +251,16 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
         scrollView.alwaysBounceVertical = true
         scrollView.keyboardDismissMode = .interactive
         scrollView.delegate = context.coordinator
-        scrollView.isScrollEnabled = true // Explicitly enable scrolling
-        scrollView.bounces = true // Enable bouncing
-        scrollView.scrollsToTop = true // Enable scroll to top gesture
+        scrollView.isScrollEnabled = true
+        scrollView.bounces = true
+        scrollView.scrollsToTop = true
         
-        // Configure text view with optimized settings for typing performance
+        // Configure text view with optimized settings for immediate keyboard response
         textView.delegate = context.coordinator
         textView.font = UIFont.systemFont(ofSize: 16, weight: .regular)
         textView.backgroundColor = UIColor.clear
         textView.textColor = colorScheme == .dark ? UIColor.white : UIColor.black
-        textView.isScrollEnabled = false // Disable text view scrolling, let scroll view handle it
+        textView.isScrollEnabled = false
         textView.isEditable = true
         textView.isSelectable = true
         textView.isUserInteractionEnabled = true
@@ -268,23 +268,21 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
         textView.textContainer.lineFragmentPadding = 0
         textView.text = text
         
-        // Optimize for typing performance and fast keyboard response
-        textView.autocorrectionType = .default
-        textView.spellCheckingType = .default
-        textView.smartDashesType = .default
-        textView.smartQuotesType = .default
-        textView.smartInsertDeleteType = .default
+        // Aggressive keyboard optimization - minimal configuration for fastest response
+        textView.autocorrectionType = .no // Disable to speed up keyboard
+        textView.spellCheckingType = .no // Disable to speed up keyboard
+        textView.smartDashesType = .no // Disable to speed up keyboard
+        textView.smartQuotesType = .no // Disable to speed up keyboard
+        textView.smartInsertDeleteType = .no // Disable to speed up keyboard
         textView.keyboardType = .default
         textView.returnKeyType = .default
         textView.keyboardAppearance = .default
+        textView.inputAccessoryView = nil
         
-        // Optimize for faster keyboard presentation
-        textView.inputAccessoryView = nil // Remove any accessory views that might interfere
-        textView.resignFirstResponder() // Start unfocused
-        
-        // Pre-warm the input system for faster keyboard response (iOS optimization)
+        // Make text view immediately ready for input
         textView.isHidden = false
         textView.alpha = 1.0
+        textView.resignFirstResponder() // Start unfocused but ready
         
         // Add text view to scroll view with manual frame positioning (no Auto Layout)
         // This prevents conflicts with updateTextViewContentSize which sets frames manually
@@ -302,6 +300,10 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
         context.coordinator.onTextChange = onTextChange
         context.coordinator.onScrollChange = onScrollChange
         
+        // Add direct tap gesture to text view for immediate focus
+        let tapGesture = UITapGestureRecognizer(target: context.coordinator, action: #selector(context.coordinator.textViewTapped))
+        textView.addGestureRecognizer(tapGesture)
+        
         // Initial content size calculation - defer to improve initial response time
         DispatchQueue.main.async {
             context.coordinator.updateTextViewContentSize()
@@ -316,14 +318,11 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
     func updateUIView(_ scrollView: UIScrollView, context: Context) {
         guard let textView = context.coordinator.textView else { return }
         
-        // Only update text if it changed AND the text view is not currently being edited
-        // This prevents interrupting the user's typing
-        if textView.text != text && !textView.isFirstResponder {
+        // Minimal updates to prevent delays - only update when absolutely necessary
+        
+        // Update text only if changed and not actively editing
+        if textView.text != text && !context.coordinator.isCurrentlyEditing {
             textView.text = text
-            // Skip content size update during focus changes to improve keyboard response time
-            if !isFocused {
-                context.coordinator.updateTextViewContentSize()
-            }
         }
         
         // Update colors only if needed
@@ -332,19 +331,19 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
             textView.textColor = expectedColor
         }
         
-        // Update focus state only when necessary and not during active editing
-        if isFocused && !textView.isFirstResponder {
-            // Remove async delay for immediate keyboard response
+        // Simplified focus handling - let the direct tap gesture handle most focus changes
+        if isFocused && !textView.isFirstResponder && !context.coordinator.isCurrentlyEditing {
             textView.becomeFirstResponder()
         } else if !isFocused && textView.isFirstResponder && !context.coordinator.isCurrentlyEditing {
             textView.resignFirstResponder()
         }
         
-        // Only update content size if available height actually changed
+        // Defer content size updates to avoid blocking keyboard presentation
         if context.coordinator.availableHeight != availableHeight {
             context.coordinator.availableHeight = availableHeight
-            context.coordinator.updateTextViewContentSize()
-            print("📐 iOS: Available height changed from \(context.coordinator.availableHeight) to \(availableHeight)")
+            DispatchQueue.main.async {
+                context.coordinator.updateTextViewContentSize()
+            }
         }
     }
     
@@ -502,6 +501,19 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
         
         func textViewShouldBeginEditing(_ textView: UITextView) -> Bool {
             return true // Always allow editing
+        }
+        
+        @objc func textViewTapped() {
+            // Direct focus handling bypassing SwiftUI binding delays
+            guard let textView = textView else { return }
+            
+            if !textView.isFirstResponder {
+                // Force immediate focus
+                textView.becomeFirstResponder()
+                isCurrentlyEditing = true
+                isFocused = true
+                print("📝 Direct tap - immediate focus")
+            }
         }
         
         // MARK: - UIScrollViewDelegate
