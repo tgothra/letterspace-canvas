@@ -8,11 +8,12 @@ struct IOSTextFormattingToolbar: View {
     let onItalic: () -> Void
     let onUnderline: () -> Void
     let onLink: () -> Void
-    let onTextColor: (Color) -> Void
-    let onHighlight: (Color) -> Void
-    let onBulletList: () -> Void
-    let onAlignment: (TextAlignment) -> Void
     let onDismiss: () -> Void
+    
+    // Callbacks to toggle picker views in the parent
+    let onToggleTextColor: () -> Void
+    let onToggleHighlight: () -> Void
+    let onToggleAlignment: () -> Void
     
     // Active state properties
     let isBold: Bool
@@ -21,120 +22,57 @@ struct IOSTextFormattingToolbar: View {
     let hasLink: Bool
     let hasBulletList: Bool
     
-    @State private var showColorPicker = false
-    @State private var showHighlightPicker = false
-    @State private var showAlignmentPicker = false
-    @Environment(\.colorScheme) var colorScheme
+    // Bindings to show active state on picker buttons
+    @Binding var isTextColorPickerVisible: Bool
+    @Binding var isHighlightPickerVisible: Bool
+    @Binding var isAlignmentPickerVisible: Bool
     
     var body: some View {
-        VStack(spacing: 0) {
-            // Expandable sections (appear ABOVE main toolbar)
-            if showColorPicker {
-                ColorPickerSection(
-                    title: "Text Color",
-                    colors: [.black, .gray, .red, .orange, .brown, .pink, .blue, .green, .purple],
-                    onColorSelect: { color in
-                        onTextColor(color)
-                        withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
-                            showColorPicker = false
-                        }
-                    }
-                )
-                .transition(.move(edge: .bottom).combined(with: .opacity))
+        HStack(spacing: 0) {
+            // Basic formatting
+            FormattingGroup {
+                IOSToolbarButton(icon: "bold", isActive: isBold, action: onBold)
+                IOSToolbarButton(icon: "italic", isActive: isItalic, action: onItalic)
+                IOSToolbarButton(icon: "underline", isActive: isUnderlined, action: onUnderline)
             }
             
-            if showHighlightPicker {
-                ColorPickerSection(
-                    title: "Highlight",
-                    colors: [.clear, .yellow, .green, .blue, .pink, .purple, .orange],
-                    onColorSelect: { color in
-                        onHighlight(color)
-                        withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
-                            showHighlightPicker = false
-                        }
-                    }
-                )
-                .transition(.move(edge: .bottom).combined(with: .opacity))
+            Divider().frame(height: 24).padding(.horizontal, 8)
+            
+            // Text styling
+            FormattingGroup {
+                IOSToolbarButton(icon: "textformat", isActive: isTextColorPickerVisible, action: onToggleTextColor)
+                IOSToolbarButton(icon: "highlighter", isActive: isHighlightPickerVisible, action: onToggleHighlight)
+                IOSToolbarButton(icon: "link", isActive: hasLink, action: onLink)
             }
             
-            if showAlignmentPicker {
-                AlignmentPickerSection(onAlignment: { alignment in
-                    onAlignment(alignment)
-                    withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
-                        showAlignmentPicker = false
-                    }
-                })
-                .transition(.move(edge: .bottom).combined(with: .opacity))
+            Divider().frame(height: 24).padding(.horizontal, 8)
+            
+            // Lists and alignment
+            FormattingGroup {
+                // Placeholder for bullet list button
+                // IOSToolbarButton(icon: "list.bullet", isActive: hasBulletList, action: onBulletList)
+                IOSToolbarButton(icon: "text.alignleft", isActive: isAlignmentPickerVisible, action: onToggleAlignment)
             }
             
-            // Main toolbar (always at bottom)
-            HStack(spacing: 0) {
-                // Basic formatting
-                FormattingGroup {
-                    IOSToolbarButton(icon: "bold", isActive: isBold, action: onBold)
-                    IOSToolbarButton(icon: "italic", isActive: isItalic, action: onItalic)
-                    IOSToolbarButton(icon: "underline", isActive: isUnderlined, action: onUnderline)
-                }
-                
-                Divider()
-                    .frame(height: 24)
-                    .padding(.horizontal, 8)
-                
-                // Text styling
-                FormattingGroup {
-                    IOSToolbarButton(icon: "textformat", isActive: showColorPicker) {
-                        withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
-                            showColorPicker.toggle()
-                            showHighlightPicker = false
-                            showAlignmentPicker = false
-                        }
-                    }
-                    IOSToolbarButton(icon: "highlighter", isActive: showHighlightPicker) {
-                        withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
-                            showHighlightPicker.toggle()
-                            showColorPicker = false
-                            showAlignmentPicker = false
-                        }
-                    }
-                    IOSToolbarButton(icon: "link", isActive: hasLink, action: onLink)
-                }
-                
-                Divider()
-                    .frame(height: 24)
-                    .padding(.horizontal, 8)
-                
-                // Lists and alignment
-                FormattingGroup {
-                    IOSToolbarButton(icon: "list.bullet", isActive: hasBulletList, action: onBulletList)
-                    IOSToolbarButton(icon: "text.alignleft", isActive: showAlignmentPicker) {
-                        withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
-                            showAlignmentPicker.toggle()
-                            showColorPicker = false
-                            showHighlightPicker = false
-                        }
-                    }
-                }
-                
-                Spacer()
-                
-                // Dismiss button
-                IOSToolbarButton(icon: "keyboard.chevron.compact.down", action: onDismiss)
-                    .padding(.trailing, 8)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-            .background(
-                Rectangle()
-                    .fill(.ultraThinMaterial)
-                    .overlay(
-                        Rectangle()
-                            .fill(colorScheme == .dark ? Color.white.opacity(0.1) : Color.black.opacity(0.05))
-                            .frame(height: 0.5)
-                            .frame(maxHeight: .infinity, alignment: .top)
-                    )
-            )
+            Spacer()
+            
+            // Dismiss button
+            IOSToolbarButton(icon: "keyboard.chevron.compact.down", action: onDismiss)
+                .padding(.trailing, 8)
         }
-        .background(Color.clear)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    Rectangle()
+                        .fill(Color(UIColor.separator))
+                        .frame(height: 0.5)
+                        .frame(maxHeight: .infinity, alignment: .top)
+                )
+        )
+        .frame(height: 50)
     }
 }
 
@@ -203,7 +141,9 @@ private struct IOSToolbarButton: View {
     }
 }
 
-private struct ColorPickerSection: View {
+// MARK: - Picker Views (to be shown as overlays by parent)
+
+struct IOSColorPicker: View {
     let title: String
     let colors: [Color]
     let onColorSelect: (Color) -> Void
@@ -214,7 +154,7 @@ private struct ColorPickerSection: View {
             HStack {
                 Text(title)
                     .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                    .foregroundColor(.primary)
                 Spacer()
             }
             .padding(.horizontal, 16)
@@ -233,17 +173,34 @@ private struct ColorPickerSection: View {
         }
         .background(
             Rectangle()
-                .fill(colorScheme == .dark ? Color(.sRGB, white: 0.15) : Color(.sRGB, white: 0.95))
-                .overlay(
-                    Rectangle()
-                        .fill(colorScheme == .dark ? Color.white.opacity(0.1) : Color.black.opacity(0.05))
-                        .frame(height: 0.5)
-                        .frame(maxHeight: .infinity, alignment: .bottom)
-                )
+                .fill(.ultraThinMaterial)
         )
+        .frame(height: 75)
     }
 }
 
+struct IOSAlignmentPicker: View {
+    let onAlignment: (TextAlignment) -> Void
+    @Environment(\.colorScheme) var colorScheme
+    
+    var body: some View {
+        HStack(spacing: 16) {
+            IOSToolbarButton(icon: "text.alignleft") { onAlignment(.leading) }
+            IOSToolbarButton(icon: "text.aligncenter") { onAlignment(.center) }
+            IOSToolbarButton(icon: "text.alignright") { onAlignment(.trailing) }
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(
+            Rectangle()
+                .fill(.ultraThinMaterial)
+        )
+        .frame(height: 50)
+    }
+}
+
+// Re-add the missing ColorButton helper view
 private struct ColorButton: View {
     let color: Color
     let onSelect: () -> Void
@@ -253,7 +210,6 @@ private struct ColorButton: View {
         Button(action: onSelect) {
             Group {
                 if color == .clear {
-                    // Clear/default color button
                     ZStack {
                         Circle()
                             .stroke(Color.red, lineWidth: 2)
@@ -269,10 +225,7 @@ private struct ColorButton: View {
                     Circle()
                         .fill(color)
                         .frame(width: 32, height: 32)
-                        .overlay(
-                            Circle()
-                                .stroke(Color.primary.opacity(0.2), lineWidth: 1)
-                        )
+                        .overlay(Circle().stroke(Color.primary.opacity(0.2), lineWidth: 1))
                 }
             }
             .scaleEffect(isPressed ? 0.9 : 1.0)
@@ -286,85 +239,19 @@ private struct ColorButton: View {
     }
 }
 
-private struct AlignmentPickerSection: View {
-    let onAlignment: (TextAlignment) -> Void
-    @Environment(\.colorScheme) var colorScheme
-    
-    var body: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Text("Alignment")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(colorScheme == .dark ? .white : .black)
-                Spacer()
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 12)
-            .padding(.bottom, 8)
-            
-            HStack(spacing: 16) {
-                IOSToolbarButton(icon: "text.alignleft") { onAlignment(.leading) }
-                IOSToolbarButton(icon: "text.aligncenter") { onAlignment(.center) }
-                IOSToolbarButton(icon: "text.alignright") { onAlignment(.trailing) }
-                Spacer()
-            }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 12)
-        }
-        .background(
-            Rectangle()
-                .fill(colorScheme == .dark ? Color(.sRGB, white: 0.15) : Color(.sRGB, white: 0.95))
-                .overlay(
-                    Rectangle()
-                        .fill(colorScheme == .dark ? Color.white.opacity(0.1) : Color.black.opacity(0.05))
-                        .frame(height: 0.5)
-                        .frame(maxHeight: .infinity, alignment: .bottom)
-                )
-        )
-    }
-}
-
 // MARK: - UIKit Integration
 class IOSFormattingToolbarHostingController: UIHostingController<IOSTextFormattingToolbar> {
     init(toolbar: IOSTextFormattingToolbar) {
         super.init(rootView: toolbar)
         
-        // Configure for keyboard accessory
         view.backgroundColor = UIColor.clear
         view.translatesAutoresizingMaskIntoConstraints = false
-        
-        // Set intrinsic content size - start with main toolbar height
-        preferredContentSize = CGSize(width: UIScreen.main.bounds.width, height: 50)
+        // Use preferredContentSize, not intrinsicContentSize
+        self.preferredContentSize = CGSize(width: UIScreen.main.bounds.width, height: 50)
     }
     
     required init?(coder aDecoder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
-    }
-    
-    override func viewDidLoad() {
-        super.viewDidLoad()
-        view.backgroundColor = UIColor.clear
-        
-        // Enable automatic height adjustment
-        view.translatesAutoresizingMaskIntoConstraints = false
-        view.setContentCompressionResistancePriority(.required, for: .vertical)
-        view.setContentHuggingPriority(.required, for: .vertical)
-    }
-    
-    override func viewDidLayoutSubviews() {
-        super.viewDidLayoutSubviews()
-        
-        // Automatically adjust height based on content
-        let targetSize = CGSize(width: view.bounds.width, height: UIView.layoutFittingCompressedSize.height)
-        let fittingSize = view.systemLayoutSizeFitting(targetSize, withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel)
-        
-        if fittingSize.height != preferredContentSize.height {
-            preferredContentSize = CGSize(width: UIScreen.main.bounds.width, height: fittingSize.height)
-        }
-    }
-    
-    func updateHeight(to height: CGFloat) {
-        preferredContentSize = CGSize(width: UIScreen.main.bounds.width, height: height)
     }
 }
 
