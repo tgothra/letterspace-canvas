@@ -75,8 +75,10 @@ struct IOSDocumentEditor: View {
         }
 
         .onTapGesture {
-            // Focus the text editor when tapped
-            isFocused = true
+            // Focus the text editor when tapped - use async to prevent conflicts
+            DispatchQueue.main.async {
+                isFocused = true
+            }
         }
     }
     
@@ -255,18 +257,31 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
         scrollView.bounces = true // Enable bouncing
         scrollView.scrollsToTop = true // Enable scroll to top gesture
         
-        // Configure text view
+        // Configure text view with optimized settings for typing performance
         textView.delegate = context.coordinator
         textView.font = UIFont.systemFont(ofSize: 16, weight: .regular)
         textView.backgroundColor = UIColor.clear
         textView.textColor = colorScheme == .dark ? UIColor.white : UIColor.black
         textView.isScrollEnabled = false // Disable text view scrolling, let scroll view handle it
-        textView.isEditable = true // Ensure text view is editable
-        textView.isSelectable = true // Ensure text view is selectable
-        textView.isUserInteractionEnabled = true // Ensure user can interact
+        textView.isEditable = true
+        textView.isSelectable = true
+        textView.isUserInteractionEnabled = true
         textView.textContainerInset = UIEdgeInsets(top: 16, left: 24, bottom: 16, right: 24)
         textView.textContainer.lineFragmentPadding = 0
         textView.text = text
+        
+        // Optimize for typing performance
+        textView.autocorrectionType = .default
+        textView.spellCheckingType = .default
+        textView.smartDashesType = .default
+        textView.smartQuotesType = .default
+        textView.smartInsertDeleteType = .default
+        textView.keyboardType = .default
+        textView.returnKeyType = .default
+        
+        // Ensure the text view maintains focus during editing
+        textView.resignFirstResponder() // Start unfocused
+        textView.inputAccessoryView = nil // Remove any accessory views that might interfere
         
         // Add text view to scroll view with manual frame positioning (no Auto Layout)
         // This prevents conflicts with updateTextViewContentSize which sets frames manually
@@ -296,8 +311,9 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
     func updateUIView(_ scrollView: UIScrollView, context: Context) {
         guard let textView = context.coordinator.textView else { return }
         
-        // Update text if it changed
-        if textView.text != text {
+        // Only update text if it changed AND the text view is not currently being edited
+        // This prevents interrupting the user's typing
+        if textView.text != text && !textView.isFirstResponder {
             textView.text = text
             context.coordinator.updateTextViewContentSize()
         }
@@ -308,10 +324,12 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
             textView.textColor = expectedColor
         }
         
-        // Update focus state
+        // Update focus state only when necessary and not during active editing
         if isFocused && !textView.isFirstResponder {
-            textView.becomeFirstResponder()
-        } else if !isFocused && textView.isFirstResponder {
+            DispatchQueue.main.async {
+                textView.becomeFirstResponder()
+            }
+        } else if !isFocused && textView.isFirstResponder && !textView.isEditing {
             textView.resignFirstResponder()
         }
         
@@ -321,8 +339,6 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
             context.coordinator.updateTextViewContentSize()
             print("📐 iOS: Available height changed from \(context.coordinator.availableHeight) to \(availableHeight)")
         }
-        
-
     }
     
     func makeCoordinator() -> Coordinator {
@@ -349,6 +365,7 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
             if let observer = scrollToTopObserver {
                 NotificationCenter.default.removeObserver(observer)
             }
+            textChangeTimer?.invalidate()
         }
         
         func setupScrollToTopNotification() {
@@ -437,29 +454,44 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
         
         // MARK: - UITextViewDelegate
         private var lastTextLength: Int = 0
-        private let textLengthThreshold: Int = 50 // Only update content size every 50 characters
+        private let textLengthThreshold: Int = 100 // Only update content size every 100 characters
+        private var textChangeTimer: Timer?
         
         func textViewDidChange(_ textView: UITextView) {
-            // Update binding
+            // Update binding immediately for responsiveness
             text = textView.text
             
-            // Call change handler
-            onTextChange?(textView.text)
+            // Debounce the document save to prevent excessive saves during typing
+            textChangeTimer?.invalidate()
+            textChangeTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { _ in
+                self.onTextChange?(textView.text)
+            }
             
             // Only update content size if text length changed significantly to improve performance
             let currentLength = textView.text.count
             if abs(currentLength - lastTextLength) > textLengthThreshold {
                 lastTextLength = currentLength
-                updateTextViewContentSize()
+                DispatchQueue.main.async {
+                    self.updateTextViewContentSize()
+                }
             }
         }
         
         func textViewDidBeginEditing(_ textView: UITextView) {
             isFocused = true
+            print("📝 Text view began editing")
         }
         
         func textViewDidEndEditing(_ textView: UITextView) {
             isFocused = false
+            // Save any pending changes when editing ends
+            textChangeTimer?.invalidate()
+            onTextChange?(textView.text)
+            print("📝 Text view ended editing")
+        }
+        
+        func textViewShouldBeginEditing(_ textView: UITextView) -> Bool {
+            return true // Always allow editing
         }
         
         // MARK: - UIScrollViewDelegate
