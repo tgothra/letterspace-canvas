@@ -260,10 +260,12 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
         textView.font = UIFont.systemFont(ofSize: 16, weight: .regular)
         textView.backgroundColor = UIColor.clear
         textView.textColor = colorScheme == .dark ? UIColor.white : UIColor.black
+        textView.tintColor = UIColor.systemBlue // Ensure cursor color is visible
         textView.isScrollEnabled = false
         textView.isEditable = true
         textView.isSelectable = true
         textView.isUserInteractionEnabled = true
+        textView.allowsEditingTextAttributes = true
         textView.textContainerInset = UIEdgeInsets(top: 16, left: 24, bottom: 16, right: 24)
         textView.textContainer.lineFragmentPadding = 0
         textView.text = text
@@ -333,7 +335,14 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
         
         // Simplified focus handling - let the direct tap gesture handle most focus changes
         if isFocused && !textView.isFirstResponder && !context.coordinator.isCurrentlyEditing {
-            textView.becomeFirstResponder()
+            let didBecome = textView.becomeFirstResponder()
+            if didBecome {
+                // Ensure cursor is visible after becoming first responder
+                DispatchQueue.main.async {
+                    let endPosition = textView.endOfDocument
+                    textView.selectedTextRange = textView.textRange(from: endPosition, to: endPosition)
+                }
+            }
         } else if !isFocused && textView.isFirstResponder && !context.coordinator.isCurrentlyEditing {
             textView.resignFirstResponder()
         }
@@ -487,7 +496,14 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
         func textViewDidBeginEditing(_ textView: UITextView) {
             isCurrentlyEditing = true
             isFocused = true
-            print("📝 Text view began editing")
+            print("📝 Text view began editing - isFirstResponder: \(textView.isFirstResponder)")
+            
+            // Ensure cursor is visible when editing begins
+            DispatchQueue.main.async {
+                let endPosition = textView.endOfDocument
+                textView.selectedTextRange = textView.textRange(from: endPosition, to: endPosition)
+                print("📝 Set cursor position at end of document")
+            }
         }
         
         func textViewDidEndEditing(_ textView: UITextView) {
@@ -508,11 +524,24 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
             guard let textView = textView else { return }
             
             if !textView.isFirstResponder {
-                // Force immediate focus
-                textView.becomeFirstResponder()
+                // Ensure text view is properly configured for editing
+                textView.isEditable = true
+                textView.isSelectable = true
+                textView.isUserInteractionEnabled = true
+                
+                // Force immediate focus and ensure cursor appears
+                let didBecome = textView.becomeFirstResponder()
+                print("📝 Direct tap - becomeFirstResponder result: \(didBecome)")
+                
+                // Update state
                 isCurrentlyEditing = true
                 isFocused = true
-                print("📝 Direct tap - immediate focus")
+                
+                // Force cursor to appear by setting selection
+                DispatchQueue.main.async {
+                    let endPosition = textView.endOfDocument
+                    textView.selectedTextRange = textView.textRange(from: endPosition, to: endPosition)
+                }
             }
         }
         
