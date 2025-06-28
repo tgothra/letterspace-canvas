@@ -24,7 +24,7 @@ struct IOSDocumentEditor: View {
     @State private var showAlignmentPicker = false
     @State private var activePicker: PickerType? = nil
     
-    private enum PickerType {
+    enum PickerType {
         case textColor, highlight, alignment
     }
     
@@ -664,9 +664,9 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
                 isUnderlined: getCurrentFormatting().isUnderlined,
                 hasLink: getCurrentFormatting().hasLink,
                 hasBulletList: getCurrentFormatting().hasBulletList,
-                isTextColorPickerVisible: isTextColorPickerVisible,
-                isHighlightPickerVisible: isHighlightPickerVisible,
-                isAlignmentPickerVisible: isAlignmentPickerVisible
+                isTextColorPickerVisible: $isTextColorPickerVisible,
+                isHighlightPickerVisible: $isHighlightPickerVisible,
+                isAlignmentPickerVisible: $isAlignmentPickerVisible
             )
             
             let hostingController = IOSFormattingToolbarHostingController(toolbar: toolbar)
