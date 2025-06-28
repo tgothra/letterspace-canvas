@@ -2262,6 +2262,7 @@ struct MainLayout: View {
                             sidebarMode: $sidebarMode, isRightSidebarVisible: $isRightSidebarVisible,
                             folders: $folders, onAddFolder: addFolder
                         )
+
                     }
                     .frame(width: 72)
                 }
@@ -2386,6 +2387,8 @@ struct MainLayout: View {
                         showBibleReaderModal = true
                     }
                 })
+                
+
             }
             .headerProminence(.increased)
 
@@ -3385,7 +3388,8 @@ struct MainLayout: View {
                         sidebarMode: .constant(.details),
                         isRightSidebarVisible: .constant(false),
                         isCollapsed: $isFloatingToolbarCollapsed,
-                        dragAmount: $toolbarDragAmount
+                        dragAmount: $toolbarDragAmount,
+                        isDistractionFreeMode: viewMode.isDistractionFreeMode
                     )
                     .padding(.trailing, isFloatingToolbarCollapsed ? 8 : 24) // Closer to edge when collapsed
                 }
@@ -3423,57 +3427,153 @@ struct MainLayout: View {
                 .ignoresSafeArea()
             }
             #endif
+            
+            // Floating Distraction-Free Mode Button - only show when in document mode
+            if sidebarMode != .allDocuments {
+                VStack {
+                    Spacer()
+                    HStack {
+                                            Spacer()
+                    
+                    Button(action: {
+                        withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                            if viewMode.isDistractionFreeMode {
+                                viewMode = .normal
+                                // Restore right sidebar when exiting distraction-free mode
+                                isRightSidebarVisible = true
+                            } else {
+                                viewMode = .distractionFree
+                                isRightSidebarVisible = false
+                            }
+                        }
+                    }) {
+                        Image(systemName: viewMode.isDistractionFreeMode ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(Color.white)
+                            .frame(width: 44, height: 44)
+                            .background(
+                                Circle()
+                                    .fill(Color.black.opacity(0.8))
+                                    .overlay(
+                                        Circle()
+                                            .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                                    )
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .help(viewMode.isDistractionFreeMode ? "Exit Distraction-Free Mode" : "Enter Distraction-Free Mode")
+                    .scaleEffect(isHoveringDistraction ? 1.05 : 1.0)
+                    .onHover { hovering in
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            isHoveringDistraction = hovering
+                        }
+                    }
+                    .padding(.trailing, 20) // Position in far right corner
+                    .padding(.bottom, 20)
+                }
+            }
+            .allowsHitTesting(true)
+            }
         }
     }
-    
+
     // Helper view for iPad detail and right sidebar combination
     @ViewBuilder  
     private func detailAndRightSidebarView(geometry: GeometryProxy) -> some View {
-        HStack(spacing: 0) {
-            // Main content area
-            ZStack(alignment: .trailing) {
-                mainContentView(availableWidth: calculateMainContentWidth(
-                    overallWidth: geometry.size.width,
-                    isIPadContext: true,
-                    isLeftSidebarVisibleForContext: false // NavigationView handles the primary sidebar
-                ))
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        ZStack {
+            HStack(spacing: 0) {
+                // Main content area
+                ZStack(alignment: .trailing) {
+                    mainContentView(availableWidth: calculateMainContentWidth(
+                        overallWidth: geometry.size.width,
+                        isIPadContext: true,
+                        isLeftSidebarVisibleForContext: false // NavigationView handles the primary sidebar
+                    ))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                if viewMode.isDistractionFreeMode && !document.markers.filter({ $0.type == "bookmark" }).isEmpty {
-                    #if os(macOS)
-                    VerticalBookmarkTimelineView(activeDocument: document)
-                        .frame(width: 170)
-                        .padding(.trailing, 15)
-                        .transition(.asymmetric(
-                            insertion: .opacity.combined(with: .move(edge: .trailing)),
-                            removal: .identity
-                        ))
-                        .animation(viewMode.isDistractionFreeMode ? .spring(response: 0.4, dampingFraction: 0.7) : nil, value: viewMode)
-                    #endif
+                    if viewMode.isDistractionFreeMode && !document.markers.filter({ $0.type == "bookmark" }).isEmpty {
+                        #if os(macOS)
+                        VerticalBookmarkTimelineView(activeDocument: document)
+                            .frame(width: 170)
+                            .padding(.trailing, 15)
+                            .transition(.asymmetric(
+                                insertion: .opacity.combined(with: .move(edge: .trailing)),
+                                removal: .identity
+                            ))
+                            .animation(viewMode.isDistractionFreeMode ? .spring(response: 0.4, dampingFraction: 0.7) : nil, value: viewMode)
+                        #endif
+                    }
+                    
                 }
-                
-            }
-            .frame(maxWidth: .infinity)
+                .frame(maxWidth: .infinity)
 
 
-            // Right sidebar (macOS always, iPad when explicitly shown)
-            #if os(macOS)
-            if !viewMode.shouldHideSidebars && isRightSidebarVisible {
-                rightSidebarContent
-                    .frame(width: rightSidebarWidth)
-                    .transition(.move(edge: .trailing))
+                // Right sidebar (macOS always, iPad when explicitly shown)
+                #if os(macOS)
+                if !viewMode.shouldHideSidebars && isRightSidebarVisible {
+                    rightSidebarContent
+                        .frame(width: rightSidebarWidth)
+                        .transition(.move(edge: .trailing))
+                }
+                #elseif os(iOS)
+                // On iPhone, show the sidebar normally. On iPad, never show it (use floating toolbar instead)
+                if !viewMode.shouldHideSidebars && isRightSidebarVisible && UIDevice.current.userInterfaceIdiom == .phone {
+                    rightSidebarContent
+                        .frame(width: rightSidebarWidth)
+                        .transition(.move(edge: .trailing))
+                }
+                #endif
             }
-            #elseif os(iOS)
-            // On iPhone, show the sidebar normally. On iPad, never show it (use floating toolbar instead)
-            if !viewMode.shouldHideSidebars && isRightSidebarVisible && UIDevice.current.userInterfaceIdiom == .phone {
-                rightSidebarContent
-                    .frame(width: rightSidebarWidth)
-                    .transition(.move(edge: .trailing))
+            
+            // Floating Distraction-Free Mode Button - only show when in document mode
+            if sidebarMode != .allDocuments {
+                VStack {
+                    Spacer()
+                    HStack {
+                        Spacer()
+                        
+                        Button(action: {
+                            withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                                if viewMode.isDistractionFreeMode {
+                                    viewMode = .normal
+                                    // Restore right sidebar when exiting distraction-free mode
+                                    isRightSidebarVisible = true
+                                } else {
+                                    viewMode = .distractionFree
+                                    isRightSidebarVisible = false
+                                }
+                            }
+                        }) {
+                            Image(systemName: viewMode.isDistractionFreeMode ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundStyle(Color.white)
+                                .frame(width: 44, height: 44)
+                                .background(
+                                    Circle()
+                                        .fill(Color.black.opacity(0.8))
+                                        .overlay(
+                                            Circle()
+                                                .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                                        )
+                                )
+                        }
+                        .buttonStyle(.plain)
+                        .help(viewMode.isDistractionFreeMode ? "Exit Distraction-Free Mode" : "Enter Distraction-Free Mode")
+                        .scaleEffect(isHoveringDistraction ? 1.05 : 1.0)
+                        .onHover { hovering in
+                            withAnimation(.easeInOut(duration: 0.3)) {
+                                isHoveringDistraction = hovering
+                            }
+                        }
+                        .padding(.trailing, 20) // Position in far right corner
+                        .padding(.bottom, 20)
+                    }
+                }
+                .allowsHitTesting(true)
             }
-            #endif
         }
     }
-    
+
     private func loadFolders() {
         // Load folders
         if let savedData = UserDefaults.standard.data(forKey: "SavedFolders"),

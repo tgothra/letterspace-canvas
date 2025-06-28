@@ -18,11 +18,21 @@ struct FloatingContextualToolbar: View {
     @Binding var isRightSidebarVisible: Bool
     @Binding var isCollapsed: Bool
     @Binding var dragAmount: CGSize
+    var isDistractionFreeMode: Bool = false
     
 
     
     // Track which panel is currently open
     @State private var activePanel: ToolType? = nil
+    
+    // Computed property for available tools based on mode
+    private var availableTools: [ToolType] {
+        if isDistractionFreeMode {
+            return [.bookmarks] // Only bookmarks in distraction-free mode
+        } else {
+            return ToolType.allCases // All tools in normal mode
+        }
+    }
     
     // Available tools with their own panels
     enum ToolType: CaseIterable {
@@ -98,7 +108,8 @@ struct FloatingContextualToolbar: View {
     // MARK: - Unified Floating Toolbar Bar
     private var floatingToolButtons: some View {
         VStack(spacing: 12) {
-            ForEach(ToolType.allCases, id: \.self) { toolType in
+            // Show only bookmarks in distraction-free mode, all tools in normal mode
+            ForEach(availableTools, id: \.self) { toolType in
                 Button(action: { toggleTool(toolType) }) {
                     Image(systemName: toolType.icon)
                         .font(.system(size: 18, weight: .medium))
@@ -114,10 +125,13 @@ struct FloatingContextualToolbar: View {
                 .animation(.spring(response: 0.2, dampingFraction: 0.7), value: activePanel == toolType)
             }
             
-            // Separator
-            Divider()
-                .frame(width: 24)
-                .foregroundStyle(theme.secondary.opacity(0.3))
+            // Show separator only if there are multiple tools (normal mode)
+            if !isDistractionFreeMode {
+                // Separator
+                Divider()
+                    .frame(width: 24)
+                    .foregroundStyle(theme.secondary.opacity(0.3))
+            }
             
             // Collapse arrow (no button styling)
             Button(action: { 
