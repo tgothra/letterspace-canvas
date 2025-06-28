@@ -2,13 +2,6 @@
 import SwiftUI
 import Combine
 
-// Define Notification Names for formatting actions
-extension Notification.Name {
-    static let applyTextColor = Notification.Name("applyTextColor")
-    static let applyHighlightColor = Notification.Name("applyHighlightColor")
-    static let applyAlignment = Notification.Name("applyAlignment")
-}
-
 struct IOSDocumentEditor: View {
     @Binding var document: Letterspace_CanvasDocument
     let onScrollChange: ((CGFloat) -> Void)?
@@ -19,14 +12,8 @@ struct IOSDocumentEditor: View {
     @State private var lastKnownModifiedDate: Date = Date()
     @State private var refreshTimer: Timer?
     @State private var backgroundOperationsPaused: Bool = false
-    @State private var showTextColorPicker = false
-    @State private var showHighlightPicker = false
-    @State private var showAlignmentPicker = false
-    @State private var activePicker: PickerType? = nil
     
-    enum PickerType {
-        case textColor, highlight, alignment
-    }
+
     
     // Initialize with optional scroll callback
     init(document: Binding<Letterspace_CanvasDocument>, onScrollChange: ((CGFloat) -> Void)? = nil) {
@@ -35,121 +22,74 @@ struct IOSDocumentEditor: View {
     }
     
     var body: some View {
-        ZStack(alignment: .bottom) {
-            // Main text editing area
-            VStack(spacing: 0) {
-                GeometryReader { geometry in
-                    IOSTextViewRepresentable(
-                        text: $textContent,
-                        isFocused: Binding(
-                            get: { isFocused },
-                            set: { isFocused = $0 }
-                        ),
-                        colorScheme: colorScheme,
-                        availableHeight: geometry.size.height,
-                        onTextChange: { newValue in
-                            updateDocumentContent(newValue)
-                        },
-                        onScrollChange: onScrollChange,
-                        onTogglePicker: { pickerType in
-                            togglePicker(pickerType)
-                        },
-                        isTextColorPickerVisible: $showTextColorPicker,
-                        isHighlightPickerVisible: $showHighlightPicker,
-                        isAlignmentPickerVisible: $showAlignmentPicker
-                    )
-                }
+        VStack(spacing: 0) {
+            // Main text editing area with dynamic content size management
+            GeometryReader { geometry in
+                IOSTextViewRepresentable(
+                    text: $textContent,
+                    isFocused: Binding(
+                        get: { isFocused },
+                        set: { isFocused = $0 }
+                    ),
+                    colorScheme: colorScheme,
+                    availableHeight: geometry.size.height,
+                    onTextChange: { newValue in
+                        updateDocumentContent(newValue)
+                    },
+                    onScrollChange: onScrollChange
+                )
             }
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(colorScheme == .dark ? Color(.sRGB, white: 0.08) : Color(.sRGB, white: 0.98))
-            )
-            .onAppear {
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(colorScheme == .dark ? Color(.sRGB, white: 0.08) : Color(.sRGB, white: 0.98))
+        )
+        .onAppear {
+            loadDocumentContent()
+            // Temporarily disable file monitoring to prevent SIGTERM issues
+            // startFileMonitoring()
+            startPeriodicRefresh()
+        }
+        .onDisappear {
+            // stopFileMonitoring()
+            stopPeriodicRefresh()
+        }
+        .onChange(of: document.id) { _, _ in
+            // Reload content when document changes (e.g., via iCloud sync)
+            loadDocumentContent()
+            // stopFileMonitoring()
+            stopPeriodicRefresh()
+            // startFileMonitoring()
+            startPeriodicRefresh()
+        }
+        .onChange(of: document.modifiedAt) { _, _ in
+            // Reload content when document is modified externally (e.g., from macOS)
+            if document.modifiedAt != lastKnownModifiedDate {
+                print("🔄 External document change detected, reloading content...")
                 loadDocumentContent()
-                // Temporarily disable file monitoring to prevent SIGTERM issues
-                // startFileMonitoring()
-                startPeriodicRefresh()
+                lastKnownModifiedDate = document.modifiedAt
             }
-            .onDisappear {
-                // stopFileMonitoring()
-                stopPeriodicRefresh()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+            // Refresh when app becomes active (user switches back from macOS)
+            if !backgroundOperationsPaused {
+                checkForExternalChanges()
             }
-            .onChange(of: document.id) { _, _ in
-                // Reload content when document changes (e.g., via iCloud sync)
-                loadDocumentContent()
-                // stopFileMonitoring()
-                stopPeriodicRefresh()
-                // startFileMonitoring()
-                startPeriodicRefresh()
-            }
-            .onChange(of: document.modifiedAt) { _, _ in
-                // Reload content when document is modified externally (e.g., from macOS)
-                if document.modifiedAt != lastKnownModifiedDate {
-                    print("🔄 External document change detected, reloading content...")
-                    loadDocumentContent()
-                    lastKnownModifiedDate = document.modifiedAt
-                }
-            }
-            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
-                // Refresh when app becomes active (user switches back from macOS)
-                if !backgroundOperationsPaused {
-                    checkForExternalChanges()
-                }
-            }
-            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("PauseBackgroundOperations"))) { _ in
-                backgroundOperationsPaused = true
-                stopPeriodicRefresh()
-                print("⏸️ Paused background operations for editing")
-            }
-            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ResumeBackgroundOperations"))) { _ in
-                backgroundOperationsPaused = false
-                startPeriodicRefresh()
-                print("▶️ Resumed background operations after editing")
-            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("PauseBackgroundOperations"))) { _ in
+            backgroundOperationsPaused = true
+            stopPeriodicRefresh()
+            print("⏸️ Paused background operations for editing")
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ResumeBackgroundOperations"))) { _ in
+            backgroundOperationsPaused = false
+            startPeriodicRefresh()
+            print("▶️ Resumed background operations after editing")
+        }
 
-            .onTapGesture {
-                // Focus the text editor immediately when tapped
-                isFocused = true
-            }
-            
-            // Picker Overlays
-            if isFocused {
-                VStack(spacing: 0) {
-                    if activePicker == .textColor {
-                        IOSColorPicker(
-                            title: "Text Color",
-                            colors: [.black, .gray, .red, .orange, .brown, .pink, .blue, .green, .purple],
-                            onColorSelect: { color in
-                                // self.applyTextColor(color) // This logic is in the coordinator
-                                NotificationCenter.default.post(name: .applyTextColor, object: color)
-                                togglePicker(.textColor)
-                            }
-                        )
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                    }
-                    
-                    if activePicker == .highlight {
-                        IOSColorPicker(
-                            title: "Highlight",
-                            colors: [.clear, .yellow, .green, .blue, .pink, .purple, .orange],
-                            onColorSelect: { color in
-                                NotificationCenter.default.post(name: .applyHighlightColor, object: color)
-                                togglePicker(.highlight)
-                            }
-                        )
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                    }
-                    
-                    if activePicker == .alignment {
-                        IOSAlignmentPicker(onAlignment: { alignment in
-                            NotificationCenter.default.post(name: .applyAlignment, object: alignment)
-                            togglePicker(.alignment)
-                        })
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                    }
-                }
-                .padding(.bottom, 50) // Position above the 50pt toolbar
-            }
+        .onTapGesture {
+            // Focus the text editor immediately when tapped
+            isFocused = true
         }
     }
     
@@ -308,20 +248,6 @@ struct IOSDocumentEditor: View {
             print("📝 Document unchanged, no update needed")
         }
     }
-    
-    private func togglePicker(_ picker: IOSDocumentEditor.PickerType) {
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-            if activePicker == picker {
-                activePicker = nil
-            } else {
-                activePicker = picker
-            }
-            
-            showTextColorPicker = (activePicker == .textColor)
-            showHighlightPicker = (activePicker == .highlight)
-            showAlignmentPicker = (activePicker == .alignment)
-        }
-    }
 }
 
 // MARK: - iOS Text View with Dynamic Content Size Management
@@ -333,10 +259,6 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
 
     let onTextChange: (String) -> Void
     let onScrollChange: ((CGFloat) -> Void)?
-    let onTogglePicker: (IOSDocumentEditor.PickerType) -> Void
-    @Binding var isTextColorPickerVisible: Bool
-    @Binding var isHighlightPickerVisible: Bool
-    @Binding var isAlignmentPickerVisible: Bool
     
     func makeUIView(context: Context) -> UIScrollView {
         let scrollView = UIScrollView()
@@ -409,9 +331,6 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
         // Setup scroll to top notification
         context.coordinator.setupScrollToTopNotification()
         
-        // Setup formatting action observers
-        context.coordinator.setupFormattingActionObservers()
-        
         return scrollView
     }
     
@@ -451,14 +370,7 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
     }
     
     func makeCoordinator() -> Coordinator {
-        Coordinator(
-            text: $text,
-            isFocused: $isFocused,
-            onTogglePicker: onTogglePicker,
-            isTextColorPickerVisible: $isTextColorPickerVisible,
-            isHighlightPickerVisible: $isHighlightPickerVisible,
-            isAlignmentPickerVisible: $isAlignmentPickerVisible
-        )
+        Coordinator(text: $text, isFocused: $isFocused)
     }
     
     class Coordinator: NSObject, UITextViewDelegate, UIScrollViewDelegate {
@@ -470,25 +382,12 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
         var textView: UITextView?
         var availableHeight: CGFloat = 0
         var isCurrentlyEditing: Bool = false
-        var onTogglePicker: ((IOSDocumentEditor.PickerType) -> Void)?
-        @Binding var isTextColorPickerVisible: Bool
-        @Binding var isHighlightPickerVisible: Bool
-        @Binding var isAlignmentPickerVisible: Bool
-        
+
         private var scrollToTopObserver: NSObjectProtocol?
         
-        init(text: Binding<String>, 
-             isFocused: Binding<Bool>,
-             onTogglePicker: @escaping (IOSDocumentEditor.PickerType) -> Void,
-             isTextColorPickerVisible: Binding<Bool>,
-             isHighlightPickerVisible: Binding<Bool>,
-             isAlignmentPickerVisible: Binding<Bool>) {
+        init(text: Binding<String>, isFocused: Binding<Bool>) {
             self._text = text
             self._isFocused = isFocused
-            self.onTogglePicker = onTogglePicker
-            self._isTextColorPickerVisible = isTextColorPickerVisible
-            self._isHighlightPickerVisible = isHighlightPickerVisible
-            self._isAlignmentPickerVisible = isAlignmentPickerVisible
         }
         
         deinit {
@@ -496,7 +395,6 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
                 NotificationCenter.default.removeObserver(observer)
             }
             textChangeTimer?.invalidate()
-            NotificationCenter.default.removeObserver(self)
         }
         
         func setupScrollToTopNotification() {
@@ -654,22 +552,38 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
         // MARK: - Formatting Toolbar Setup
         func setupFormattingToolbar(for textView: UITextView, colorScheme: ColorScheme) {
             let toolbar = IOSTextFormattingToolbar(
-                onBold: { [weak self] in self?.toggleBold() },
-                onItalic: { [weak self] in self?.toggleItalic() },
-                onUnderline: { [weak self] in self?.toggleUnderline() },
-                onLink: { [weak self] in self?.insertLink() },
-                onDismiss: { [weak textView] in textView?.resignFirstResponder() },
-                onToggleTextColor: { [weak self] in self?.onTogglePicker?(IOSDocumentEditor.PickerType.textColor) },
-                onToggleHighlight: { [weak self] in self?.onTogglePicker?(IOSDocumentEditor.PickerType.highlight) },
-                onToggleAlignment: { [weak self] in self?.onTogglePicker?(IOSDocumentEditor.PickerType.alignment) },
+                onBold: { [weak self] in
+                    self?.toggleBold()
+                },
+                onItalic: { [weak self] in
+                    self?.toggleItalic()
+                },
+                onUnderline: { [weak self] in
+                    self?.toggleUnderline()
+                },
+                onLink: { [weak self] in
+                    self?.insertLink()
+                },
+                onTextColor: { [weak self] color in
+                    self?.applyTextColor(color)
+                },
+                onHighlight: { [weak self] color in
+                    self?.applyHighlight(color)
+                },
+                onBulletList: { [weak self] in
+                    self?.toggleBulletList()
+                },
+                onAlignment: { [weak self] alignment in
+                    self?.applyAlignment(alignment)
+                },
+                onDismiss: { [weak textView] in
+                    textView?.resignFirstResponder()
+                },
                 isBold: getCurrentFormatting().isBold,
                 isItalic: getCurrentFormatting().isItalic,
                 isUnderlined: getCurrentFormatting().isUnderlined,
                 hasLink: getCurrentFormatting().hasLink,
-                hasBulletList: getCurrentFormatting().hasBulletList,
-                isTextColorPickerVisible: $isTextColorPickerVisible,
-                isHighlightPickerVisible: $isHighlightPickerVisible,
-                isAlignmentPickerVisible: $isAlignmentPickerVisible
+                hasBulletList: getCurrentFormatting().hasBulletList
             )
             
             let hostingController = IOSFormattingToolbarHostingController(toolbar: toolbar)
@@ -892,31 +806,6 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
             if abs(scrollOffset - lastScrollOffset) > scrollThreshold {
                 lastScrollOffset = scrollOffset
                 onScrollChange?(scrollOffset)
-            }
-        }
-        
-        // MARK: - Formatting Action Observers
-        func setupFormattingActionObservers() {
-            NotificationCenter.default.addObserver(self, selector: #selector(handleApplyTextColor(_:)), name: .applyTextColor, object: nil)
-            NotificationCenter.default.addObserver(self, selector: #selector(handleApplyHighlightColor(_:)), name: .applyHighlightColor, object: nil)
-            NotificationCenter.default.addObserver(self, selector: #selector(handleApplyAlignment(_:)), name: .applyAlignment, object: nil)
-        }
-        
-        @objc private func handleApplyTextColor(_ notification: Notification) {
-            if let color = notification.object as? Color {
-                applyTextColor(color)
-            }
-        }
-        
-        @objc private func handleApplyHighlightColor(_ notification: Notification) {
-            if let color = notification.object as? Color {
-                applyHighlight(color)
-            }
-        }
-        
-        @objc private func handleApplyAlignment(_ notification: Notification) {
-            if let alignment = notification.object as? TextAlignment {
-                applyAlignment(alignment)
             }
         }
     }
