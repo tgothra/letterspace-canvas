@@ -27,44 +27,8 @@ struct IOSTextFormattingToolbar: View {
     @Environment(\.colorScheme) var colorScheme
     
     var body: some View {
-        VStack(spacing: 0) {
-            // Expandable sections (appear ABOVE main toolbar)
-            if showColorPicker {
-                ColorPickerSection(
-                    title: "Text Color",
-                    colors: [.black, .gray, .red, .orange, .brown, .pink, .blue, .green, .purple],
-                    onColorSelect: { color in
-                        onTextColor(color)
-                        withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
-                            showColorPicker = false
-                        }
-                    }
-                )
-            }
-            
-            if showHighlightPicker {
-                ColorPickerSection(
-                    title: "Highlight",
-                    colors: [.clear, .yellow, .green, .blue, .pink, .purple, .orange],
-                    onColorSelect: { color in
-                        onHighlight(color)
-                        withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
-                            showHighlightPicker = false
-                        }
-                    }
-                )
-            }
-            
-            if showAlignmentPicker {
-                AlignmentPickerSection(onAlignment: { alignment in
-                    onAlignment(alignment)
-                    withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
-                        showAlignmentPicker = false
-                    }
-                })
-            }
-            
-            // Main toolbar
+        ZStack(alignment: .bottom) {
+            // Main toolbar (always visible at bottom)
             HStack(spacing: 0) {
                 // Basic formatting
                 FormattingGroup {
@@ -130,6 +94,49 @@ struct IOSTextFormattingToolbar: View {
                             .frame(maxHeight: .infinity, alignment: .top)
                     )
             )
+            
+            // Expandable sections (overlay above main toolbar)
+            VStack(spacing: 0) {
+                if showColorPicker {
+                    ColorPickerSection(
+                        title: "Text Color",
+                        colors: [.black, .gray, .red, .orange, .brown, .pink, .blue, .green, .purple],
+                        onColorSelect: { color in
+                            onTextColor(color)
+                            withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
+                                showColorPicker = false
+                            }
+                        }
+                    )
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+                
+                if showHighlightPicker {
+                    ColorPickerSection(
+                        title: "Highlight",
+                        colors: [.clear, .yellow, .green, .blue, .pink, .purple, .orange],
+                        onColorSelect: { color in
+                            onHighlight(color)
+                            withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
+                                showHighlightPicker = false
+                            }
+                        }
+                    )
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+                
+                if showAlignmentPicker {
+                    AlignmentPickerSection(onAlignment: { alignment in
+                        onAlignment(alignment)
+                        withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
+                            showAlignmentPicker = false
+                        }
+                    })
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+                
+                Spacer(minLength: 50) // Reserve space for main toolbar
+            }
         }
         .background(Color.clear)
     }
