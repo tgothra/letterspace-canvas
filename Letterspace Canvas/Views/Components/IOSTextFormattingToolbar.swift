@@ -209,16 +209,10 @@ private struct ColorPickerSection: View {
     @Environment(\.colorScheme) var colorScheme
     
     var body: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Text(title)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(colorScheme == .dark ? .white : .black)
-                Spacer()
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 12)
-            .padding(.bottom, 8)
+        HStack(spacing: 16) {
+            Text(title)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(colorScheme == .dark ? .white.opacity(0.8) : .black.opacity(0.8))
             
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
@@ -226,10 +220,10 @@ private struct ColorPickerSection: View {
                         ColorButton(color: color, onSelect: { onColorSelect(color) })
                     }
                 }
-                .padding(.horizontal, 16)
             }
-            .padding(.bottom, 12)
         }
+        .padding(.horizontal, 16)
+        .frame(height: 50)
         .background(
             Rectangle()
                 .fill(colorScheme == .dark ? Color(.sRGB, white: 0.15) : Color(.sRGB, white: 0.95))
@@ -291,26 +285,20 @@ private struct AlignmentPickerSection: View {
     @Environment(\.colorScheme) var colorScheme
     
     var body: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Text("Alignment")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(colorScheme == .dark ? .white : .black)
-                Spacer()
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 12)
-            .padding(.bottom, 8)
-            
+        HStack(spacing: 16) {
+            Text("Alignment")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(colorScheme == .dark ? .white.opacity(0.8) : .black.opacity(0.8))
+
             HStack(spacing: 16) {
                 IOSToolbarButton(icon: "text.alignleft") { onAlignment(.leading) }
                 IOSToolbarButton(icon: "text.aligncenter") { onAlignment(.center) }
                 IOSToolbarButton(icon: "text.alignright") { onAlignment(.trailing) }
                 Spacer()
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 12)
         }
+        .padding(.horizontal, 16)
+        .frame(height: 50)
         .background(
             Rectangle()
                 .fill(colorScheme == .dark ? Color(.sRGB, white: 0.15) : Color(.sRGB, white: 0.95))
