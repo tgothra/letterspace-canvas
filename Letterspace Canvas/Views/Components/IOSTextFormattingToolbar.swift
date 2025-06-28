@@ -93,7 +93,7 @@ struct IOSTextFormattingToolbar: View {
                 )
         )
         .overlay(alignment: .bottom) {
-            VStack(spacing: 8) {
+            VStack(spacing: 0) {
                 if showColorPicker {
                     ColorPickerSection(
                         title: "Text Color",
@@ -131,8 +131,12 @@ struct IOSTextFormattingToolbar: View {
                     })
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
+                
+                // Spacer to push sections above the main toolbar
+                Spacer()
+                    .frame(height: 50)
             }
-            .offset(y: -50) // Position above the toolbar
+            .allowsHitTesting(true)
         }
     }
 }
@@ -175,7 +179,6 @@ private struct IOSToolbarButton: View {
                 .clipShape(RoundedRectangle(cornerRadius: 6))
         }
         .buttonStyle(PlainButtonStyle())
-        .contentShape(Rectangle())
         .scaleEffect(isPressed ? 0.95 : 1.0)
         .onLongPressGesture(minimumDuration: 0, maximumDistance: .infinity, pressing: { pressing in
             withAnimation(.easeInOut(duration: 0.1)) {
@@ -236,7 +239,7 @@ private struct ColorPickerSection: View {
                 )
         )
         .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: -2)
-        .contentShape(Rectangle())
+        .allowsHitTesting(true)
     }
 }
 
@@ -274,7 +277,6 @@ private struct ColorButton: View {
             .scaleEffect(isPressed ? 0.9 : 1.0)
         }
         .buttonStyle(PlainButtonStyle())
-        .contentShape(Rectangle())
         .onLongPressGesture(minimumDuration: 0, maximumDistance: .infinity, pressing: { pressing in
             withAnimation(.easeInOut(duration: 0.1)) {
                 isPressed = pressing
@@ -313,7 +315,7 @@ private struct AlignmentPickerSection: View {
                 )
         )
         .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: -2)
-        .contentShape(Rectangle())
+        .allowsHitTesting(true)
     }
 }
 
