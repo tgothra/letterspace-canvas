@@ -329,7 +329,7 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
             DispatchQueue.main.async {
                 textView.becomeFirstResponder()
             }
-        } else if !isFocused && textView.isFirstResponder && !textView.isEditing {
+        } else if !isFocused && textView.isFirstResponder && !context.coordinator.isCurrentlyEditing {
             textView.resignFirstResponder()
         }
         
@@ -353,6 +353,7 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
         var scrollView: UIScrollView?
         var textView: UITextView?
         var availableHeight: CGFloat = 0
+        private var isCurrentlyEditing: Bool = false
 
         private var scrollToTopObserver: NSObjectProtocol?
         
@@ -478,11 +479,13 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
         }
         
         func textViewDidBeginEditing(_ textView: UITextView) {
+            isCurrentlyEditing = true
             isFocused = true
             print("📝 Text view began editing")
         }
         
         func textViewDidEndEditing(_ textView: UITextView) {
+            isCurrentlyEditing = false
             isFocused = false
             // Save any pending changes when editing ends
             textChangeTimer?.invalidate()
