@@ -353,7 +353,7 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
         var scrollView: UIScrollView?
         var textView: UITextView?
         var availableHeight: CGFloat = 0
-        private var isCurrentlyEditing: Bool = false
+        var isCurrentlyEditing: Bool = false
 
         private var scrollToTopObserver: NSObjectProtocol?
         
