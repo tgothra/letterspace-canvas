@@ -41,7 +41,10 @@ struct IOSDocumentEditor: View {
                 GeometryReader { geometry in
                     IOSTextViewRepresentable(
                         text: $textContent,
-                        isFocused: $isFocused,
+                        isFocused: Binding(
+                            get: { isFocused },
+                            set: { isFocused = $0 }
+                        ),
                         colorScheme: colorScheme,
                         availableHeight: geometry.size.height,
                         onTextChange: { newValue in
