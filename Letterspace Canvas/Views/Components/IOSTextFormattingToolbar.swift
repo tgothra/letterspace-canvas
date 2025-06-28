@@ -27,78 +27,73 @@ struct IOSTextFormattingToolbar: View {
     @Environment(\.colorScheme) var colorScheme
     
     var body: some View {
-        ZStack(alignment: .bottom) {
-            // Main toolbar (always at the bottom)
-            HStack(spacing: 0) {
-                // Basic formatting
-                FormattingGroup {
-                    IOSToolbarButton(icon: "bold", isActive: isBold, action: onBold)
-                    IOSToolbarButton(icon: "italic", isActive: isItalic, action: onItalic)
-                    IOSToolbarButton(icon: "underline", isActive: isUnderlined, action: onUnderline)
-                }
-                
-                Divider()
-                    .frame(height: 24)
-                    .padding(.horizontal, 8)
-                
-                // Text styling
-                FormattingGroup {
-                    IOSToolbarButton(icon: "textformat", isActive: showColorPicker) {
-                        withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
-                            showColorPicker.toggle()
-                            showHighlightPicker = false
-                            showAlignmentPicker = false
-                        }
-                    }
-                    IOSToolbarButton(icon: "highlighter", isActive: showHighlightPicker) {
-                        withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
-                            showHighlightPicker.toggle()
-                            showColorPicker = false
-                            showAlignmentPicker = false
-                        }
-                    }
-                    IOSToolbarButton(icon: "link", isActive: hasLink, action: onLink)
-                }
-                
-                Divider()
-                    .frame(height: 24)
-                    .padding(.horizontal, 8)
-                
-                // Lists and alignment
-                FormattingGroup {
-                    IOSToolbarButton(icon: "list.bullet", isActive: hasBulletList, action: onBulletList)
-                    IOSToolbarButton(icon: "text.alignleft", isActive: showAlignmentPicker) {
-                        withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
-                            showAlignmentPicker.toggle()
-                            showColorPicker = false
-                            showHighlightPicker = false
-                        }
-                    }
-                }
-                
-                Spacer()
-                
-                // Dismiss button
-                IOSToolbarButton(icon: "keyboard.chevron.compact.down", action: onDismiss)
-                    .padding(.trailing, 8)
+        HStack(spacing: 0) {
+            // Basic formatting
+            FormattingGroup {
+                IOSToolbarButton(icon: "bold", isActive: isBold, action: onBold)
+                IOSToolbarButton(icon: "italic", isActive: isItalic, action: onItalic)
+                IOSToolbarButton(icon: "underline", isActive: isUnderlined, action: onUnderline)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-            .background(
-                Rectangle()
-                    .fill(.ultraThinMaterial)
-                    .overlay(
-                        Rectangle()
-                            .fill(colorScheme == .dark ? Color.white.opacity(0.1) : Color.black.opacity(0.05))
-                            .frame(height: 0.5)
-                            .frame(maxHeight: .infinity, alignment: .top)
-                    )
-            )
             
-            // Expandable sections overlay (appear ABOVE main toolbar)
-            VStack {
-                Spacer()
-                
+            Divider()
+                .frame(height: 24)
+                .padding(.horizontal, 8)
+            
+            // Text styling
+            FormattingGroup {
+                IOSToolbarButton(icon: "textformat", isActive: showColorPicker) {
+                    withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
+                        showColorPicker.toggle()
+                        showHighlightPicker = false
+                        showAlignmentPicker = false
+                    }
+                }
+                IOSToolbarButton(icon: "highlighter", isActive: showHighlightPicker) {
+                    withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
+                        showHighlightPicker.toggle()
+                        showColorPicker = false
+                        showAlignmentPicker = false
+                    }
+                }
+                IOSToolbarButton(icon: "link", isActive: hasLink, action: onLink)
+            }
+            
+            Divider()
+                .frame(height: 24)
+                .padding(.horizontal, 8)
+            
+            // Lists and alignment
+            FormattingGroup {
+                IOSToolbarButton(icon: "list.bullet", isActive: hasBulletList, action: onBulletList)
+                IOSToolbarButton(icon: "text.alignleft", isActive: showAlignmentPicker) {
+                    withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
+                        showAlignmentPicker.toggle()
+                        showColorPicker = false
+                        showHighlightPicker = false
+                    }
+                }
+            }
+            
+            Spacer()
+            
+            // Dismiss button
+            IOSToolbarButton(icon: "keyboard.chevron.compact.down", action: onDismiss)
+                .padding(.trailing, 8)
+        }
+        .padding(.horizontal, 16)
+        .frame(height: 50)
+        .background(
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    Rectangle()
+                        .fill(colorScheme == .dark ? Color.white.opacity(0.1) : Color.black.opacity(0.05))
+                        .frame(height: 0.5)
+                        .frame(maxHeight: .infinity, alignment: .top)
+                )
+        )
+        .overlay(alignment: .bottom) {
+            VStack(spacing: 8) {
                 if showColorPicker {
                     ColorPickerSection(
                         title: "Text Color",
@@ -137,9 +132,8 @@ struct IOSTextFormattingToolbar: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
-            .padding(.bottom, 50) // Height of main toolbar
+            .offset(y: -50) // Position above the toolbar
         }
-        .background(Color.clear)
     }
 }
 
