@@ -75,10 +75,8 @@ struct IOSDocumentEditor: View {
         }
 
         .onTapGesture {
-            // Focus the text editor when tapped - use async to prevent conflicts
-            DispatchQueue.main.async {
-                isFocused = true
-            }
+            // Focus the text editor immediately when tapped
+            isFocused = true
         }
     }
     
@@ -270,7 +268,7 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
         textView.textContainer.lineFragmentPadding = 0
         textView.text = text
         
-        // Optimize for typing performance
+        // Optimize for typing performance and fast keyboard response
         textView.autocorrectionType = .default
         textView.spellCheckingType = .default
         textView.smartDashesType = .default
@@ -278,10 +276,15 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
         textView.smartInsertDeleteType = .default
         textView.keyboardType = .default
         textView.returnKeyType = .default
+        textView.keyboardAppearance = .default
         
-        // Ensure the text view maintains focus during editing
-        textView.resignFirstResponder() // Start unfocused
+        // Optimize for faster keyboard presentation
         textView.inputAccessoryView = nil // Remove any accessory views that might interfere
+        textView.resignFirstResponder() // Start unfocused
+        
+        // Pre-warm the input system for faster keyboard response (iOS optimization)
+        textView.isHidden = false
+        textView.alpha = 1.0
         
         // Add text view to scroll view with manual frame positioning (no Auto Layout)
         // This prevents conflicts with updateTextViewContentSize which sets frames manually
@@ -299,8 +302,10 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
         context.coordinator.onTextChange = onTextChange
         context.coordinator.onScrollChange = onScrollChange
         
-        // Initial content size calculation
-        context.coordinator.updateTextViewContentSize()
+        // Initial content size calculation - defer to improve initial response time
+        DispatchQueue.main.async {
+            context.coordinator.updateTextViewContentSize()
+        }
         
         // Setup scroll to top notification
         context.coordinator.setupScrollToTopNotification()
@@ -315,7 +320,10 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
         // This prevents interrupting the user's typing
         if textView.text != text && !textView.isFirstResponder {
             textView.text = text
-            context.coordinator.updateTextViewContentSize()
+            // Skip content size update during focus changes to improve keyboard response time
+            if !isFocused {
+                context.coordinator.updateTextViewContentSize()
+            }
         }
         
         // Update colors only if needed
@@ -326,9 +334,8 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
         
         // Update focus state only when necessary and not during active editing
         if isFocused && !textView.isFirstResponder {
-            DispatchQueue.main.async {
-                textView.becomeFirstResponder()
-            }
+            // Remove async delay for immediate keyboard response
+            textView.becomeFirstResponder()
         } else if !isFocused && textView.isFirstResponder && !context.coordinator.isCurrentlyEditing {
             textView.resignFirstResponder()
         }
