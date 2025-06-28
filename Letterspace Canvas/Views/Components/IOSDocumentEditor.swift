@@ -11,6 +11,7 @@ struct IOSDocumentEditor: View {
     @State private var fileMonitor: DocumentFileMonitor?
     @State private var lastKnownModifiedDate: Date = Date()
     @State private var refreshTimer: Timer?
+    @State private var backgroundOperationsPaused: Bool = false
     
 
     
@@ -71,7 +72,19 @@ struct IOSDocumentEditor: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
             // Refresh when app becomes active (user switches back from macOS)
-            checkForExternalChanges()
+            if !backgroundOperationsPaused {
+                checkForExternalChanges()
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("PauseBackgroundOperations"))) { _ in
+            backgroundOperationsPaused = true
+            stopPeriodicRefresh()
+            print("⏸️ Paused background operations for editing")
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ResumeBackgroundOperations"))) { _ in
+            backgroundOperationsPaused = false
+            startPeriodicRefresh()
+            print("▶️ Resumed background operations after editing")
         }
 
         .onTapGesture {
@@ -171,6 +184,12 @@ struct IOSDocumentEditor: View {
     }
     
     private func checkForExternalChanges() {
+        // Skip external checks if background operations are paused (during editing)
+        if backgroundOperationsPaused {
+            print("⏸️ Skipping external changes check - background operations paused")
+            return
+        }
+        
         print("🔄 Checking for external changes...")
         reloadDocumentFromDisk()
     }
@@ -251,40 +270,40 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
         scrollView.alwaysBounceVertical = true
         scrollView.keyboardDismissMode = .interactive
         scrollView.delegate = context.coordinator
-        scrollView.isScrollEnabled = true
-        scrollView.bounces = true
-        scrollView.scrollsToTop = true
+        scrollView.isScrollEnabled = true // Explicitly enable scrolling
+        scrollView.bounces = true // Enable bouncing
+        scrollView.scrollsToTop = true // Enable scroll to top gesture
         
-        // Configure text view with optimized settings for immediate keyboard response
+        // Configure text view with optimized settings for typing performance
         textView.delegate = context.coordinator
         textView.font = UIFont.systemFont(ofSize: 16, weight: .regular)
         textView.backgroundColor = UIColor.clear
         textView.textColor = colorScheme == .dark ? UIColor.white : UIColor.black
-        textView.tintColor = UIColor.systemBlue // Ensure cursor color is visible
-        textView.isScrollEnabled = false
+        textView.isScrollEnabled = false // Disable text view scrolling, let scroll view handle it
         textView.isEditable = true
         textView.isSelectable = true
         textView.isUserInteractionEnabled = true
-        textView.allowsEditingTextAttributes = true
         textView.textContainerInset = UIEdgeInsets(top: 16, left: 24, bottom: 16, right: 24)
         textView.textContainer.lineFragmentPadding = 0
         textView.text = text
         
-        // Aggressive keyboard optimization - minimal configuration for fastest response
-        textView.autocorrectionType = .no // Disable to speed up keyboard
-        textView.spellCheckingType = .no // Disable to speed up keyboard
-        textView.smartDashesType = .no // Disable to speed up keyboard
-        textView.smartQuotesType = .no // Disable to speed up keyboard
-        textView.smartInsertDeleteType = .no // Disable to speed up keyboard
+        // Optimize for typing performance and fast keyboard response
+        textView.autocorrectionType = .default
+        textView.spellCheckingType = .default
+        textView.smartDashesType = .default
+        textView.smartQuotesType = .default
+        textView.smartInsertDeleteType = .default
         textView.keyboardType = .default
         textView.returnKeyType = .default
         textView.keyboardAppearance = .default
-        textView.inputAccessoryView = nil
         
-        // Make text view immediately ready for input
+        // Optimize for faster keyboard presentation
+        textView.inputAccessoryView = nil // Remove any accessory views that might interfere
+        textView.resignFirstResponder() // Start unfocused
+        
+        // Pre-warm the input system for faster keyboard response (iOS optimization)
         textView.isHidden = false
         textView.alpha = 1.0
-        textView.resignFirstResponder() // Start unfocused but ready
         
         // Add text view to scroll view with manual frame positioning (no Auto Layout)
         // This prevents conflicts with updateTextViewContentSize which sets frames manually
@@ -302,12 +321,8 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
         context.coordinator.onTextChange = onTextChange
         context.coordinator.onScrollChange = onScrollChange
         
-        // Add direct tap gesture to text view for immediate focus
-        let tapGesture = UITapGestureRecognizer(target: context.coordinator, action: #selector(context.coordinator.textViewTapped))
-        textView.addGestureRecognizer(tapGesture)
-        
-        // Initial content size calculation - defer to improve initial response time
-        DispatchQueue.main.async {
+        // Initial content size calculation - defer and throttle to improve initial response time
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             context.coordinator.updateTextViewContentSize()
         }
         
@@ -320,11 +335,14 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
     func updateUIView(_ scrollView: UIScrollView, context: Context) {
         guard let textView = context.coordinator.textView else { return }
         
-        // Minimal updates to prevent delays - only update when absolutely necessary
-        
-        // Update text only if changed and not actively editing
-        if textView.text != text && !context.coordinator.isCurrentlyEditing {
+        // Only update text if it changed AND the text view is not currently being edited
+        // This prevents interrupting the user's typing
+        if textView.text != text && !textView.isFirstResponder {
             textView.text = text
+            // Skip content size update during focus changes to improve keyboard response time
+            if !isFocused {
+                context.coordinator.updateTextViewContentSize()
+            }
         }
         
         // Update colors only if needed
@@ -333,26 +351,19 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
             textView.textColor = expectedColor
         }
         
-        // Simplified focus handling - let the direct tap gesture handle most focus changes
-        if isFocused && !textView.isFirstResponder && !context.coordinator.isCurrentlyEditing {
-            let didBecome = textView.becomeFirstResponder()
-            if didBecome {
-                // Ensure cursor is visible after becoming first responder
-                DispatchQueue.main.async {
-                    let endPosition = textView.endOfDocument
-                    textView.selectedTextRange = textView.textRange(from: endPosition, to: endPosition)
-                }
-            }
+        // Update focus state only when necessary and not during active editing
+        if isFocused && !textView.isFirstResponder {
+            // Remove async delay for immediate keyboard response
+            textView.becomeFirstResponder()
         } else if !isFocused && textView.isFirstResponder && !context.coordinator.isCurrentlyEditing {
             textView.resignFirstResponder()
         }
         
-        // Defer content size updates to avoid blocking keyboard presentation
+        // Only update content size if available height actually changed
         if context.coordinator.availableHeight != availableHeight {
             context.coordinator.availableHeight = availableHeight
-            DispatchQueue.main.async {
-                context.coordinator.updateTextViewContentSize()
-            }
+            context.coordinator.updateTextViewContentSize()
+            print("📐 iOS: Available height changed from \(context.coordinator.availableHeight) to \(availableHeight)")
         }
     }
     
@@ -423,6 +434,11 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
         // Dynamic content size management - key method for top and bottom padding
         func updateTextViewContentSize() {
             guard let textView = textView, let scrollView = scrollView else { return }
+            
+            // Skip updates during initial editing to prevent hangs
+            if isCurrentlyEditing && textView.isFirstResponder {
+                return
+            }
             
             // Ensure scroll view is properly configured for scrolling
             scrollView.isScrollEnabled = true
@@ -496,14 +512,10 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
         func textViewDidBeginEditing(_ textView: UITextView) {
             isCurrentlyEditing = true
             isFocused = true
-            print("📝 Text view began editing - isFirstResponder: \(textView.isFirstResponder)")
+            print("📝 Text view began editing")
             
-            // Ensure cursor is visible when editing begins
-            DispatchQueue.main.async {
-                let endPosition = textView.endOfDocument
-                textView.selectedTextRange = textView.textRange(from: endPosition, to: endPosition)
-                print("📝 Set cursor position at end of document")
-            }
+            // Temporarily pause heavy background operations during initial editing
+            pauseBackgroundOperations()
         }
         
         func textViewDidEndEditing(_ textView: UITextView) {
@@ -513,35 +525,25 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
             textChangeTimer?.invalidate()
             onTextChange?(textView.text)
             print("📝 Text view ended editing")
+            
+            // Resume background operations after editing ends
+            resumeBackgroundOperations()
         }
         
         func textViewShouldBeginEditing(_ textView: UITextView) -> Bool {
             return true // Always allow editing
         }
         
-        @objc func textViewTapped() {
-            // Direct focus handling bypassing SwiftUI binding delays
-            guard let textView = textView else { return }
-            
-            if !textView.isFirstResponder {
-                // Ensure text view is properly configured for editing
-                textView.isEditable = true
-                textView.isSelectable = true
-                textView.isUserInteractionEnabled = true
-                
-                // Force immediate focus and ensure cursor appears
-                let didBecome = textView.becomeFirstResponder()
-                print("📝 Direct tap - becomeFirstResponder result: \(didBecome)")
-                
-                // Update state
-                isCurrentlyEditing = true
-                isFocused = true
-                
-                // Force cursor to appear by setting selection
-                DispatchQueue.main.async {
-                    let endPosition = textView.endOfDocument
-                    textView.selectedTextRange = textView.textRange(from: endPosition, to: endPosition)
-                }
+        // MARK: - Background Operations Management
+        private func pauseBackgroundOperations() {
+            // Notify parent to pause heavy operations during initial editing
+            NotificationCenter.default.post(name: NSNotification.Name("PauseBackgroundOperations"), object: nil)
+        }
+        
+        private func resumeBackgroundOperations() {
+            // Resume operations after a short delay to ensure smooth editing experience
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                NotificationCenter.default.post(name: NSNotification.Name("ResumeBackgroundOperations"), object: nil)
             }
         }
         
