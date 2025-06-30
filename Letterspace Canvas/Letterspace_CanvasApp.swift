@@ -117,7 +117,7 @@ struct Letterspace_CanvasApp: App {
     #endif
     
     init() {
-        Font.registerInterTightFonts()
+        // Fonts are now automatically loaded via Info.plist UIAppFonts
         
         // Add notification observer for document loading
         #if os(macOS)

@@ -21,23 +21,13 @@
 	</array>
 	<key>UIAppFonts</key>
 	<array>
-		<string>InterTight-Thin.ttf
-InterTight-ThinItalic.ttf
-InterTight-Light.ttf
-InterTight-LightItalic.ttf
-InterTight-Regular.ttf
-InterTight-Italic.ttf
-InterTight-Medium.ttf
-InterTight-MediumItalic.ttf
-InterTight-SemiBold.ttf
-InterTight-SemiBoldItalic.ttf
-InterTight-Bold.ttf
-InterTight-BoldItalic.ttf
-InterTight-ExtraBold.ttf
-InterTight-ExtraBoldItalic.ttf
-InterTight-Black.ttf
-InterTight-BlackItalic.ttf</string>
-		<string></string>
+		<string>InterTight-Regular.ttf</string>
+		<string>InterTight-Italic.ttf</string>
+		<string>InterTight-Medium.ttf</string>
+		<string>InterTight-SemiBold.ttf</string>
+		<string>InterTight-SemiBoldItalic.ttf</string>
+		<string>InterTight-Bold.ttf</string>
+		<string>InterTight-BoldItalic.ttf</string>
 	</array>
 	<key>CFBundleIdentifier</key>
 	<string></string>

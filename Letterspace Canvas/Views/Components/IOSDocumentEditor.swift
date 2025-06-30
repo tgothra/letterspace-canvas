@@ -34,9 +34,23 @@ struct IOSDocumentEditor: View {
                     colorScheme: colorScheme,
                     availableHeight: geometry.size.height,
                     onTextChange: { newValue in
-                        updateDocumentContent(newValue)
+                                updateDocumentContent(newValue)
                     },
-                    onScrollChange: onScrollChange
+                    onAttributedTextChange: { plainText, attributedText in
+                        updateDocumentContentWithAttributes(plainText, attributedText: attributedText)
+                    },
+                    onScrollChange: onScrollChange,
+                    onBookmarkUpdate: { id, title, lineNumber, metadata, isAdding in
+                        if isAdding {
+                            document.addMarker(id: id, title: title, type: "bookmark", position: lineNumber, metadata: metadata)
+                        } else {
+                            document.removeMarker(id: id)
+                        }
+                        // Save document asynchronously to prevent main thread hangs
+                        DispatchQueue.global(qos: .userInitiated).async {
+                            document.save()
+                        }
+                    }
                 )
             }
         }
@@ -73,8 +87,8 @@ struct IOSDocumentEditor: View {
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
             // Refresh when app becomes active (user switches back from macOS)
             if !backgroundOperationsPaused {
-                checkForExternalChanges()
-            }
+            checkForExternalChanges()
+        }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("PauseBackgroundOperations"))) { _ in
             backgroundOperationsPaused = true
@@ -99,6 +113,32 @@ struct IOSDocumentEditor: View {
             // Use the string content from the textBlock element
             textContent = textElement.content
             print("📖 iOS: Loaded document content (\(textElement.content.count) characters) from textBlock element")
+            
+            // Debug: Check if attributedContent exists
+            print("📖 iOS: textElement.attributedContent is nil: \(textElement.attributedContent == nil)")
+            if let attributedContent = textElement.attributedContent {
+                print("📖 iOS: Found attributedContent with \(attributedContent.length) characters")
+            } else {
+                print("📖 iOS: No attributedContent found - checking rtfData")
+                print("📖 iOS: textElement.rtfData is nil: \(textElement.rtfData == nil)")
+                if let rtfData = textElement.rtfData {
+                    print("📖 iOS: Found rtfData with \(rtfData.count) bytes")
+                }
+            }
+            
+            // Load attributed content if available and apply it to the text view
+            if let attributedContent = textElement.attributedContent {
+                // Schedule the attributed content to be applied after the text view is ready
+                DispatchQueue.main.async {
+                    // This will trigger the IOSTextViewRepresentable to apply the attributed content
+                    NotificationCenter.default.post(
+                        name: NSNotification.Name("ApplyAttributedContent"),
+                        object: nil,
+                        userInfo: ["attributedContent": attributedContent]
+                    )
+                }
+                print("📖 iOS: Scheduled attributed content application (\(attributedContent.length) attributed characters)")
+            }
         } else if !document.elements.isEmpty {
             // Fallback: if no textBlock exists but there are other elements, 
             // combine all element content for editing
@@ -109,7 +149,10 @@ struct IOSDocumentEditor: View {
             // Create a textBlock element with the combined content for future editing
             let textElement = DocumentElement(type: .textBlock, content: combinedContent)
             document.elements.append(textElement)
+            // Save document asynchronously to prevent main thread hangs
+            DispatchQueue.global(qos: .userInitiated).async {
             document.save()
+            }
         } else {
             // If no content exists, create placeholder content
             textContent = "Start typing your document here...\n\nThis text editor is synchronized with the macOS version."
@@ -126,14 +169,31 @@ struct IOSDocumentEditor: View {
     }
     
     private func updateDocumentContent(_ newContent: String) {
-        // Update the unified textBlock element (same approach as macOS)
+        // This method will be called by the representable, which will pass both plain text and attributed text
+        updatePlainTextContent(newContent)
+    }
+    
+    private func updateDocumentContentWithAttributes(_ newContent: String, attributedText: NSAttributedString) {
+        print("📝 iOS: updateDocumentContentWithAttributes called")
+        print("📝 iOS: Content length: \(newContent.count), Attributed length: \(attributedText.length)")
+        
+        // Update the unified textBlock element with both plain text and attributed content
         if let index = document.elements.firstIndex(where: { $0.type == .textBlock }) {
-            // Update existing textBlock element directly on the binding
-            document.elements[index].content = newContent
-            // For iOS, we don't handle attributedContent/rtfData but we preserve the structure
+            print("📝 iOS: Updating existing textBlock element at index \(index)")
+            
+            // Create a new element with the attributed content
+            var newElement = DocumentElement(type: .textBlock, content: newContent)
+            newElement.attributedContent = attributedText
+            
+            // Replace the element in the array
+            document.elements[index] = newElement
+            
+            print("📝 iOS: Replaced element at index \(index) with new element containing RTF data")
         } else {
-            // Create new textBlock element
-            let element = DocumentElement(type: .textBlock, content: newContent)
+            print("📝 iOS: Creating new textBlock element")
+            // Create new textBlock element with attributed content
+            var element = DocumentElement(type: .textBlock, content: newContent)
+            element.attributedContent = attributedText
             document.elements.append(element)
         }
         
@@ -143,11 +203,29 @@ struct IOSDocumentEditor: View {
         // Update the canvasDocument content for consistency
         document.updateCanvasDocument()
         
-        // Save the document immediately
+        print("📝 iOS: About to save document asynchronously")
+        // Save the document immediately on the main thread to avoid race conditions
         document.save()
+        print("📝 iOS: Document save completed")
         
-        // Remove debug logging on every keystroke to improve performance
-        // print("📝 iOS: Updated document content (\(newContent.count) characters) and saved to iCloud Documents")
+        print("📝 iOS: Updated document with attributed content (\(newContent.count) characters, \(attributedText.length) attributed)")
+    }
+    
+    private func updatePlainTextContent(_ newContent: String) {
+        // Fallback method for plain text updates
+        if let index = document.elements.firstIndex(where: { $0.type == .textBlock }) {
+            document.elements[index].content = newContent
+        } else {
+            let element = DocumentElement(type: .textBlock, content: newContent)
+            document.elements.append(element)
+        }
+        
+        document.modifiedAt = Date()
+        document.updateCanvasDocument()
+        
+        DispatchQueue.global(qos: .userInitiated).async {
+            document.save()
+        }
     }
     
     private func startFileMonitoring() {
@@ -258,7 +336,9 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
     let availableHeight: CGFloat
 
     let onTextChange: (String) -> Void
+    let onAttributedTextChange: ((String, NSAttributedString) -> Void)?
     let onScrollChange: ((CGFloat) -> Void)?
+    let onBookmarkUpdate: (UUID, String, Int, [String: Any], Bool) -> Void // id, title, lineNumber, metadata, isAdding
     
     func makeUIView(context: Context) -> UIScrollView {
         let scrollView = UIScrollView()
@@ -321,7 +401,9 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
         context.coordinator.scrollView = scrollView
         context.coordinator.textView = textView
         context.coordinator.onTextChange = onTextChange
+        context.coordinator.onAttributedTextChange = onAttributedTextChange
         context.coordinator.onScrollChange = onScrollChange
+        context.coordinator.onBookmarkUpdate = onBookmarkUpdate
         
         // Initial content size calculation - defer and throttle to improve initial response time
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
@@ -330,6 +412,12 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
         
         // Setup scroll to top notification
         context.coordinator.setupScrollToTopNotification()
+        
+        // Setup attributed content notification
+        context.coordinator.setupAttributedContentNotification()
+        
+        // Setup keyboard observers for proper content adjustment
+        context.coordinator.setupKeyboardObservers()
         
         return scrollView
     }
@@ -377,13 +465,19 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
         @Binding var text: String
         @Binding var isFocused: Bool
         var onTextChange: ((String) -> Void)?
+        var onAttributedTextChange: ((String, NSAttributedString) -> Void)?
         var onScrollChange: ((CGFloat) -> Void)?
+        var onBookmarkUpdate: ((UUID, String, Int, [String: Any], Bool) -> Void)?
         var scrollView: UIScrollView?
         var textView: UITextView?
         var availableHeight: CGFloat = 0
         var isCurrentlyEditing: Bool = false
+        private var colorScheme: ColorScheme?
 
         private var scrollToTopObserver: NSObjectProtocol?
+        private var keyboardWillShowObserver: NSObjectProtocol?
+        private var keyboardWillHideObserver: NSObjectProtocol?
+        private var applyAttributedContentObserver: NSObjectProtocol?
         
         init(text: Binding<String>, isFocused: Binding<Bool>) {
             self._text = text
@@ -392,6 +486,15 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
         
         deinit {
             if let observer = scrollToTopObserver {
+                NotificationCenter.default.removeObserver(observer)
+            }
+            if let observer = keyboardWillShowObserver {
+                NotificationCenter.default.removeObserver(observer)
+            }
+            if let observer = keyboardWillHideObserver {
+                NotificationCenter.default.removeObserver(observer)
+            }
+            if let observer = applyAttributedContentObserver {
                 NotificationCenter.default.removeObserver(observer)
             }
             textChangeTimer?.invalidate()
@@ -405,6 +508,56 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
             ) { [weak self] _ in
                 self?.scrollToTop()
             }
+        }
+        
+        func setupKeyboardObservers() {
+            keyboardWillShowObserver = NotificationCenter.default.addObserver(
+                forName: UIResponder.keyboardWillShowNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] notification in
+                self?.keyboardWillShow(notification)
+            }
+            
+            keyboardWillHideObserver = NotificationCenter.default.addObserver(
+                forName: UIResponder.keyboardWillHideNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] notification in
+                self?.keyboardWillHide(notification)
+            }
+        }
+        
+        func setupAttributedContentNotification() {
+            applyAttributedContentObserver = NotificationCenter.default.addObserver(
+                forName: NSNotification.Name("ApplyAttributedContent"),
+                object: nil,
+                queue: .main
+            ) { [weak self] notification in
+                self?.applyAttributedContent(notification)
+            }
+        }
+        
+        private func applyAttributedContent(_ notification: Notification) {
+            guard let textView = textView,
+                  let attributedContent = notification.userInfo?["attributedContent"] as? NSAttributedString else {
+                print("❌ iOS: Failed to get attributed content from notification")
+                return
+            }
+            
+            print("📝 iOS: Applying attributed content (\(attributedContent.length) characters)")
+            print("📝 iOS: Attributed content string: \"\(attributedContent.string.prefix(100))...\"")
+            
+            // Apply the attributed content to the text view
+            textView.attributedText = NSAttributedString(attributedString: attributedContent)
+            
+            // Update the text binding to match
+            text = attributedContent.string
+            
+            // Update content size after applying attributed content
+            updateTextViewContentSize()
+            
+            print("✅ iOS: Successfully applied attributed content with formatting")
         }
         
         func scrollToTop() {
@@ -431,6 +584,55 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
             UIView.animate(withDuration: 0.4, delay: 0, options: [.curveEaseInOut], animations: {
                 scrollView.setContentOffset(CGPoint(x: 0, y: -scrollView.contentInset.top), animated: false)
             }, completion: nil)
+        }
+        
+        private func keyboardWillShow(_ notification: Notification) {
+            guard let scrollView = scrollView,
+                  let textView = textView,
+                  let keyboardFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect,
+                  let animationDuration = notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double else {
+                return
+            }
+            
+            // Convert keyboard frame to scroll view's coordinate system
+            let keyboardHeight = keyboardFrame.height
+            
+            // Adjust scroll view content insets to account for keyboard
+            let contentInsets = UIEdgeInsets(top: 0, left: 0, bottom: keyboardHeight, right: 0)
+            
+            UIView.animate(withDuration: animationDuration) {
+                scrollView.contentInset = contentInsets
+                scrollView.scrollIndicatorInsets = contentInsets
+                
+                // Scroll to keep cursor visible if text view is first responder
+                if textView.isFirstResponder {
+                    let cursorRect = textView.caretRect(for: textView.selectedTextRange?.start ?? textView.beginningOfDocument)
+                    let cursorRectInScrollView = textView.convert(cursorRect, to: scrollView)
+                    
+                    // Add some padding above the cursor
+                    let targetRect = CGRect(
+                        x: cursorRectInScrollView.origin.x,
+                        y: cursorRectInScrollView.origin.y - 20,
+                        width: cursorRectInScrollView.width,
+                        height: cursorRectInScrollView.height + 40
+                    )
+                    
+                    scrollView.scrollRectToVisible(targetRect, animated: false)
+                }
+            }
+        }
+        
+        private func keyboardWillHide(_ notification: Notification) {
+            guard let scrollView = scrollView,
+                  let animationDuration = notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double else {
+                return
+            }
+            
+            // Reset content insets when keyboard hides
+            UIView.animate(withDuration: animationDuration) {
+                scrollView.contentInset = UIEdgeInsets.zero
+                scrollView.scrollIndicatorInsets = UIEdgeInsets.zero
+            }
         }
         
         // Dynamic content size management - key method for top and bottom padding
@@ -495,6 +697,9 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
             // Update binding immediately for responsiveness
             text = textView.text
             
+            // Save attributed text immediately to preserve formatting
+            self.saveAttributedText(textView)
+            
             // Debounce the document save to prevent excessive saves during typing
             textChangeTimer?.invalidate()
             textChangeTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { _ in
@@ -536,6 +741,13 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
             return true // Always allow editing
         }
         
+        func textViewDidChangeSelection(_ textView: UITextView) {
+            // Update toolbar when selection changes to reflect current formatting
+            if let colorScheme = self.colorScheme {
+                updateFormattingToolbar(for: textView, colorScheme: colorScheme)
+            }
+        }
+        
         // MARK: - Background Operations Management
         private func pauseBackgroundOperations() {
             // Notify parent to pause heavy operations during initial editing
@@ -550,51 +762,87 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
         }
         
         // MARK: - Formatting Toolbar Setup
+        private var toolbarHostingController: IOSFormattingToolbarHostingController?
+        
         func setupFormattingToolbar(for textView: UITextView, colorScheme: ColorScheme) {
+            self.colorScheme = colorScheme
+            updateFormattingToolbar(for: textView, colorScheme: colorScheme)
+        }
+        
+        private func updateFormattingToolbar(for textView: UITextView, colorScheme: ColorScheme) {
+            let currentFormatting = getCurrentFormatting()
             let toolbar = IOSTextFormattingToolbar(
+                onTextStyle: { [weak self] style in
+                    self?.applyTextStyle(style)
+                    self?.updateFormattingToolbar(for: textView, colorScheme: colorScheme)
+                },
                 onBold: { [weak self] in
                     self?.toggleBold()
+                    self?.updateFormattingToolbar(for: textView, colorScheme: colorScheme)
                 },
                 onItalic: { [weak self] in
                     self?.toggleItalic()
+                    self?.updateFormattingToolbar(for: textView, colorScheme: colorScheme)
                 },
                 onUnderline: { [weak self] in
                     self?.toggleUnderline()
+                    self?.updateFormattingToolbar(for: textView, colorScheme: colorScheme)
                 },
                 onLink: { [weak self] in
                     self?.insertLink()
+                    self?.updateFormattingToolbar(for: textView, colorScheme: colorScheme)
                 },
                 onTextColor: { [weak self] color in
                     self?.applyTextColor(color)
+                    self?.updateFormattingToolbar(for: textView, colorScheme: colorScheme)
                 },
                 onHighlight: { [weak self] color in
                     self?.applyHighlight(color)
+                    self?.updateFormattingToolbar(for: textView, colorScheme: colorScheme)
                 },
                 onBulletList: { [weak self] in
                     self?.toggleBulletList()
+                    self?.updateFormattingToolbar(for: textView, colorScheme: colorScheme)
                 },
                 onAlignment: { [weak self] alignment in
                     self?.applyAlignment(alignment)
+                    self?.updateFormattingToolbar(for: textView, colorScheme: colorScheme)
                 },
-                onDismiss: { [weak textView] in
-                    textView?.resignFirstResponder()
+                onBookmark: { [weak self] in
+                    self?.toggleBookmark()
+                    self?.updateFormattingToolbar(for: textView, colorScheme: colorScheme)
                 },
-                isBold: getCurrentFormatting().isBold,
-                isItalic: getCurrentFormatting().isItalic,
-                isUnderlined: getCurrentFormatting().isUnderlined,
-                hasLink: getCurrentFormatting().hasLink,
-                hasBulletList: getCurrentFormatting().hasBulletList
+                currentTextStyle: currentFormatting.textStyle,
+                isBold: currentFormatting.isBold,
+                isItalic: currentFormatting.isItalic,
+                isUnderlined: currentFormatting.isUnderlined,
+                hasLink: currentFormatting.hasLink,
+                hasBulletList: currentFormatting.hasBulletList,
+                hasTextColor: currentFormatting.textColor != nil,
+                hasHighlight: currentFormatting.highlightColor != nil,
+                hasBookmark: currentFormatting.isBookmarked,
+                currentTextColor: currentFormatting.textColor,
+                currentHighlightColor: currentFormatting.highlightColor
             )
             
-            let hostingController = IOSFormattingToolbarHostingController(toolbar: toolbar)
-            textView.inputAccessoryView = hostingController.view
+            if toolbarHostingController == nil {
+                toolbarHostingController = IOSFormattingToolbarHostingController(toolbar: toolbar)
+                textView.inputAccessoryView = toolbarHostingController?.view
+            } else {
+                toolbarHostingController?.rootView = toolbar
+            }
         }
         
         // MARK: - Text Formatting Methods
         private func toggleBold() {
-            guard let textView = textView, textView.selectedRange.location != NSNotFound else { return }
+            print("🔥 iOS: toggleBold called")
+            guard let textView = textView, textView.selectedRange.location != NSNotFound else { 
+                print("🔥 iOS: toggleBold guard failed - no textView or invalid selection")
+                return 
+            }
             
             let selectedRange = textView.selectedRange
+            print("🔥 iOS: toggleBold selectedRange: \(selectedRange)")
             let attributedText = NSMutableAttributedString(attributedString: textView.attributedText)
             
             attributedText.enumerateAttribute(.font, in: selectedRange) { fontAttribute, range, _ in
@@ -625,6 +873,11 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
             textView.attributedText = attributedText
             textView.selectedRange = selectedRange
             text = textView.text
+            
+            print("🔥 iOS: toggleBold about to call saveAttributedText")
+            // Save the attributed text to preserve formatting
+            saveAttributedText(textView)
+            print("🔥 iOS: toggleBold completed")
         }
         
         private func toggleItalic() {
@@ -661,6 +914,9 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
             textView.attributedText = attributedText
             textView.selectedRange = selectedRange
             text = textView.text
+            
+            // Save the attributed text to preserve formatting
+            saveAttributedText(textView)
         }
         
         private func toggleUnderline() {
@@ -678,6 +934,9 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
             textView.attributedText = attributedText
             textView.selectedRange = selectedRange
             text = textView.text
+            
+            // Save the attributed text to preserve formatting
+            saveAttributedText(textView)
         }
         
         private func insertLink() {
@@ -690,13 +949,21 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
             
             let selectedRange = textView.selectedRange
             let attributedText = NSMutableAttributedString(attributedString: textView.attributedText)
-            let uiColor = UIColor(color)
             
-            attributedText.addAttribute(.foregroundColor, value: uiColor, range: selectedRange)
+            if color == .clear {
+                // Remove foreground color attribute to reset to default color
+                attributedText.removeAttribute(.foregroundColor, range: selectedRange)
+            } else {
+                let uiColor = UIColor(color)
+                attributedText.addAttribute(.foregroundColor, value: uiColor, range: selectedRange)
+            }
             
             textView.attributedText = attributedText
             textView.selectedRange = selectedRange
             text = textView.text
+            
+            // Save the attributed text to preserve formatting
+            saveAttributedText(textView)
         }
         
         private func applyHighlight(_ color: Color) {
@@ -715,6 +982,9 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
             textView.attributedText = attributedText
             textView.selectedRange = selectedRange
             text = textView.text
+            
+            // Save the attributed text to preserve formatting
+            saveAttributedText(textView)
         }
         
         private func toggleBulletList() {
@@ -747,6 +1017,71 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
             textView.attributedText = attributedText
             textView.selectedRange = selectedRange
             self.text = textView.text
+            
+            // Save the attributed text to preserve formatting
+            saveAttributedText(textView)
+        }
+        
+        private func toggleBookmark() {
+            guard let textView = textView, 
+                  textView.selectedRange.location != NSNotFound,
+                  textView.selectedRange.length > 0 else { 
+                print("🔖❌ toggleBookmark() GUARD CHECK FAILED - no text selected")
+                return 
+            }
+            
+            let selectedRange = textView.selectedRange
+            let attributedText = NSMutableAttributedString(attributedString: textView.attributedText)
+            let currentAttributes = attributedText.attributes(at: selectedRange.location, effectiveRange: nil)
+            let existingBookmarkID = currentAttributes[.isBookmark] as? String
+            
+            if let bookmarkID = existingBookmarkID, let uuid = UUID(uuidString: bookmarkID) {
+                // Remove bookmark
+                print("🔖 Removing bookmark attribute with ID: \(bookmarkID) at range: \(selectedRange)")
+                attributedText.removeAttribute(.isBookmark, range: selectedRange)
+                
+                // Update text view first
+                textView.attributedText = attributedText
+                textView.selectedRange = selectedRange
+                text = textView.text
+                
+                // Save the attributed text to preserve formatting
+                saveAttributedText(textView)
+                
+                // Remove from document markers via callback
+                onBookmarkUpdate?(uuid, "", 0, [:], false)
+                print("📚 Bookmark removed from document")
+            } else {
+                // Add bookmark
+                let uuid = UUID()
+                let bookmarkID = uuid.uuidString
+                print("🔖 Adding bookmark attribute with ID: \(bookmarkID) at range: \(selectedRange)")
+                attributedText.addAttribute(.isBookmark, value: bookmarkID, range: selectedRange)
+                
+                let snippet = (attributedText.string as NSString).substring(with: selectedRange)
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                let title = snippet.isEmpty ? "Bookmark" : String(snippet.prefix(30))
+                let fullText = attributedText.string
+                let textUpToCursor = (fullText as NSString).substring(to: selectedRange.location)
+                let lineNumber = textUpToCursor.components(separatedBy: .newlines).count
+                
+                // Update text view first
+                textView.attributedText = attributedText
+                textView.selectedRange = selectedRange
+                text = textView.text
+                
+                // Save the attributed text to preserve formatting
+                saveAttributedText(textView)
+                
+                // Add to document markers via callback
+                let metadata: [String: Any] = [
+                    "charPosition": selectedRange.location,
+                    "charLength": selectedRange.length,
+                    "snippet": snippet
+                ]
+                onBookmarkUpdate?(uuid, title, lineNumber, metadata, true)
+                print("📚 Bookmark added to document - title: \(title), line: \(lineNumber)")
+            }
         }
         
         private func getCurrentFormatting() -> TextFormatting {
@@ -762,28 +1097,126 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
                 let attributes = textView.attributedText.attributes(at: selectedRange.location, effectiveRange: nil)
                 
                 if let font = attributes[.font] as? UIFont {
-                    let traits = font.fontDescriptor.symbolicTraits
-                    formatting.isBold = traits.contains(.traitBold)
-                    formatting.isItalic = traits.contains(.traitItalic)
+                    let symbolicTraits = font.fontDescriptor.symbolicTraits
+                    formatting.isBold = symbolicTraits.contains(.traitBold)
+                    formatting.isItalic = symbolicTraits.contains(.traitItalic)
+                    
+                    // Detect text style based on font size and weight
+                    let fontSize = font.pointSize
+                    let fontTraits = font.fontDescriptor.object(forKey: .traits) as? [UIFontDescriptor.TraitKey: Any]
+                    let fontWeight = fontTraits?[UIFontDescriptor.TraitKey.weight] as? CGFloat ?? CGFloat(UIFont.Weight.regular.rawValue)
+                    
+                    if fontSize >= 32 {
+                        formatting.textStyle = "Title"
+                    } else if fontSize >= 25 {
+                        formatting.textStyle = "Heading"
+                    } else if fontWeight >= UIFont.Weight.medium.rawValue && fontSize >= 17 {
+                        formatting.textStyle = "Strong"
+                    } else if fontSize <= 13 {
+                        formatting.textStyle = "Caption"
+                    } else {
+                        formatting.textStyle = "Body"
+                    }
                 }
                 
                 formatting.isUnderlined = (attributes[.underlineStyle] as? Int ?? 0) != 0
                 formatting.hasLink = attributes[.link] != nil
                 
                 if let textColor = attributes[.foregroundColor] as? UIColor {
-                    formatting.textColor = Color(textColor)
+                    // Only set textColor if it's different from the default text color
+                    let defaultTextColor = (colorScheme ?? .light) == .dark ? UIColor.white : UIColor.black
+                    if !textColor.isEqual(defaultTextColor) {
+                        formatting.textColor = Color(textColor)
+                    }
                 }
                 
                 if let backgroundColor = attributes[.backgroundColor] as? UIColor {
                     formatting.highlightColor = Color(backgroundColor)
                 }
+                
+                formatting.isBookmarked = attributes[.isBookmark] != nil
             }
             
             return formatting
         }
         
+        private func applyTextStyle(_ styleName: String) {
+            guard let textView = textView, textView.selectedRange.location != NSNotFound else { return }
+            
+            let selectedRange = textView.selectedRange
+            let attributedText = NSMutableAttributedString(attributedString: textView.attributedText)
+            
+            // Define font attributes based on style
+            let baseFontSize: CGFloat = 16
+            var font: UIFont
+            var paragraphStyle = NSMutableParagraphStyle()
+            
+            switch styleName {
+            case "Title":
+                font = UIFont.systemFont(ofSize: baseFontSize * 2.0, weight: .regular) // 32pt
+                paragraphStyle.paragraphSpacingBefore = baseFontSize * 0.8
+                paragraphStyle.paragraphSpacing = baseFontSize * 0.6
+                paragraphStyle.lineHeightMultiple = 1.2
+                
+            case "Heading":
+                font = UIFont.systemFont(ofSize: baseFontSize * 1.6, weight: .semibold) // ~25pt
+                paragraphStyle.paragraphSpacingBefore = baseFontSize * 0.6
+                paragraphStyle.paragraphSpacing = baseFontSize * 0.4
+                paragraphStyle.lineHeightMultiple = 1.1
+                
+            case "Strong":
+                font = UIFont.systemFont(ofSize: baseFontSize * 1.1, weight: .medium) // ~17pt
+                paragraphStyle.lineHeightMultiple = 1.3
+                
+            case "Caption":
+                font = UIFont.systemFont(ofSize: baseFontSize * 0.8, weight: .regular) // ~13pt
+                paragraphStyle.paragraphSpacingBefore = baseFontSize * 0.3
+                paragraphStyle.paragraphSpacing = baseFontSize * 0.2
+                paragraphStyle.lineHeightMultiple = 1.15
+                
+            default: // "Body"
+                font = UIFont.systemFont(ofSize: baseFontSize, weight: .regular)
+                paragraphStyle.lineHeightMultiple = 1.3
+            }
+            
+            // Apply the font and paragraph style
+            if selectedRange.length > 0 {
+                // Apply to selected text
+                attributedText.addAttribute(.font, value: font, range: selectedRange)
+                attributedText.addAttribute(.paragraphStyle, value: paragraphStyle, range: selectedRange)
+            } else {
+                // Apply to current typing attributes
+                textView.typingAttributes = [
+                    .font: font,
+                    .paragraphStyle: paragraphStyle,
+                    .foregroundColor: colorScheme == .dark ? UIColor.white : UIColor.black
+                ]
+            }
+            
+            textView.attributedText = attributedText
+            textView.selectedRange = selectedRange
+            text = textView.text
+            
+            // Save the attributed text to preserve formatting
+            saveAttributedText(textView)
+        }
+        
+        private func saveAttributedText(_ textView: UITextView) {
+            // Create attributed string from the text view to preserve all formatting
+            let attributedText = NSAttributedString(attributedString: textView.attributedText)
+            
+            print("💾 iOS: saveAttributedText called - \(attributedText.length) characters")
+            print("💾 iOS: Has onAttributedTextChange callback: \(onAttributedTextChange != nil)")
+            
+            // Call the attributed text change callback to save the formatting
+            onAttributedTextChange?(textView.text, attributedText)
+            
+            print("💾 iOS: onAttributedTextChange callback invoked")
+        }
+        
         // Helper struct for formatting state
         private struct TextFormatting {
+            var textStyle: String? = nil
             var isBold: Bool = false
             var isItalic: Bool = false
             var isUnderlined: Bool = false
@@ -791,6 +1224,7 @@ struct IOSTextViewRepresentable: UIViewRepresentable {
             var textColor: Color? = nil
             var highlightColor: Color? = nil
             var hasBulletList: Bool = false
+            var isBookmarked: Bool = false
         }
         
         // MARK: - UIScrollViewDelegate

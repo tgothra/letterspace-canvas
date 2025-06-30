@@ -269,7 +269,7 @@ extension DocumentTextView {
         
         // Always reset first click flags
         UserDefaults.standard.set(false, forKey: "Letterspace_FirstClickHandled")
-        UserDefaults.standard.synchronize()
+        // Remove synchronize() to prevent main thread hangs
         
         // Force first responder status
         if let window = self.window {
@@ -337,7 +337,7 @@ extension DocumentTextView {
         
         // Reset flags unconditionally
         UserDefaults.standard.set(false, forKey: "Letterspace_FirstClickHandled")
-        UserDefaults.standard.synchronize()
+        // Remove synchronize() to prevent main thread hangs
         
         // Force header state to false
         isHeaderImageCurrentlyExpanded = false
@@ -432,17 +432,15 @@ extension DocumentTextView {
                         updatedDocument.elements.append(element)
                     }
                     
-                    // Update document SYNCHRONOUSLY before focus is lost
-                    if Thread.isMainThread {
+                    // Update document binding immediately on main thread, but save asynchronously
+                    DispatchQueue.main.async {
                         coordinator.parent.document = updatedDocument
+                    }
+                    
+                    // Save document asynchronously to prevent main thread hangs
+                    DispatchQueue.global(qos: .userInitiated).async {
                         updatedDocument.save()
-                        print("💾 Document saved synchronously before losing focus")
-                    } else {
-                        DispatchQueue.main.sync {
-                            coordinator.parent.document = updatedDocument
-                            updatedDocument.save()
-                            print("💾 Document saved via sync dispatch before losing focus")
-                        }
+                        print("💾 Document saved asynchronously after losing focus")
                     }
                 }
             }
@@ -580,7 +578,7 @@ extension DocumentTextView {
         get { return UserDefaults.standard.integer(forKey: "LetterSpace_EditorClickCounter") }
         set { 
             UserDefaults.standard.set(newValue, forKey: "LetterSpace_EditorClickCounter")
-            UserDefaults.standard.synchronize()
+            // Remove synchronize() to prevent main thread hangs
         }
     }
     
@@ -608,7 +606,7 @@ extension DocumentTextView {
         
         // Clear the first click handled flag
         UserDefaults.standard.set(false, forKey: "Letterspace_FirstClickHandled")
-        UserDefaults.standard.synchronize()
+        // Remove synchronize() to prevent main thread hangs
         
         // Force immediate focus on this text view
         if let window = self.window {

@@ -452,7 +452,7 @@ struct OrganizeDocumentsView: View {
         }
         if let encoded = try? encoder.encode(stringKeys) {
             UserDefaults.standard.set(encoded, forKey: "FolderDocuments")
-            UserDefaults.standard.synchronize() // Force immediate save
+            // Remove synchronize() to prevent main thread hangs
             print("💾 Successfully saved folder documents")
             
             // Update folders' documentIds to stay in sync
@@ -471,7 +471,7 @@ struct OrganizeDocumentsView: View {
         print("💾 Saving folders...")
         if let encoded = try? JSONEncoder().encode(folders) {
             UserDefaults.standard.set(encoded, forKey: "SavedFolders")
-            UserDefaults.standard.synchronize() // Force immediate save
+            // Remove synchronize() to prevent main thread hangs
             print("💾 Successfully saved folders")
         }
     }
@@ -530,7 +530,7 @@ struct OrganizeDocumentsView: View {
                 self.saveFolders()
                 
                 // Force an immediate update to UserDefaults
-                UserDefaults.standard.synchronize()
+                // Remove synchronize() to prevent main thread hangs
                 
                 // Notify main view of the update
                 NotificationCenter.default.post(name: NSNotification.Name("FoldersDidUpdate"), object: nil)
@@ -563,7 +563,7 @@ struct OrganizeDocumentsView: View {
                 self.saveFolders()
                 
                 // Force an immediate update to UserDefaults
-                UserDefaults.standard.synchronize()
+                // Remove synchronize() to prevent main thread hangs
                 
                 // Notify main view of the update
                 NotificationCenter.default.post(name: NSNotification.Name("FoldersDidUpdate"), object: nil)

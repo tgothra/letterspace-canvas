@@ -87,19 +87,19 @@ struct FloatingContextualToolbar: View {
                         .zIndex(1)
                 } else {
                     // Normal mode: show active panel if selected
-                    if let activePanel = activePanel {
-                        toolPanel(for: activePanel)
-                            .transition(.asymmetric(
-                                insertion: .move(edge: .trailing).combined(with: .opacity),
-                                removal: .move(edge: .trailing).combined(with: .opacity)
-                            ))
-                            .zIndex(1)
-                    }
-                    
-                    // Floating tool buttons (when expanded)
-                    floatingToolButtons
-                        .zIndex(2)
-                        .transition(.move(edge: .trailing).combined(with: .opacity))
+                if let activePanel = activePanel {
+                    toolPanel(for: activePanel)
+                        .transition(.asymmetric(
+                            insertion: .move(edge: .trailing).combined(with: .opacity),
+                            removal: .move(edge: .trailing).combined(with: .opacity)
+                        ))
+                        .zIndex(1)
+                }
+                
+                // Floating tool buttons (when expanded)
+                floatingToolButtons
+                    .zIndex(2)
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
             } else {
                 // Collapsed indicator - thin vertical line on the right edge
@@ -134,10 +134,10 @@ struct FloatingContextualToolbar: View {
             
             // Show separator only if there are multiple tools (normal mode)
             if !isDistractionFreeMode {
-                // Separator
-                Divider()
-                    .frame(width: 24)
-                    .foregroundStyle(theme.secondary.opacity(0.3))
+            // Separator
+            Divider()
+                .frame(width: 24)
+                .foregroundStyle(theme.secondary.opacity(0.3))
             }
             
             // Collapse arrow (no button styling)

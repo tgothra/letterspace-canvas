@@ -93,8 +93,8 @@ struct ScrollGestureHandler: NSViewRepresentable {
                     
                     if let self = self, abs(deltaY) > 0.01 { // Only process meaningful scroll events
                         DispatchQueue.main.async {
-                            self.onScroll?(deltaY)
-                        }
+                        self.onScroll?(deltaY)
+                    }
                     }
                 }
                 
@@ -1200,8 +1200,8 @@ struct DocumentArea: View {
         // If we're in distraction-free mode, don't handle scroll
         if isDistractionFreeMode {
             return
-        }
-        
+                            }
+                            
         // Only process if there's actually a header image to avoid unnecessary work
         guard headerImage != nil || isHeaderExpanded else {
             return
@@ -1220,7 +1220,7 @@ struct DocumentArea: View {
         // Apply very gentle easing function for ultra-smooth transition
         // Using a much gentler ease-out: f(x) = 1 - (1-x)^1.2 for smoother slow scrolling
         let progress = 1.0 - pow(1.0 - linearProgress, 1.2)
-        
+                    
         // Much lower threshold for ultra-smooth updates during slow scrolling
         let threshold: CGFloat = 0.001 // Ultra-low threshold for smooth slow scrolling
         if abs(headerCollapseProgress - progress) > threshold {

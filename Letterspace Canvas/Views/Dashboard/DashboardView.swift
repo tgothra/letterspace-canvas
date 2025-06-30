@@ -1987,9 +1987,9 @@ struct DashboardView: View {
             
             ZStack {
                 // Background tap area to exit reorder mode or clear document selections
-                Color.clear
-                    .contentShape(Rectangle())
-                    .onTapGesture {
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .onTapGesture {
                         if reorderMode {
                             print("🔄 Exiting reorder mode via background tap")
                             withAnimation(.interactiveSpring(response: 0.3, dampingFraction: 0.8, blendDuration: 0)) {
@@ -2006,8 +2006,8 @@ struct DashboardView: View {
                             }
                             #endif
                         }
-                    }
-                    .zIndex(-1) // Behind the cards
+                        }
+                        .zIndex(-1) // Behind the cards
                 
                 ForEach(0..<carouselSections.count, id: \.self) { index in
                     carouselCard(for: index, cardWidth: cardWidth, cardSpacing: cardSpacing, totalWidth: totalWidth, shadowPadding: shadowPadding)
@@ -2188,10 +2188,10 @@ struct DashboardView: View {
             if reorderMode {
                 // In reorder mode, tapping a card exits reorder mode
                 print("🔄 Exiting reorder mode via card tap")
-                withAnimation(.interactiveSpring(response: 0.3, dampingFraction: 0.8, blendDuration: 0)) {
+                    withAnimation(.interactiveSpring(response: 0.3, dampingFraction: 0.8, blendDuration: 0)) {
                     reorderMode = false
                     draggedCardIndex = nil
-                    draggedCardOffset = .zero
+                        draggedCardOffset = .zero
                 }
             } else if !isCenter {
                 withAnimation(.interactiveSpring(response: 0.4, dampingFraction: 0.85, blendDuration: 0)) {

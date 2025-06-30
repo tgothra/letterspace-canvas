@@ -57,43 +57,8 @@ extension Color {
     }
 }
 
-extension Font {
-    static func registerInterTightFonts() {
-        // Register each weight of Inter Tight that we need
-        let fontNames = [
-            "InterTight-Thin",
-            "InterTight-ThinItalic",
-            "InterTight-Light",
-            "InterTight-LightItalic",
-            "InterTight-Regular",
-            "InterTight-Italic",
-            "InterTight-Medium",
-            "InterTight-MediumItalic",
-            "InterTight-SemiBold",
-            "InterTight-SemiBoldItalic",
-            "InterTight-Bold",
-            "InterTight-BoldItalic",
-            "InterTight-ExtraBold",
-            "InterTight-ExtraBoldItalic",
-            "InterTight-Black",
-            "InterTight-BlackItalic"
-        ]
-        
-        for fontName in fontNames {
-            guard let url = Bundle.main.url(forResource: fontName, withExtension: "ttf"),
-                  let dataProvider = CGDataProvider(url: url as CFURL),
-                  let font = CGFont(dataProvider) else {
-                print("Failed to load font: \(fontName)")
-                continue
-            }
-            
-            var error: Unmanaged<CFError>?
-            if !CTFontManagerRegisterGraphicsFont(font, &error) {
-                print("Failed to register font: \(fontName)")
-            }
-        }
-    }
-}
+// Font registration is now handled automatically via Info.plist UIAppFonts
+// No manual registration needed
 
 enum DesignSystem {
     enum Colors {
@@ -146,7 +111,7 @@ enum DesignSystem {
     
     enum Typography {
         static func black(size: CGFloat) -> Font {
-            .custom("InterTight-Black", size: size)
+            .custom("InterTight-Bold", size: size) // Fallback to Bold since Black was removed
         }
         
         static func bold(size: CGFloat) -> Font {
@@ -166,7 +131,7 @@ enum DesignSystem {
         }
         
         static func light(size: CGFloat) -> Font {
-            .custom("InterTight-Light", size: size)
+            .custom("InterTight-Regular", size: size) // Fallback to Regular since Light was removed
         }
         
         static let title = bold(size: 24)

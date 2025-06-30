@@ -58,17 +58,33 @@ struct DocumentElement: Identifiable, Codable, Transferable {
             do {
                 #if os(macOS)
                 let docType = NSAttributedString.DocumentType.rtfd
-                #else
-                // If data was saved as .rtf on iOS, try to read as .rtf
-                // This assumes that if rtfData exists on iOS, it was saved via the RTF path.
-                let docType = NSAttributedString.DocumentType.rtf
-                #endif
-
                 let options: [NSAttributedString.DocumentReadingOptionKey: Any] = [
                     .documentType: docType
                 ]
-                
                 let attributedString = try NSMutableAttributedString(data: data, options: options, documentAttributes: nil)
+                #else
+                // On iOS, first try to read as RTF
+                let attributedString: NSMutableAttributedString
+                do {
+                    print("📖 iOS: Attempting to read rtfData as RTF...")
+                    let options: [NSAttributedString.DocumentReadingOptionKey: Any] = [
+                        .documentType: NSAttributedString.DocumentType.rtf
+                    ]
+                    attributedString = try NSMutableAttributedString(data: data, options: options, documentAttributes: nil)
+                    print("📖 iOS: Successfully read as RTF - \(attributedString.length) characters")
+                } catch {
+                    print("❌ iOS: Failed to read as RTF: \(error)")
+                    print("📖 iOS: Attempting to read rtfData as NSKeyedArchiver...")
+                    // If RTF fails, try NSKeyedArchiver (our fallback format)
+                    if let unarchivedString = try NSKeyedUnarchiver.unarchivedObject(ofClass: NSAttributedString.self, from: data) {
+                        attributedString = NSMutableAttributedString(attributedString: unarchivedString)
+                        print("📖 iOS: Successfully read using NSKeyedArchiver - \(attributedString.length) characters")
+                    } else {
+                        print("❌ iOS: NSKeyedArchiver returned nil")
+                        return nil
+                    }
+                }
+                #endif
                 
                 // Preserve standard attributes from RTFD data, including .backgroundColor
                 // No custom conversion needed anymore
@@ -102,7 +118,9 @@ struct DocumentElement: Identifiable, Codable, Transferable {
             }
         }
         set {
+            print("📦 DocumentElement.attributedContent setter called")
             if let newValue = newValue {
+                print("📦 Setting attributedContent with \(newValue.length) characters")
                 do {
                     // Create a mutable copy to remove any custom attributes if they accidentally exist
                     let mutableString = NSMutableAttributedString(attributedString: newValue)
@@ -147,19 +165,35 @@ struct DocumentElement: Identifiable, Codable, Transferable {
                     // For now, let's try RTF as a fallback, though it's less rich than RTFD.
                     // Or, if RTFD is critical, this path needs a proper iOS solution.
                     do {
+                        print("📦 iOS: Attempting to serialize NSAttributedString to RTF...")
                         rtfData = try attributedString.data(from: NSRange(location: 0, length: attributedString.length), documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf])
+                        print("📦 iOS: Successfully serialized to RTF - \(rtfData?.count ?? 0) bytes")
+                        print("📦 iOS: rtfData assigned to DocumentElement")
                     } catch {
-                        print("Error serializing NSAttributedString to RTF on iOS: \(error)")
-                        // As a last resort, store plain text if RTF fails
-                        // rtfData = attributedString.string.data(using: .utf8) 
-                        // Or, better to leave rtfData nil if proper serialization fails
-                        rtfData = nil 
+                        print("❌ iOS: Error serializing NSAttributedString to RTF: \(error)")
+                        print("❌ iOS: AttributedString length: \(attributedString.length)")
+                        print("❌ iOS: AttributedString content preview: \"\(attributedString.string.prefix(100))...\"")
+                        
+                        // Let's try a different approach: Use NSKeyedArchiver to store the attributed string
+                        print("📦 iOS: Attempting NSKeyedArchiver fallback...")
+                        do {
+                            rtfData = try NSKeyedArchiver.archivedData(withRootObject: attributedString, requiringSecureCoding: false)
+                            print("📦 iOS: Successfully serialized using NSKeyedArchiver - \(rtfData?.count ?? 0) bytes")
+                        } catch {
+                            print("❌ iOS: NSKeyedArchiver also failed: \(error)")
+                            // As a last resort, store plain text if RTF fails
+                            // rtfData = attributedString.string.data(using: .utf8) 
+                            // Or, better to leave rtfData nil if proper serialization fails
+                            rtfData = nil 
+                        }
                     }
                     #endif
                 }
             } else {
+                print("📦 Setting attributedContent to nil")
                 rtfData = nil
             }
+            print("📦 DocumentElement.attributedContent setter completed - rtfData is nil: \(rtfData == nil), size: \(rtfData?.count ?? 0) bytes")
         }
     }
     
@@ -205,6 +239,7 @@ struct DocumentElement: Identifiable, Codable, Transferable {
         options = try container.decode([String].self, forKey: .options)
         date = try container.decodeIfPresent(Date.self, forKey: .date)
         rtfData = try container.decodeIfPresent(Data.self, forKey: .rtfData)
+        print("📦 DocumentElement.decode: rtfData is nil: \(rtfData == nil), size: \(rtfData?.count ?? 0) bytes")
         isInline = try container.decodeIfPresent(Bool.self, forKey: .isInline) ?? false
         scriptureRanges = try container.decodeIfPresent([[Int]].self, forKey: .scriptureRanges) ?? []
     }
@@ -217,6 +252,7 @@ struct DocumentElement: Identifiable, Codable, Transferable {
         try container.encode(placeholder, forKey: .placeholder)
         try container.encode(options, forKey: .options)
         try container.encode(date, forKey: .date)
+        print("📦 DocumentElement.encode: rtfData is nil: \(rtfData == nil), size: \(rtfData?.count ?? 0) bytes")
         try container.encodeIfPresent(rtfData, forKey: .rtfData)
         try container.encode(isInline, forKey: .isInline)
         try container.encode(scriptureRanges, forKey: .scriptureRanges)

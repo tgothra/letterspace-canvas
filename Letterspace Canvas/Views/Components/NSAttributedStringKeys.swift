@@ -1,5 +1,8 @@
 #if os(macOS)
 import AppKit
+#elseif os(iOS)
+import UIKit
+#endif
 
 // Define custom attribute key for bookmarks
 extension NSAttributedString.Key {
@@ -19,5 +22,3 @@ extension NSAttributedString.Key {
 extension NSAttributedString.Key {
     static let fixedWidth = NSAttributedString.Key("fixedWidth")
 }
-
-#endif

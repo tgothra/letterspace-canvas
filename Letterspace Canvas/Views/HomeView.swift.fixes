@@ -1,1 +1,0 @@
-Fix 1: In MonthYearPickerView, change the ForEach loop variable from 'month' to 'monthIndex'. Fix 2: Remove the global functions at the end of the file.

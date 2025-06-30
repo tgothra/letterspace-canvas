@@ -38,7 +38,10 @@ extension DocumentTextView {
             var doc = coordinator.parent.document
             doc.removeMarker(id: uuid)
             coordinator.parent.document = doc
-            coordinator.parent.document.save()
+            // Save document asynchronously to prevent main thread hangs
+            DispatchQueue.global(qos: .userInitiated).async {
+                coordinator.parent.document.save()
+            }
             print("📚 Document saved after removing bookmark")
         } else {
             isAdding = true
@@ -67,7 +70,10 @@ extension DocumentTextView {
                 ]
             )
             coordinator.parent.document = doc
-            coordinator.parent.document.save() // Save to persist the bookmark addition
+            // Save document asynchronously to prevent main thread hangs
+            DispatchQueue.global(qos: .userInitiated).async {
+                coordinator.parent.document.save()
+            }
             print("📚 Document saved after adding bookmark - markers count: \(coordinator.parent.document.markers.count)")
         }
         textStorage.endEditing()
