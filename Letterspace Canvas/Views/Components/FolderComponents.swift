@@ -721,3 +721,91 @@ extension Folder {
         set { UserDefaults.standard.set(newValue, forKey: "folder_offset_\(id.uuidString)") }
     }
 }
+
+// Folders modal view
+struct FoldersView: View {
+    @Environment(\.themeColors) var theme
+    @Environment(\.colorScheme) var colorScheme
+    let onDismiss: () -> Void
+    @State private var folders: [Folder] = []
+    @State private var activePopup: ActivePopup = .folders
+    @State private var document = Letterspace_CanvasDocument(title: "", subtitle: "", elements: [], id: "", markers: [], series: nil, variations: [], isVariation: false, parentVariationId: nil, createdAt: Date(), modifiedAt: Date(), tags: nil, isHeaderExpanded: false, isSubtitleVisible: true, links: [])
+    @State private var sidebarMode: RightSidebar.SidebarMode = .allDocuments
+    @State private var isRightSidebarVisible = false
+    @State private var isHoveringClose = false
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                Text("Folders")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(theme.primary)
+                
+                Spacer()
+                
+                Button(action: onDismiss) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(width: 22, height: 22)
+                        .background(
+                            Circle()
+                                .fill(isHoveringClose ? Color.red : Color.gray.opacity(0.5))
+                        )
+                }
+                .buttonStyle(.plain)
+                .onHover { hovering in
+                    isHoveringClose = hovering
+                }
+            }
+            .padding(.bottom, 8)
+            
+            // Folders content
+            FoldersPopupContent(
+                activePopup: $activePopup,
+                folders: $folders,
+                document: $document,
+                sidebarMode: $sidebarMode,
+                isRightSidebarVisible: $isRightSidebarVisible,
+                onAddFolder: addFolder
+            )
+        }
+        .frame(width: {
+            #if os(iOS)
+            return UIDevice.current.userInterfaceIdiom == .pad ? 500 : 400
+            #else
+            return 400
+            #endif
+        }())
+        .padding(20)
+        .background(colorScheme == .dark ? Color(.sRGB, white: 0.15) : .white)
+        .cornerRadius(16)
+        .onAppear {
+            loadFolders()
+        }
+    }
+    
+    private func loadFolders() {
+        if let savedData = UserDefaults.standard.data(forKey: "SavedFolders"),
+           let decodedFolders = try? JSONDecoder().decode([Folder].self, from: savedData) {
+            folders = decodedFolders
+        } else {
+            folders = [
+                Folder(id: UUID(), name: "Sermons", isEditing: false, subfolders: [], documentIds: Set<String>()),
+                Folder(id: UUID(), name: "Bible Studies", isEditing: false, subfolders: [], documentIds: Set<String>()),
+                Folder(id: UUID(), name: "Notes", isEditing: false, subfolders: [], documentIds: Set<String>()),
+                Folder(id: UUID(), name: "Archive", isEditing: false, subfolders: [], documentIds: Set<String>())
+            ]
+            }
+    }
+    
+    private func addFolder(_ folder: Folder, to parentId: UUID?) {
+        folders.append(folder)
+        // Save folders
+        if let encoded = try? JSONEncoder().encode(folders) {
+            UserDefaults.standard.set(encoded, forKey: "SavedFolders")
+            UserDefaults.standard.synchronize()
+            }
+    }
+}

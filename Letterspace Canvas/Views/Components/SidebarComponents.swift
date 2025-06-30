@@ -434,3 +434,181 @@ struct SidebarButton: View {
         .frame(width: 48, height: 48)
     }
 }
+
+// Floating sidebar button component
+struct FloatingSidebarButton: View {
+    let icon: String
+    let title: String
+    let action: () -> Void
+    @State private var isPressed = false
+    @State private var rippleScale: CGFloat = 0
+    @State private var rippleOpacity: Double = 0
+    @State private var isDragging = false
+    @Environment(\.themeColors) var theme
+    
+    @ViewBuilder
+    private func iconView() -> some View {
+        if icon == "rectangle.3.group" {
+            // Custom layout icon for dashboard - vertical layout
+            #if os(macOS)
+            // Smaller fixed sizes for macOS to match other icons
+            VStack(spacing: 1.5) {
+                // Top rectangle (small)
+                Rectangle()
+                    .fill(theme.primary)
+                    .frame(width: 8, height: 4.5)
+                    .cornerRadius(1)
+                
+                // Middle rectangle (largest)
+                Rectangle()
+                    .fill(theme.primary)
+                    .frame(width: 13, height: 5.5)
+                    .cornerRadius(1)
+                
+                // Bottom rectangle (medium)
+                Rectangle()
+                    .fill(theme.primary)
+                    .frame(width: 10, height: 4.5)
+                    .cornerRadius(1)
+            }
+            .frame(width: 14, height: 18)
+            #else
+            // Responsive sizes for iPad
+            VStack(spacing: responsiveSize(base: 2.6, min: 2, max: 3)) {  // Consistent spacing
+                // Top rectangle (small)
+                Rectangle()
+                    .fill(theme.primary)
+                    .frame(
+                        width: responsiveSize(base: 13, min: 10, max: 16),
+                        height: responsiveSize(base: 8, min: 6, max: 10)
+                    )
+                    .cornerRadius(responsiveSize(base: 2, min: 1.5, max: 2.5))
+                
+                // Middle rectangle (largest)
+                Rectangle()
+                    .fill(theme.primary)
+                    .frame(
+                        width: responsiveSize(base: 21, min: 16, max: 26),
+                        height: responsiveSize(base: 9, min: 7, max: 11)
+                    )
+                    .cornerRadius(responsiveSize(base: 2, min: 1.5, max: 2.5))
+                
+                // Bottom rectangle (medium)
+                Rectangle()
+                    .fill(theme.primary)
+                    .frame(
+                        width: responsiveSize(base: 16, min: 12, max: 20),
+                        height: responsiveSize(base: 8, min: 6, max: 10)
+                    )
+                    .cornerRadius(responsiveSize(base: 2, min: 1.5, max: 2.5))
+            }
+            .frame(
+                width: responsiveSize(base: 24, min: 18, max: 30),
+                height: responsiveSize(base: 30, min: 23, max: 38)
+            )
+            #endif
+        } else if icon == "person.crop.circle.fill" {
+            // Check if user has a profile image
+            if let profileImage = UserProfileManager.shared.getProfileImage() {
+                PlatformImageView(platformImage: profileImage)
+                    .scaledToFill()
+                    .frame(
+                        width: responsiveSize(base: 25, min: 20, max: 30),  // Consistent profile image size
+                        height: responsiveSize(base: 25, min: 20, max: 30)
+                    )
+                    .clipShape(Circle())
+                    .overlay(
+                        Circle()
+                            .stroke(theme.primary.opacity(0.2), lineWidth: 1)
+                    )
+            } else {
+                // Fallback to default icon
+                Image(systemName: icon)
+                    .font(.system(size: responsiveSize(base: 26, min: 20, max: 32)))  // Consistent icon size
+            }
+        } else {
+            Image(systemName: icon)
+                .font(.system(size: responsiveSize(base: 22, min: 18, max: 28)))  // Smaller icon size
+        }
+    }
+    
+    var body: some View {
+        let buttonSize: CGFloat = {
+            #if os(macOS)
+            return 40  // Keep macOS fixed - window-based, not screen-based
+            #else
+            // Responsive button size based on screen width percentage
+            let screenWidth = UIScreen.main.bounds.width
+            let calculatedSize = screenWidth * 0.055 // 5.5% of screen width (reduced from 6.5%)
+            return max(48, min(72, calculatedSize)) // Constrain between 48-72pt for more compact design
+            #endif
+        }()
+        
+        Button(action: {
+            // Only trigger action if not dragging
+            guard !isDragging else { return }
+            
+            // Trigger ripple animation
+            withAnimation(.easeOut(duration: 0.6)) {
+                rippleScale = 2.0
+                rippleOpacity = 0.3
+            }
+            
+            
+            // Fade out ripple
+            withAnimation(.easeOut(duration: 0.4).delay(0.1)) {
+                rippleOpacity = 0
+            }
+            
+            // Reset ripple after animation
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+                rippleScale = 0
+            }
+            
+            // Execute the actual action
+            action()
+        }) {
+            ZStack {
+                // Ripple effect background
+                Circle()
+                    .fill(theme.accent.opacity(rippleOpacity))
+                    .frame(width: buttonSize, height: buttonSize)
+                    .scaleEffect(rippleScale)
+                    .animation(.easeOut(duration: 0.6), value: rippleScale)
+                    .animation(.easeOut(duration: 0.4), value: rippleOpacity)
+                
+                // Button content
+                iconView()
+                    .foregroundStyle(theme.primary)
+                    .frame(width: buttonSize, height: buttonSize)
+                    .scaleEffect(isPressed ? 0.95 : 1.0)
+            }
+        }
+        .buttonStyle(PlainButtonStyle())
+        .contentShape(Rectangle())
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 10)
+                .onChanged { value in
+                    isDragging = true
+                    // Reset any pressed state when dragging
+                    isPressed = false
+                }
+                .onEnded { value in
+                    // Reset dragging state after a short delay
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        isDragging = false
+                    }
+                }
+        )
+        .onLongPressGesture(minimumDuration: 0, maximumDistance: .infinity, pressing: { pressing in
+            // Only show pressed state if not dragging
+            if !isDragging {
+                withAnimation(.easeInOut(duration: 0.1)) {
+                    isPressed = pressing
+                }
+            }
+        }, perform: {
+            // Long press action if needed
+        })
+    }
+}
