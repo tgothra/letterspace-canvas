@@ -16,12 +16,8 @@ extension View {
         let referenceWidth: CGFloat = 1194 // iPad Pro 11" width in points
         let currentWidth = {
             #if os(iOS)
-            // Only use responsive sizing on iPad, not iPhone
-            if UIDevice.current.userInterfaceIdiom == .pad {
-                return UIScreen.main.bounds.width
-            } else {
-                return CGFloat(1194) // Default reference width for iPhone (no scaling)
-            }
+            // iPhone now uses iPad interface, so apply responsive sizing to both
+            return UIScreen.main.bounds.width
             #else
             return CGFloat(1194) // macOS uses fixed sizing (no scaling)
             #endif
@@ -163,8 +159,8 @@ struct MainLayout: View {
     // Floating sidebar states for iPad/iPhone
     @State private var showFloatingSidebar = {
         #if os(iOS)
-        // Always show floating sidebar on iPad, but respect user interaction on iPhone
-        return UIDevice.current.userInterfaceIdiom == .pad ? true : false
+        // Always show floating sidebar on both iPad and iPhone (iPhone now uses iPad interface)
+        return true
         #else
         return false
         #endif
@@ -174,27 +170,18 @@ struct MainLayout: View {
     @State private var isManuallyShown = false  // Track when user manually shows navigation
     @State private var isDocked = {
         #if os(iOS)
-        if UIDevice.current.userInterfaceIdiom == .pad {
-            // Default to docked on iPad, but respect saved preference if it exists
-            return UserDefaults.standard.object(forKey: "sidebarIsDocked") as? Bool ?? true
-        } else {
-            // Default to floating on iPhone
-            return UserDefaults.standard.bool(forKey: "sidebarIsDocked")
-        }
+        // Default to docked on both iPad and iPhone (iPhone now uses iPad interface)
+        return UserDefaults.standard.object(forKey: "sidebarIsDocked") as? Bool ?? true
         #else
         return UserDefaults.standard.bool(forKey: "sidebarIsDocked")
         #endif
     }()
     @State private var isNavigationCollapsed = {
         #if os(iOS)
-        if UIDevice.current.userInterfaceIdiom == .pad {
-            // Default to not collapsed on iPad
-            return UserDefaults.standard.object(forKey: "navigationIsCollapsed") as? Bool ?? false
-        } else {
-            return UserDefaults.standard.bool(forKey: "navigationIsCollapsed")
-        }
+        // Default to not collapsed on both iPad and iPhone (iPhone now uses iPad interface)
+        return UserDefaults.standard.object(forKey: "navigationIsCollapsed") as? Bool ?? false
         #else
-        return UserDefaults.standard.bool(forKey: "navigationIsCollapsed")
+                    return UserDefaults.standard.object(forKey: "navigationIsCollapsed") as? Bool ?? false
         #endif
     }()
     
@@ -245,41 +232,40 @@ struct MainLayout: View {
         .onAppear {
             loadFolders()
             
-            // Debug logging for iPad navigation
+            // Debug logging for iOS navigation (both iPad and iPhone now use iPad interface)
             #if os(iOS)
-            if UIDevice.current.userInterfaceIdiom == .pad {
-                print("🐛 iPad Navigation Debug:")
-                print("🐛 isDocked: \(isDocked)")
-                print("🐛 isNavigationCollapsed: \(isNavigationCollapsed)")
-                print("🐛 viewMode.isDistractionFreeMode: \(viewMode.isDistractionFreeMode)")
-                print("🐛 sidebarMode: \(sidebarMode)")
-                
-                // Force reset navigation state on iPad to ensure sidebar shows
-                if isNavigationCollapsed {
-                    print("🐛 Force resetting navigation collapsed state")
-                    isNavigationCollapsed = false
-                    UserDefaults.standard.set(isNavigationCollapsed, forKey: "navigationIsCollapsed")
-                }
-                
-                // Force dock navigation to be visible on iPad
-                if !isDocked {
-                    print("🐛 Force setting isDocked to true on iPad")
-                    isDocked = true
-                    UserDefaults.standard.set(isDocked, forKey: "sidebarIsDocked")
-                }
-                
-                // If this is the first time on iPad, default to docked mode
-                if UserDefaults.standard.object(forKey: "sidebarIsDocked") == nil {
-                    isDocked = true
-                    UserDefaults.standard.set(true, forKey: "sidebarIsDocked")
-                    print("🐛 Set isDocked to true for first time iPad use")
-                }
-                // Also ensure navigation is not collapsed by default on iPad
-                if UserDefaults.standard.object(forKey: "navigationIsCollapsed") == nil {
-                    isNavigationCollapsed = false
-                    UserDefaults.standard.set(false, forKey: "navigationIsCollapsed")
-                    print("🐛 Set isNavigationCollapsed to false for first time iPad use")
-                }
+            // Apply iPad-style navigation setup to both iPad and iPhone
+            print("🐛 iOS Navigation Debug (iPad interface for both iPad and iPhone):")
+            print("🐛 isDocked: \(isDocked)")
+            print("🐛 isNavigationCollapsed: \(isNavigationCollapsed)")
+            print("🐛 viewMode.isDistractionFreeMode: \(viewMode.isDistractionFreeMode)")
+            print("🐛 sidebarMode: \(sidebarMode)")
+            
+            // Force reset navigation state to ensure sidebar shows
+            if isNavigationCollapsed {
+                print("🐛 Force resetting navigation collapsed state")
+                isNavigationCollapsed = false
+                UserDefaults.standard.set(isNavigationCollapsed, forKey: "navigationIsCollapsed")
+            }
+            
+            // Force dock navigation to be visible
+            if !isDocked {
+                print("🐛 Force setting isDocked to true")
+                isDocked = true
+                UserDefaults.standard.set(isDocked, forKey: "sidebarIsDocked")
+            }
+            
+            // If this is the first time, default to docked mode
+            if UserDefaults.standard.object(forKey: "sidebarIsDocked") == nil {
+                isDocked = true
+                UserDefaults.standard.set(true, forKey: "sidebarIsDocked")
+                print("🐛 Set isDocked to true for first time use")
+            }
+            // Also ensure navigation is not collapsed by default
+            if UserDefaults.standard.object(forKey: "navigationIsCollapsed") == nil {
+                isNavigationCollapsed = false
+                UserDefaults.standard.set(false, forKey: "navigationIsCollapsed")
+                print("🐛 Set isNavigationCollapsed to false for first time use")
             }
             #endif
         }
@@ -1231,6 +1217,7 @@ struct MainLayout: View {
                                             self.loadAndOpenDocument(id: selectedDoc.id)
                                         },
                 showFloatingSidebar: $showFloatingSidebar, // Pass floating sidebar state
+                floatingSidebarWidth: floatingSidebarWidth, // Pass floating sidebar width
                 sidebarMode: $sidebarMode, // Pass sidebarMode binding
                 isRightSidebarVisible: $isRightSidebarVisible // Pass isRightSidebarVisible binding
                                     )
@@ -1343,6 +1330,7 @@ struct MainLayout: View {
         GeometryReader { geometry in
             #if os(iOS)
             // For both iPad and iPhone, use the macOSLayout which includes floating sidebar
+            // iPhone now defaults to iPad-style interface
                 macOSLayout(geometry: geometry)
             #else
             // macOS
@@ -1373,9 +1361,9 @@ struct MainLayout: View {
                         .transition(.move(edge: .leading))
                 }
                 #elseif os(iOS)
-                // iOS: Show docked sidebar if docked mode is enabled and not collapsed
-                // But skip docked sidebar on iPad since we use floating navigation
-                if isDocked && !viewMode.isDistractionFreeMode && !isNavigationCollapsed && UIDevice.current.userInterfaceIdiom != .pad {
+                // iOS: Show docked sidebar only on devices that don't use floating navigation
+                // Skip docked sidebar on both iPad and iPhone since they now both use floating navigation
+                if false { // Disable docked sidebar completely for iOS since both iPad and iPhone use floating navigation
                     dockedSidebarContent
                         .zIndex(1)
                         .transition(.move(edge: .leading))
@@ -1401,8 +1389,8 @@ struct MainLayout: View {
                             isIPadContext: false,
                             isLeftSidebarVisibleForContext: {
                                 #if os(iOS)
-                                // iPad uses floating navigation, so no docked sidebar
-                                return isDocked && !viewMode.isDistractionFreeMode && UIDevice.current.userInterfaceIdiom != .pad
+                                // Both iPad and iPhone use floating navigation, so no docked sidebar
+                                return false // Disabled: Both iPad and iPhone use floating navigation only
                                 #else
                                 return isLeftSidebarActuallyVisible
                                 #endif
@@ -1444,8 +1432,8 @@ struct MainLayout: View {
             }
             
             #if os(iOS)
-            // iOS: Add floating sidebar overlay (always for iPad, floating mode for iPhone)
-            if !viewMode.isDistractionFreeMode && (UIDevice.current.userInterfaceIdiom == .pad || (!isDocked && (showFloatingSidebar || isNavigationCollapsed))) {
+            // iOS: Add floating sidebar overlay (always for both iPad and iPhone since iPhone now uses iPad interface)
+            if !viewMode.isDistractionFreeMode && (UIDevice.current.userInterfaceIdiom == .pad || UIDevice.current.userInterfaceIdiom == .phone) {
                                 VStack(alignment: .leading) {
                 HStack {
                         // Unified floating navigation with responsive size transitions
@@ -1582,8 +1570,8 @@ struct MainLayout: View {
                 }
             }
             
-            // iPad swipe indicator when floating navigation is dismissed
-            if UIDevice.current.userInterfaceIdiom == .pad && !viewMode.isDistractionFreeMode && (!showFloatingSidebar || (!shouldShowNavigationPanel && !isManuallyShown)) {
+            // Swipe indicator when floating navigation is dismissed (both iPad and iPhone)
+            if (UIDevice.current.userInterfaceIdiom == .pad || UIDevice.current.userInterfaceIdiom == .phone) && !viewMode.isDistractionFreeMode && (!showFloatingSidebar || (!shouldShowNavigationPanel && !isManuallyShown)) {
                 VStack {
                     Spacer()
                     HStack {
@@ -1714,8 +1702,8 @@ struct MainLayout: View {
                 .ignoresSafeArea()
             }
             
-            // iPad floating contextual toolbar - positioned in gutter area outside document
-            if UIDevice.current.userInterfaceIdiom == .pad && sidebarMode != .allDocuments {
+            // Floating contextual toolbar for both iPad and iPhone - positioned in gutter area outside document
+            if (UIDevice.current.userInterfaceIdiom == .pad || UIDevice.current.userInterfaceIdiom == .phone) && sidebarMode != .allDocuments {
                 HStack {
                     Spacer()
                     
@@ -1733,7 +1721,7 @@ struct MainLayout: View {
             }
             
             // Add swipe gesture area for showing collapsed toolbar
-            if UIDevice.current.userInterfaceIdiom == .pad && sidebarMode != .allDocuments && isFloatingToolbarCollapsed {
+            if (UIDevice.current.userInterfaceIdiom == .pad || UIDevice.current.userInterfaceIdiom == .phone) && sidebarMode != .allDocuments && isFloatingToolbarCollapsed {
                 HStack {
                     Spacer()
                     
@@ -1857,8 +1845,8 @@ struct MainLayout: View {
                         .transition(.move(edge: .trailing))
                 }
                 #elseif os(iOS)
-                // On iPhone, show the sidebar normally. On iPad, never show it (use floating toolbar instead)
-                if !viewMode.shouldHideSidebars && isRightSidebarVisible && UIDevice.current.userInterfaceIdiom == .phone {
+                // Disable right sidebar for both iPhone and iPad since they both use floating toolbar
+                if false { // Disabled: Both iPad and iPhone use floating toolbar instead
                     rightSidebarContent
                         .frame(width: rightSidebarWidth)
                         .transition(.move(edge: .trailing))
