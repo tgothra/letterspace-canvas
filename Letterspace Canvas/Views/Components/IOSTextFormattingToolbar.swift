@@ -9,6 +9,8 @@ struct IOSTextFormattingToolbar: View {
     let onItalic: () -> Void
     let onUnderline: () -> Void
     let onLink: () -> Void
+    let onLinkCreate: (String, String) -> Void
+    let onLinkCreateWithStyle: ((String, String, UIColor, Bool) -> Void)?
     let onTextColor: (Color) -> Void
     let onHighlight: (Color) -> Void
     let onBulletList: () -> Void
@@ -32,7 +34,59 @@ struct IOSTextFormattingToolbar: View {
     @State private var showColorPicker = false
     @State private var showHighlightPicker = false
     @State private var showAlignmentPicker = false
+    @State private var showLinkPicker = false
     @Environment(\.colorScheme) var colorScheme
+    
+    // Custom initializer to handle optional onLinkCreateWithStyle parameter
+    init(
+        onTextStyle: @escaping (String) -> Void,
+        onBold: @escaping () -> Void,
+        onItalic: @escaping () -> Void,
+        onUnderline: @escaping () -> Void,
+        onLink: @escaping () -> Void,
+        onLinkCreate: @escaping (String, String) -> Void,
+        onLinkCreateWithStyle: ((String, String, UIColor, Bool) -> Void)? = nil,
+        onTextColor: @escaping (Color) -> Void,
+        onHighlight: @escaping (Color) -> Void,
+        onBulletList: @escaping () -> Void,
+        onAlignment: @escaping (TextAlignment) -> Void,
+        onBookmark: @escaping () -> Void,
+        currentTextStyle: String?,
+        isBold: Bool,
+        isItalic: Bool,
+        isUnderlined: Bool,
+        hasLink: Bool,
+        hasBulletList: Bool,
+        hasTextColor: Bool,
+        hasHighlight: Bool,
+        hasBookmark: Bool,
+        currentTextColor: Color?,
+        currentHighlightColor: Color?
+    ) {
+        self.onTextStyle = onTextStyle
+        self.onBold = onBold
+        self.onItalic = onItalic
+        self.onUnderline = onUnderline
+        self.onLink = onLink
+        self.onLinkCreate = onLinkCreate
+        self.onLinkCreateWithStyle = onLinkCreateWithStyle
+        self.onTextColor = onTextColor
+        self.onHighlight = onHighlight
+        self.onBulletList = onBulletList
+        self.onAlignment = onAlignment
+        self.onBookmark = onBookmark
+        self.currentTextStyle = currentTextStyle
+        self.isBold = isBold
+        self.isItalic = isItalic
+        self.isUnderlined = isUnderlined
+        self.hasLink = hasLink
+        self.hasBulletList = hasBulletList
+        self.hasTextColor = hasTextColor
+        self.hasHighlight = hasHighlight
+        self.hasBookmark = hasBookmark
+        self.currentTextColor = currentTextColor
+        self.currentHighlightColor = currentHighlightColor
+    }
     
     var body: some View {
         Group {
@@ -113,6 +167,31 @@ struct IOSTextFormattingToolbar: View {
                     insertion: .move(edge: .bottom).combined(with: .opacity),
                     removal: .move(edge: .bottom).combined(with: .opacity.animation(.easeIn(duration: 0.15)))
                 ))
+            } else if showLinkPicker {
+                LinkPickerPlaceholderView(
+                    onBack: {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            showLinkPicker = false
+                        }
+                    }
+                )
+                .transition(.asymmetric(
+                    insertion: .move(edge: .bottom).combined(with: .opacity),
+                    removal: .move(edge: .bottom).combined(with: .opacity.animation(.easeIn(duration: 0.15)))
+                ))
+                .onAppear {
+                    // Present the link picker as a modal overlay
+                    DispatchQueue.main.async {
+                        // Immediately hide the placeholder to prevent re-triggering
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            showLinkPicker = false
+                        }
+                        
+                        presentLinkPickerModal(onLinkCreate: onLinkCreate) {
+                            // Modal was cancelled/dismissed - already handled by hiding showLinkPicker above
+                        }
+                    }
+                }
             } else {
                 // Main toolbar
                 MainToolbarView(
@@ -135,7 +214,11 @@ struct IOSTextFormattingToolbar: View {
                     onBold: onBold,
                     onItalic: onItalic,
                     onUnderline: onUnderline,
-                    onLink: onLink,
+                    onShowLinkPicker: {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            showLinkPicker = true
+                        }
+                    },
                     onBulletList: onBulletList,
                     onShowColorPicker: {
                         withAnimation(.easeInOut(duration: 0.2)) {
@@ -163,6 +246,52 @@ struct IOSTextFormattingToolbar: View {
         .frame(maxHeight: .infinity)
         .clipped()
     }
+    
+    // Function to present link picker modal
+    private func presentLinkPickerModal(onLinkCreate: @escaping (String, String) -> Void, onCancel: @escaping () -> Void) {
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let window = windowScene.windows.first else { return }
+        
+        let linkPickerVC = LinkPickerViewController { linkURL, linkColor, shouldUnderline in
+            // Link created with custom styling
+            print("🔗 Link creation: URL=\(linkURL), Color=\(linkColor), Underline=\(shouldUnderline)")
+            if let onLinkCreateWithStyle = onLinkCreateWithStyle {
+                print("🔗 Using onLinkCreateWithStyle callback")
+                onLinkCreateWithStyle(linkURL, linkURL, linkColor, shouldUnderline)
+            } else {
+                print("🔗 Using fallback onLinkCreate callback")
+                // Fallback to basic link creation
+                onLinkCreate(linkURL, linkURL)
+            }
+            onCancel()
+        } onCancel: {
+            // Cancelled
+            onCancel()
+        }
+        
+        let navController = UINavigationController(rootViewController: linkPickerVC)
+        navController.modalPresentationStyle = .formSheet
+        
+        // Set a compact size for the modal
+        if let sheet = navController.sheetPresentationController {
+            sheet.detents = [.custom(resolver: { _ in
+                return 280 // Increased height for color options
+            })]
+            sheet.prefersGrabberVisible = true
+            sheet.preferredCornerRadius = 16
+        }
+        
+        window.rootViewController?.present(navController, animated: true) {
+            // Modal presented successfully
+        }
+        
+        // Handle dismissal by swipe or other means
+        linkPickerVC.onDismiss = {
+            DispatchQueue.main.async {
+                onCancel()
+            }
+        }
+    }
 }
 
 // MARK: - Supporting Views
@@ -182,7 +311,7 @@ private struct MainToolbarView: View {
     let onBold: () -> Void
     let onItalic: () -> Void
     let onUnderline: () -> Void
-    let onLink: () -> Void
+    let onShowLinkPicker: () -> Void
     let onBulletList: () -> Void
     let onShowColorPicker: () -> Void
     let onShowHighlightPicker: () -> Void
@@ -222,7 +351,7 @@ private struct MainToolbarView: View {
                 
                 // Right Group: Structure - Link, Bullet, Alignment
                 HStack(spacing: 12) {
-                    IOSTextButton(text: "Link", isActive: hasLink, action: onLink)
+                    IOSTextButton(text: "Link", isActive: hasLink, action: onShowLinkPicker)
                     IOSTextButton(text: "Bullet", isActive: hasBulletList, action: onBulletList)
                     IOSTextButton(text: "Alignment", action: onShowAlignmentPicker)
                 }
@@ -324,6 +453,244 @@ private struct InlineAlignmentPickerView: View {
     }
 }
 
+
+
+// Placeholder view that shows while modal is being presented
+private struct LinkPickerPlaceholderView: View {
+    let onBack: () -> Void
+    @Environment(\.colorScheme) var colorScheme
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            // Back button
+            Button(action: onBack) {
+                HStack(spacing: 4) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 12, weight: .medium))
+                    Text("Back")
+                        .font(.system(size: 14, weight: .medium))
+                }
+                .foregroundColor(.accentColor)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(colorScheme == .dark ? Color.white.opacity(0.1) : Color.black.opacity(0.05))
+                )
+            }
+            
+            Spacer()
+            
+            Text("Opening Link Editor...")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(colorScheme == .dark ? .white : .black)
+            
+            Spacer()
+        }
+        .frame(maxHeight: .infinity)
+        .padding(.horizontal, 8)
+        .background(Color(UIColor.systemBackground))
+    }
+}
+
+// UIKit-based link picker view controller
+private class LinkPickerViewController: UIViewController {
+    private let onLinkCreate: (String, UIColor, Bool) -> Void
+    private let onCancel: () -> Void
+    private var textField: UITextField!
+    private var colorStackView: UIStackView!
+    private var underlineSwitch: UISwitch!
+    private var selectedColorIndex = 0
+    var onDismiss: (() -> Void)?
+    
+    private let linkColors: [(String, UIColor)] = [
+        ("Blue", .systemBlue),
+        ("Red", .systemRed),
+        ("Green", .systemGreen),
+        ("Purple", .systemPurple),
+        ("Orange", .systemOrange)
+    ]
+    
+    init(onLinkCreate: @escaping (String, UIColor, Bool) -> Void, onCancel: @escaping () -> Void) {
+        self.onLinkCreate = onLinkCreate
+        self.onCancel = onCancel
+        super.init(nibName: nil, bundle: nil)
+    }
+    
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+    
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        setupUI()
+    }
+    
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        textField.becomeFirstResponder()
+    }
+    
+
+    
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        // If the view controller is being dismissed (not just covered by another view)
+        if isBeingDismissed || isMovingFromParent {
+            onDismiss?()
+        }
+    }
+    
+    private func setupUI() {
+        view.backgroundColor = .systemBackground
+        title = "Add Link"
+        
+        navigationItem.leftBarButtonItem = UIBarButtonItem(
+            barButtonSystemItem: .cancel,
+            target: self,
+            action: #selector(cancelTapped)
+        )
+        
+        navigationItem.rightBarButtonItem = UIBarButtonItem(
+            barButtonSystemItem: .done,
+            target: self,
+            action: #selector(doneTapped)
+        )
+        
+        // Create text field
+        textField = UITextField()
+        textField.placeholder = "Enter URL"
+        textField.text = "https://"
+        textField.keyboardType = .URL
+        textField.autocapitalizationType = .none
+        textField.borderStyle = .roundedRect
+        textField.font = UIFont.systemFont(ofSize: 16)
+        textField.addTarget(self, action: #selector(textFieldChanged), for: .editingChanged)
+        
+        // Create color label
+        let colorLabel = UILabel()
+        colorLabel.text = "Link Color"
+        colorLabel.font = UIFont.systemFont(ofSize: 16, weight: .medium)
+        colorLabel.textColor = .label
+        
+        // Create color selection using buttons instead of segmented control
+        colorStackView = UIStackView()
+        colorStackView.axis = .horizontal
+        colorStackView.distribution = .fillEqually
+        colorStackView.spacing = 8
+        colorStackView.translatesAutoresizingMaskIntoConstraints = false
+        
+        for (index, (name, color)) in linkColors.enumerated() {
+            let button = UIButton(type: .system)
+            button.tag = index
+            button.backgroundColor = color
+            button.layer.cornerRadius = 20
+            button.layer.borderWidth = 2
+            button.layer.borderColor = index == 0 ? UIColor.label.cgColor : UIColor.clear.cgColor
+            button.addTarget(self, action: #selector(colorButtonTapped(_:)), for: .touchUpInside)
+            
+            // Add color name as accessibility label
+            button.accessibilityLabel = name
+            
+            colorStackView.addArrangedSubview(button)
+            
+            NSLayoutConstraint.activate([
+                button.widthAnchor.constraint(equalToConstant: 40),
+                button.heightAnchor.constraint(equalToConstant: 40)
+            ])
+        }
+        
+        // Create underline label
+        let underlineLabel = UILabel()
+        underlineLabel.text = "Underline"
+        underlineLabel.font = UIFont.systemFont(ofSize: 16, weight: .medium)
+        underlineLabel.textColor = .label
+        
+        // Create underline switch
+        underlineSwitch = UISwitch()
+        underlineSwitch.isOn = true // Default to underlined
+        
+        // Layout
+        textField.translatesAutoresizingMaskIntoConstraints = false
+        colorLabel.translatesAutoresizingMaskIntoConstraints = false
+        underlineLabel.translatesAutoresizingMaskIntoConstraints = false
+        underlineSwitch.translatesAutoresizingMaskIntoConstraints = false
+        
+        view.addSubview(textField)
+        view.addSubview(colorLabel)
+        view.addSubview(colorStackView)
+        view.addSubview(underlineLabel)
+        view.addSubview(underlineSwitch)
+        
+        NSLayoutConstraint.activate([
+            // URL field
+            textField.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 20),
+            textField.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+            textField.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+            textField.heightAnchor.constraint(equalToConstant: 44),
+            
+            // Color label
+            colorLabel.topAnchor.constraint(equalTo: textField.bottomAnchor, constant: 24),
+            colorLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+            
+            // Color stack view
+            colorStackView.topAnchor.constraint(equalTo: colorLabel.bottomAnchor, constant: 8),
+            colorStackView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+            colorStackView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+            colorStackView.heightAnchor.constraint(equalToConstant: 40),
+            
+            // Underline label and switch
+            underlineLabel.topAnchor.constraint(equalTo: colorStackView.bottomAnchor, constant: 24),
+            underlineLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+            
+            underlineSwitch.centerYAnchor.constraint(equalTo: underlineLabel.centerYAnchor),
+            underlineSwitch.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20)
+        ])
+        
+        updateDoneButton()
+    }
+    
+    @objc private func textFieldChanged() {
+        updateDoneButton()
+    }
+    
+    private func updateDoneButton() {
+        let text = textField.text ?? ""
+        navigationItem.rightBarButtonItem?.isEnabled = !text.isEmpty && text != "https://"
+    }
+    
+    @objc private func cancelTapped() {
+        dismiss(animated: true) {
+            self.onCancel()
+        }
+    }
+    
+    @objc private func colorButtonTapped(_ sender: UIButton) {
+        // Update selection visual state
+        for subview in sender.superview?.subviews ?? [] {
+            if let button = subview as? UIButton {
+                button.layer.borderColor = UIColor.clear.cgColor
+            }
+        }
+        sender.layer.borderColor = UIColor.label.cgColor
+        selectedColorIndex = sender.tag
+    }
+    
+    @objc private func doneTapped() {
+        let urlString = textField.text ?? ""
+        let selectedColor = linkColors[selectedColorIndex].1
+        let shouldUnderline = underlineSwitch.isOn
+        
+        dismiss(animated: true) {
+            self.onLinkCreate(urlString, selectedColor, shouldUnderline)
+        }
+    }
+    
+
+}
+
+
+
 private struct InlineStylePickerView: View {
     let currentStyle: String?
     let onStyleSelect: (String) -> Void
@@ -412,13 +779,25 @@ private struct InlineColorButton: View {
                 }
             }
             .scaleEffect(isPressed ? 0.9 : 1.0)
-            .frame(width: 36, height: 36) // Larger tap target
+            .frame(width: 44, height: 44) // Larger tap target
         }
         .buttonStyle(PlainButtonStyle())
-        .onLongPressGesture(minimumDuration: 0, maximumDistance: .infinity, pressing: { pressing in
-            // Instant response - no animation delay
-            isPressed = pressing
-        }, perform: {})
+        .onTapGesture {
+            // Provide haptic feedback
+            let impact = UIImpactFeedbackGenerator(style: .light)
+            impact.impactOccurred()
+        }
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in
+                    if !isPressed {
+                        isPressed = true
+                    }
+                }
+                .onEnded { _ in
+                    isPressed = false
+                }
+        )
     }
 }
 
@@ -447,7 +826,10 @@ private struct IOSTextButton: View {
     }
     
     var body: some View {
-        Button(action: action) {
+        Button(action: {
+            print("📱 Button tapped: \(text)")
+            action()
+        }) {
             Text(text)
                 .font(.system(size: 14, weight: isBold ? .bold : .medium))
                 .italic(isItalic)
@@ -455,8 +837,9 @@ private struct IOSTextButton: View {
                 .foregroundColor(textColor ?? buttonForegroundColor)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 12)
+                .frame(minWidth: 44, minHeight: 44)
                 .background(
                     RoundedRectangle(cornerRadius: 8)
                         .fill(highlightColor ?? buttonBackgroundColor)
@@ -465,10 +848,22 @@ private struct IOSTextButton: View {
         }
         .buttonStyle(PlainButtonStyle())
         .scaleEffect(isPressed ? 0.95 : 1.0)
-        .onLongPressGesture(minimumDuration: 0, maximumDistance: .infinity, pressing: { pressing in
-            // Instant response - no animation delay
-            isPressed = pressing
-        }, perform: {})
+        .onTapGesture {
+            // Provide haptic feedback
+            let impact = UIImpactFeedbackGenerator(style: .light)
+            impact.impactOccurred()
+        }
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in
+                    if !isPressed {
+                        isPressed = true
+                    }
+                }
+                .onEnded { _ in
+                    isPressed = false
+                }
+        )
     }
     
     private var buttonForegroundColor: Color {
@@ -504,20 +899,35 @@ private struct IOSToolbarButton: View {
     }
     
     var body: some View {
-        Button(action: action) {
+        Button(action: {
+            print("📱 Toolbar button tapped: \(icon)")
+            action()
+        }) {
             Image(systemName: icon)
                 .font(.system(size: 16, weight: .medium))
                 .foregroundColor(buttonForegroundColor)
-                .frame(width: 48, height: 36)
+                .frame(width: 52, height: 44)
                 .background(buttonBackgroundColor)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
         }
         .buttonStyle(PlainButtonStyle())
         .scaleEffect(isPressed ? 0.95 : 1.0)
-        .onLongPressGesture(minimumDuration: 0, maximumDistance: .infinity, pressing: { pressing in
-            // Instant response - no animation delay
-            isPressed = pressing
-        }, perform: {})
+        .onTapGesture {
+            // Provide haptic feedback
+            let impact = UIImpactFeedbackGenerator(style: .light)
+            impact.impactOccurred()
+        }
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in
+                    if !isPressed {
+                        isPressed = true
+                    }
+                }
+                .onEnded { _ in
+                    isPressed = false
+                }
+        )
     }
     
     private var buttonForegroundColor: Color {
@@ -568,6 +978,9 @@ class IOSFormattingToolbarHostingController: UIHostingController<IOSTextFormatti
         if #available(iOS 11.0, *) {
             additionalSafeAreaInsets = UIEdgeInsets.zero
         }
+        
+        // Ensure proper touch handling
+        view.isUserInteractionEnabled = true
         
         // Set up flexible height constraints to avoid conflicts
         setupFlexibleConstraints()

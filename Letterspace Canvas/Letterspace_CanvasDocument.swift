@@ -42,6 +42,18 @@ struct DocumentVariation: Codable, Identifiable {
     var serviceTime: String?  // Time of the service
     var notes: String?  // Additional notes
     
+    init(id: UUID, name: String, documentId: String, parentDocumentId: String, createdAt: Date, datePresented: Date? = nil, location: String? = nil, serviceTime: String? = nil, notes: String? = nil) {
+        self.id = id
+        self.name = name
+        self.documentId = documentId
+        self.parentDocumentId = parentDocumentId
+        self.createdAt = createdAt
+        self.datePresented = datePresented
+        self.location = location
+        self.serviceTime = serviceTime
+        self.notes = notes
+    }
+    
     // Update metadata in both documents
     mutating func updateMetadata(datePresented: Date?, location: String?, serviceTime: String? = nil, notes: String? = nil) {
         self.datePresented = datePresented
@@ -56,6 +68,13 @@ struct DocumentLink: Codable, Identifiable, Equatable {
     var title: String
     var url: String
     var createdAt: Date
+    
+    init(id: String = UUID().uuidString, title: String, url: String, createdAt: Date = Date()) {
+        self.id = id
+        self.title = title
+        self.url = url
+        self.createdAt = createdAt
+    }
     
     static func == (lhs: DocumentLink, rhs: DocumentLink) -> Bool {
         lhs.id == rhs.id &&
@@ -543,6 +562,7 @@ struct Letterspace_CanvasDocument: FileDocument, Codable, Identifiable {
         self.isSubtitleVisible = document.isSubtitleVisible
         self.links = document.links
         self.summary = document.summary
+        self.metadata = document.metadata
         
         // Initialize the canvasDocument with content derived from elements
         let combinedText = elements.map { $0.content }.joined(separator: "\n\n")

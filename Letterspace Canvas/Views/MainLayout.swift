@@ -717,9 +717,45 @@ struct MainLayout: View {
     // Animated floating navigation that smoothly transitions between compact and expanded states
     @ViewBuilder
     private var animatedFloatingNavigation: some View {
+        #if os(iOS)
+        let screenHeight = UIScreen.main.bounds.height
+        let screenWidth = UIScreen.main.bounds.width
+        let isLandscape = screenWidth > screenHeight
+        #else
+        let screenHeight: CGFloat = 900 // Default for macOS
+        let screenWidth: CGFloat = 1200 // Default for macOS
+        let isLandscape = true // macOS is typically landscape
+        #endif
+        
         floatingSidebarContent
-            .frame(width: responsiveSize(base: shouldUseExpandedNavigation ? 105 : 45, min: 40, max: 120))  // Consistent width across devices
-            .scaleEffect(shouldUseExpandedNavigation ? 1.1 : 0.85, anchor: .center)  // Scale from center for better collapse animation
+            .frame(width: {
+                #if os(iOS)
+                if isLandscape && UIDevice.current.userInterfaceIdiom == .pad {
+                    // Wider width in iPad landscape for better visibility
+                    return responsiveSize(base: shouldUseExpandedNavigation ? 100 : 50, min: 45, max: 110) // Increased from 85/40 to 100/50
+                } else {
+                    // Original width for portrait and other devices
+                    return responsiveSize(base: shouldUseExpandedNavigation ? 105 : 45, min: 40, max: 120)
+                }
+                #else
+                // macOS default width
+                return responsiveSize(base: shouldUseExpandedNavigation ? 105 : 45, min: 40, max: 120)
+                #endif
+            }())
+            .scaleEffect({
+                #if os(iOS)
+                if isLandscape && UIDevice.current.userInterfaceIdiom == .pad {
+                    // Smaller scale in iPad landscape - further reduced for more compact appearance
+                    return shouldUseExpandedNavigation ? 0.8 : 0.65 // Reduced from 0.9/0.75 to 0.8/0.65
+                } else {
+                    // Original scale for portrait and other devices
+                    return shouldUseExpandedNavigation ? 1.1 : 0.85
+                }
+                #else
+                // macOS default scale
+                return shouldUseExpandedNavigation ? 1.1 : 0.85
+                #endif
+            }(), anchor: .center)  // Scale from center for better collapse animation
             .animation(.spring(response: 0.6, dampingFraction: 0.75), value: shouldUseExpandedNavigation)
             .animation(.spring(response: 1.8, dampingFraction: 0.85), value: sidebarMode)  // Slower transition for dashboard to document
             .animation(.spring(response: 0.6, dampingFraction: 0.75), value: navigationCornerRadius)  // Animate corner radius changes
@@ -964,7 +1000,20 @@ struct MainLayout: View {
                     )
                 }
                 .padding(.horizontal, 8)
-                .padding(.top, 16)  // Increased top padding from 8 to 16 for more space above dashboard
+                .padding(.top, {
+                    #if os(iOS)
+                    let screenWidth = UIScreen.main.bounds.width
+                    let screenHeight = UIScreen.main.bounds.height
+                    let isLandscape = screenWidth > screenHeight
+                    if isLandscape && UIDevice.current.userInterfaceIdiom == .pad {
+                        return 8 // Reduced top padding for iPad landscape
+                    } else {
+                        return 16 // Original padding for other cases
+                    }
+                    #else
+                    return 16 // Original padding for macOS
+                    #endif
+                }())  // Dynamic top padding based on device and orientation
                 
                 Divider()
                     .padding(.horizontal, 16)
@@ -1064,12 +1113,38 @@ struct MainLayout: View {
                         
                         // Add spacer to center the back button between separator and bottom
                         Spacer()
-                            .frame(height: 12) // Adjust this value to center the arrow properly
+                            .frame(height: {
+                                #if os(iOS)
+                                let screenWidth = UIScreen.main.bounds.width
+                                let screenHeight = UIScreen.main.bounds.height
+                                let isLandscape = screenWidth > screenHeight
+                                if isLandscape && UIDevice.current.userInterfaceIdiom == .pad {
+                                    return 4 // Reduced spacer for iPad landscape
+                                } else {
+                                    return 12 // Original spacer for other cases
+                                }
+                                #else
+                                return 12 // Original spacer for macOS
+                                #endif
+                            }()) // Dynamic spacer based on device and orientation
                     }
                 }
                 .padding(.horizontal, 8)
                 .padding(.top, 0)        // Keep top padding removed to eliminate gap
-                .padding(.bottom, 2)     // Further reduced bottom padding from 5 to 2
+                .padding(.bottom, {
+                    #if os(iOS)
+                    let screenWidth = UIScreen.main.bounds.width
+                    let screenHeight = UIScreen.main.bounds.height
+                    let isLandscape = screenWidth > screenHeight
+                    if isLandscape && UIDevice.current.userInterfaceIdiom == .pad {
+                        return 0 // No bottom padding for iPad landscape
+                    } else {
+                        return 2 // Original padding for other cases
+                    }
+                    #else
+                    return 2 // Original padding for macOS
+                    #endif
+                }())     // Dynamic bottom padding based on device and orientation
             }
         }
         // Width is now set by compact/expanded navigation wrappers
@@ -1383,9 +1458,25 @@ struct MainLayout: View {
                                 return shouldUseExpandedNavigation ? centerPoint : 20
                             }())
                             .padding(.top, {
-                                // Responsive top padding based on screen height 
+                                // Responsive top padding based on screen height and orientation
                                 let screenHeight = UIScreen.main.bounds.height
-                                return shouldUseExpandedNavigation ? screenHeight * 0.28 : 20 // 28% of screen height when expanded
+                                let screenWidth = UIScreen.main.bounds.width
+                                let isLandscape = screenWidth > screenHeight
+                                
+                                                                 if shouldUseExpandedNavigation {
+                                    if isLandscape && UIDevice.current.userInterfaceIdiom == .pad {
+                                        // In iPad landscape, move navigation lower
+                                        return screenHeight * 0.14 + 35 // Adjusted to 14% + 35 for optimal positioning
+                                    } else if isLandscape {
+                                        // Other landscape devices
+                                        return screenHeight * 0.05 + 10 // Original landscape value
+                                     } else {
+                                         // Portrait mode - use original calculation
+                                         return screenHeight * 0.28 // 28% of screen height when expanded
+                                     }
+                                 } else {
+                                     return 20 // Compact mode
+                                 }
                             }())
                             .offset(x: (showFloatingSidebar && (shouldShowNavigationPanel || isManuallyShown)) ? 0 : -200) // Hide when viewing documents unless manually shown
                             .animation(.spring(response: showFloatingSidebar ? 0.6 : 2.5, dampingFraction: showFloatingSidebar ? 0.75 : 0.9), value: showFloatingSidebar)

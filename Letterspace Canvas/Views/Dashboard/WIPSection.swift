@@ -7,6 +7,9 @@ struct WIPSection: View {
     @Binding var isRightSidebarVisible: Bool
     @Binding var isExpanded: Bool
     var isCarouselMode: Bool = false // New parameter for carousel mode
+    var showExpandButtons: Bool = false // New parameter to control expand button visibility
+    var onShowModal: (() -> Void)? = nil  // Callback for showing modal on iPad
+    var hideHeader: Bool = false // New parameter to hide header in modals
     @Environment(\.themeColors) var theme
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.carouselHeaderFont) var carouselHeaderFont
@@ -29,23 +32,31 @@ struct WIPSection: View {
     }
     
     var body: some View {
-        VStack(alignment: .leading, spacing: isCarouselMode ? 6 : 12) {  // Reduced spacing for carousel mode
+        VStack(alignment: .leading, spacing: hideHeader ? 0 : (isCarouselMode ? 6 : 12)) {  // Reduced spacing for carousel mode, no spacing if hiding header
+            // Conditionally show header
+            if !hideHeader {
             HStack(spacing: 8) {
                 Image(systemName: "clock.badge.checkmark")
                     .font(.system(size: isCarouselMode ? carouselIconSize : 14))
                     .foregroundStyle(theme.primary)
-                    .offset(y: -2.5) // Lift the icon up more
                 Text("Work in Progress")
                     .font(isCarouselMode ? carouselHeaderFont : .custom("InterTight-Medium", size: 16))
                     .foregroundStyle(theme.primary)
 
                 Spacer() // Push buttons to the right
 
-                // Expand button (macOS only, or non-carousel mode)
-                if !isCarouselMode || !isIPad {
+                    // Expand button (show when showExpandButtons is true)
+                    if showExpandButtons {
                 Button {
+                        print("🔄 WIP expand button tapped")
+                        if isCarouselMode && isIPad {
+                            // On iPad carousel mode, show modal instead of expanding
+                            onShowModal?()
+                        } else {
+                            // Normal expansion for macOS and non-carousel modes
                     withAnimation(.easeInOut(duration: 0.2)) {
                         isExpanded.toggle()
+                            }
                     }
                 } label: {
                     Image(systemName: isExpanded ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
@@ -68,7 +79,7 @@ struct WIPSection: View {
                 }
                 #endif
                 // Make button visible only when section is hovered
-                    .opacity(!isCarouselMode || !isIPad ? (isSectionHovered ? 1 : 0) : 1)
+                        .opacity(!isCarouselMode ? (isSectionHovered ? 1 : 0) : 1)  // Always visible in carousel mode
                 .animation(.easeInOut(duration: 0.15), value: isSectionHovered)
                 }
             }
@@ -80,6 +91,7 @@ struct WIPSection: View {
                 .fill(.separator)
                 .frame(height: 1)
                 .padding(.vertical, isCarouselMode ? 8 : 4) // Increased carousel padding from 2 to 8 for more space
+            }
             
             ScrollView(.vertical, showsIndicators: true) {
                 // Add a zero-height GeometryReader to match PinnedSection structure
@@ -140,25 +152,36 @@ struct WIPSection: View {
             .customScroll(shouldFlash: false)  // Added customScroll to match PinnedSection
             #endif
             // Make the ScrollView expand/collapse rather than the entire section
-            .frame(height: isExpanded ? 350 : (isCarouselMode ? 350 : 130))  // Increased carousel height from 280 to 350
+            .frame(height: isExpanded ? 350 : {
+                if isCarouselMode {
+                    return 180 // iPad landscape carousel
+                } else if isIPad && !isCarouselMode && !hideHeader {
+                    // iPad portrait cards need more height to fill the 380pt container
+                    // Container: 380pt, Header: ~50pt, Padding: ~20pt = ~310pt available for scroll content
+                    return 310 // Increased height for iPad portrait cards to better fill container
+                } else {
+                    return 130 // Default height for other cases
+                }
+            }())
         }
         .padding(isCarouselMode ? EdgeInsets() : EdgeInsets(top: 20, leading: 24, bottom: 20, trailing: 24))
         .background(
             Group {
-                if !isCarouselMode {
-            RoundedRectangle(cornerRadius: 12)
-                .fill(colorScheme == .dark ? Color(.sRGB, white: 0.12) : .white)
-                } else {
+                // Remove background for all iPad carousel cards (portrait and landscape)
+                if isIPad || isCarouselMode || hideHeader {
                     Color.clear
+                } else {
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(colorScheme == .dark ? Color(.sRGB, white: 0.12) : .white)
                 }
             }
         )
         .modifier(CarouselClipModifier(isCarouselMode: isCarouselMode))
         .shadow(
-            color: isCarouselMode ? .clear : (colorScheme == .dark ? .black.opacity(isExpanded ? 0.25 : 0.17) : .black.opacity(isExpanded ? 0.12 : 0.07)),
-            radius: isCarouselMode ? 0 : (isExpanded ? 12 : 8),
+            color: (isCarouselMode || hideHeader) ? .clear : (colorScheme == .dark ? .black.opacity(isExpanded ? 0.25 : 0.17) : .black.opacity(isExpanded ? 0.12 : 0.07)),
+            radius: (isCarouselMode || hideHeader) ? 0 : (isExpanded ? 12 : 8),
             x: 0,
-            y: isCarouselMode ? 0 : (isExpanded ? 4 : 1)
+            y: (isCarouselMode || hideHeader) ? 0 : (isExpanded ? 4 : 1)
         )
         // Apply scale effect when expanded (only if not in carousel mode)
         .scaleEffect(isCarouselMode ? 1.0 : (isExpanded ? 1.02 : 1.0))

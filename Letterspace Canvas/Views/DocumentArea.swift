@@ -420,9 +420,9 @@ struct DocumentArea: View {
     // Document vertical content stack
     private func documentVStack(geo: GeometryProxy) -> some View {
                         VStack(spacing: 0) {
-            // Header section is ONLY rendered when there's actually a header image
-            // or when header is explicitly enabled (even without an image)
-            if viewMode != .focus && !isDistractionFreeMode && (headerImage != nil || isHeaderExpanded) {
+            // Header section is ALWAYS rendered unless in focus mode or distraction-free mode
+            // Show collapsed header bar for documents without images, full header for documents with images
+            if viewMode != .focus && !isDistractionFreeMode {
                                 headerView
                     .transition(createHeaderTransition())
             }
@@ -432,13 +432,13 @@ struct DocumentArea: View {
                             documentContentView
                     .frame(minHeight: geo.size.height)
             }
-            // Only add padding when a header exists or is enabled - increased for better spacing
-            .padding(.top, (headerImage != nil || isHeaderExpanded) ? 24 : 0)
+            // Always add padding since we always show a header now
+            .padding(.top, 24)
                         }
                         .frame(width: paperWidth)
             // Remove overall animation on currentOverlap to prevent animating document title
             // when header is toggled (this was causing sliding effect)
-            .padding(.top, (headerImage != nil || isHeaderExpanded) ? 24 : 0)
+            .padding(.top, 24)
                         .opacity(isDocumentVisible ? 1 : 0)
                         .offset(y: isDocumentVisible ? 0 : 20)
                     }
@@ -1267,10 +1267,80 @@ struct DocumentArea: View {
         }
     }
     
+    private var collapsedTextOnlyHeaderView: some View {
+        ZStack {
+            // Background for the header bar
+            Rectangle()
+                .fill(colorScheme == .dark ? Color(.sRGB, red: 0.15, green: 0.15, blue: 0.15, opacity: 1.0) : Color(.sRGB, red: 0.95, green: 0.95, blue: 0.95, opacity: 1.0))
+                .frame(height: 80)
+            
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    // Editable title
+                    TextField("Untitled", text: Binding(
+                        get: { document.title.isEmpty ? "" : document.title },
+                        set: { newValue in
+                            document.title = newValue
+                            document.save()
+                        }
+                    ))
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                    .textFieldStyle(.plain)
+                    .focused($isTitleFocused)
+                    .onSubmit {
+                        isTitleFocused = false
+                    }
+                    
+                    // Editable subtitle
+                    TextField("Add subtitle...", text: Binding(
+                        get: { document.subtitle },
+                        set: { newValue in
+                            document.subtitle = newValue
+                            document.save()
+                        }
+                    ))
+                    .font(.system(size: 14, weight: .regular))
+                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.8) : .black.opacity(0.8))
+                    .textFieldStyle(.plain)
+                    .onSubmit {
+                        // Move focus away when done
+                        isTitleFocused = false
+                    }
+                }
+                .padding(.leading, 20)
+                
+                Spacer()
+                
+                // Button to add header image
+                Button(action: {
+                    // When user clicks the photo button, enable header image mode
+                    withAnimation(.easeInOut(duration: 0.35)) {
+                        isHeaderExpanded = true
+                        document.isHeaderExpanded = true
+                        isImageExpanded = false // Start with collapsed image placeholder
+                        document.save()
+                    }
+                }) {
+                    Image(systemName: "photo")
+                        .font(.system(size: 14))
+                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.6) : .black.opacity(0.6))
+                        .padding(8)
+                        .background(Circle().fill(colorScheme == .dark ? Color.white.opacity(0.1) : Color.black.opacity(0.1)))
+                }
+                .buttonStyle(.plain)
+                .padding(.trailing, 16)
+            }
+        }
+        .frame(height: 80)
+        .frame(maxWidth: paperWidth)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+    
     private var headerView: some View {
         Group {
-            // Only create the HeaderImageSection if we have a header image OR isHeaderExpanded is true
             if headerImage != nil || isHeaderExpanded {
+                // Full header section with image or image placeholder
                 HeaderImageSection(
                     isExpanded: $isImageExpanded,
                     headerImage: $headerImage,
@@ -1289,7 +1359,6 @@ struct DocumentArea: View {
                     isTitleVisible: $isTitleVisible
                 )
                 .buttonStyle(.plain)
-                .drawingGroup() // Add hardware acceleration for smoother transitions
                 .padding(.top, 24)
                 // Remove fixed height constraint - let HeaderImageSection determine its own height
                 // .frame(height: calculateDynamicHeaderHeight()) // REMOVED: This was forcing 200px height
@@ -1299,10 +1368,10 @@ struct DocumentArea: View {
                 .onPreferenceChange(ImagePickerSourceRectKey.self) { rect in
                     imagePickerSourceRect = rect
                 }
-
             } else {
-                // Return an empty view with zero height when no header
-                EmptyView()
+                // Show collapsed header bar for documents without header images
+                collapsedTextOnlyHeaderView
+                    .padding(.top, 24)
             }
         }
     }
@@ -1318,64 +1387,8 @@ struct DocumentArea: View {
     
     private var documentContentView: some View {
         VStack(spacing: 0) {
-            // Only show title/subtitle in document content when there's no header image
-            // and header expansion is not enabled
-            if headerImage == nil && !isHeaderExpanded {
-                // Title/subtitle section
-                VStack(spacing: 0) {
-                    documentTitleView
-                    
-                    // Separator with consistent transitions
-                    Divider()
-                        .frame(height: 1)
-                        .background(colorScheme == .dark ? Color.white.opacity(0.1) : Color.black.opacity(0.1))
-                        .padding(.horizontal, 24)
-                        // Apply specific top/bottom padding
-                        .padding(.top, isDistractionFreeMode ? 16 : 24)
-                        .padding(.bottom, 12) // Reduced bottom padding to 12
-                }
-                // IMPORTANT: Use an identity transition for removal to make title disappear immediately
-                // without any animation when toggling header on
-                .transition(.asymmetric(
-                    insertion: .opacity.combined(with: .scale(scale: 0.98)),
-                    removal: .identity
-                ))
-                .opacity(isDistractionFreeMode ? 0.7 : 1)
-                // IMPORTANT: Remove ALL animations for title visibility when toggling header
-                // Only animate title changes not related to header toggling
-                .contentShape(Rectangle()) // Make entire area tappable
-                .onTapGesture {
-                    // Only handle tap if we don't have a header image
-                    if headerImage == nil && !isHeaderExpanded {
-                        withAnimation(.easeInOut(duration: 0.5)) {
-                            // Toggle the expanded/collapsed state of the title
-                            if isEditorFocused {
-                                // If already collapsed, expand it again
-                                isEditorFocused = false
-                                isTitleVisible = true
-                            } else {
-                                // If expanded, collapse it
-                            isEditorFocused = true
-                            isTitleVisible = true
-                            
-                            // Restore text editor focus
-                            #if os(macOS)
-                            if let window = NSApp.keyWindow,
-                               let textView = window.contentView?.subviews.first(where: { $0.className.contains("DocumentEditor") }) as? NSTextView {
-                                    textView.isSelectable = true
-                                    textView.isEditable = true
-                                window.makeFirstResponder(textView)
-                                }
-                            #endif
-                            }
-                        }
-                    }
-                }
-                
-                // Add small spacing between title and content when title is visible
-                Spacer()
-                    .frame(height: 8)
-            }
+            // Don't show title/subtitle in document content anymore - 
+            // they will be shown in the collapsed header bar instead
             
             // Document editor wrapped in a container for proper padding and constraints
             VStack(alignment: .leading, spacing: 0) {

@@ -59,6 +59,11 @@ struct DashboardView: View {
     @State private var isWIPExpanded: Bool = false
     @State private var isSchedulerExpanded: Bool = false
     
+    // iPad modal overlay states
+    @State private var showPinnedModal = false
+    @State private var showWIPModal = false
+    @State private var showSchedulerModal = false
+    
     // State for calendar modal - Managed by DashboardView
     @State private var calendarModalData: ModalDisplayData? = nil
     
@@ -71,6 +76,12 @@ struct DashboardView: View {
     
     // Track if this is the first app launch to reset to first card
     @State private var isFirstLaunch: Bool = true
+    
+    // Track orientation for carousel sections
+    @State private var isLandscapeMode: Bool = false
+    
+    // Track whether expand buttons should be shown (separate from carousel styling)
+    @State private var shouldShowExpandButtons: Bool = false
     
     // Carousel sections in order: Pinned, WIP, Document Schedule (now mutable)
     @State private var carouselSections: [(title: String, view: AnyView)] = []
@@ -88,7 +99,9 @@ struct DashboardView: View {
     // Computed property to determine if navigation padding should be added
     private var shouldAddNavigationPadding: Bool {
         #if os(iOS)
-        return UIDevice.current.userInterfaceIdiom == .pad && showFloatingSidebar
+        // Only add padding when navigation is actually shown in dashboard mode
+        // This ensures proper full-width expansion when navigation is hidden
+        return UIDevice.current.userInterfaceIdiom == .pad && showFloatingSidebar && sidebarMode == .allDocuments
         #else
         return false
         #endif
@@ -123,7 +136,11 @@ struct DashboardView: View {
             sidebarMode: $sidebarMode,
             isRightSidebarVisible: $isRightSidebarVisible,
             isExpanded: .constant(false), // Always collapsed in carousel
-            isCarouselMode: true // Enable carousel mode
+            isCarouselMode: isLandscapeMode, // Use state variable for orientation
+            showExpandButtons: shouldShowExpandButtons, // separate parameter for expand buttons
+            onShowModal: {
+                showPinnedModal = true
+            }
         )
         .modifier(CarouselHeaderStyling())
     }
@@ -136,7 +153,11 @@ struct DashboardView: View {
             sidebarMode: $sidebarMode,
             isRightSidebarVisible: $isRightSidebarVisible,
             isExpanded: .constant(false), // Always collapsed in carousel
-            isCarouselMode: true // Enable carousel mode
+            isCarouselMode: isLandscapeMode, // Use state variable for orientation
+            showExpandButtons: shouldShowExpandButtons, // separate parameter for expand buttons
+            onShowModal: {
+                showWIPModal = true
+            }
         )
         .modifier(CarouselHeaderStyling())
     }
@@ -149,7 +170,11 @@ struct DashboardView: View {
             onShowModal: { data in
                 self.calendarModalData = data 
             },
-            isCarouselMode: true // Enable carousel mode
+            isCarouselMode: isLandscapeMode, // Use state variable for orientation
+            showExpandButtons: shouldShowExpandButtons, // separate parameter for expand buttons
+            onShowExpandModal: {
+                showSchedulerModal = true
+            }
         )
         .modifier(CarouselHeaderStyling())
     }
@@ -371,10 +396,40 @@ struct DashboardView: View {
         .opacity(showDetailsCard || calendarModalData != nil ? 0.7 : 1.0)
     }
     
+    // Landscape-specific header with bigger greeting
+    private var iPadLandscapeHeaderView: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 12) { // Increased spacing from 8 to 12 for more breathing room
+                Text("Dashboard")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(theme.primary.opacity(0.7))
+                    .padding(.bottom, 2)
+                
+                Text(getTimeBasedGreeting())
+                    .font(.custom("InterTight-Regular", size: 62)) // Increased from 52 to 62 for bigger greeting
+                    .tracking(0.5)
+                    .foregroundStyle(theme.primary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 8)
+        // Apply blur effect when DocumentDetailsCard or calendar modal is shown
+        .blur(radius: showDetailsCard || calendarModalData != nil ? 3 : 0)
+        .opacity(showDetailsCard || calendarModalData != nil ? 0.7 : 1.0)
+    }
+    
     var body: some View {
         GeometryReader { geometry in
             let isPortrait = geometry.size.height > geometry.size.width
-            let isIPad = geometry.size.width > 700 // Rough iPad detection
+            let isIPad: Bool = {
+                #if os(iOS)
+                return UIDevice.current.userInterfaceIdiom == .pad
+                #else
+                return false // macOS is never an iPad
+                #endif
+            }()
             
             ZStack { // Main ZStack for overlay handling
                 dashboardContent // Use the extracted content view
@@ -438,11 +493,11 @@ struct DashboardView: View {
                 }
                 #endif
             }
-            .blur(radius: isModalPresented ? 3 : 0)
-            .opacity(isModalPresented ? 0.7 : 1.0)
+            .blur(radius: isModalPresented || showPinnedModal || showWIPModal || showSchedulerModal ? 3 : 0)
+            .opacity(isModalPresented || showPinnedModal || showWIPModal || showSchedulerModal ? 0.7 : 1.0)
             .overlay { modalOverlayView } // Apply overlay first
-            .animation(.easeInOut(duration: 0.2), value: isModalPresented)
-            .ignoresSafeArea(isPortrait && isIPad ? .all : [], edges: isPortrait && isIPad ? .top : [])
+            .animation(.easeInOut(duration: 0.2), value: isModalPresented || showPinnedModal || showWIPModal || showSchedulerModal)
+            .ignoresSafeArea(isIPad ? .all : [], edges: isIPad ? .top : [])
         }
         .onAppear {
                 loadFolders()
@@ -758,13 +813,172 @@ struct DashboardView: View {
                 toggleWIP(documentId)
             }
         }
+        // iPad Modal Overlays
+        .overlay(
+            Group {
+                // Pinned Modal
+                if showPinnedModal {
+                    iPadModalOverlay(
+                        isPresented: $showPinnedModal,
+                        title: "Pinned",
+                        icon: "pin.fill"
+                    ) {
+                        PinnedSection(
+                            documents: documents,
+                            pinnedDocuments: $pinnedDocuments,
+                            onSelectDocument: { selectedDoc in
+                                onSelectDocument(selectedDoc)
+                                showPinnedModal = false
+                            },
+                            document: $document,
+                            sidebarMode: $sidebarMode,
+                            isRightSidebarVisible: $isRightSidebarVisible,
+                            isExpanded: .constant(true), // Always expanded in modal
+                            isCarouselMode: false, // Disable carousel mode in modal
+                            showExpandButtons: false, // No expand buttons in modal
+                            hideHeader: true // Hide internal header since we have modal header
+                        )
+                    }
+                }
+                
+                // WIP Modal
+                if showWIPModal {
+                    iPadModalOverlay(
+                        isPresented: $showWIPModal,
+                        title: "Work in Progress",
+                        icon: "clock.badge.checkmark"
+                    ) {
+                        WIPSection(
+                            documents: documents,
+                            wipDocuments: $wipDocuments,
+                            document: $document,
+                            sidebarMode: $sidebarMode,
+                            isRightSidebarVisible: $isRightSidebarVisible,
+                            isExpanded: .constant(true), // Always expanded in modal
+                            isCarouselMode: false, // Disable carousel mode in modal
+                            showExpandButtons: false, // No expand buttons in modal
+                            hideHeader: true // Hide internal header since we have modal header
+                        )
+                    }
+                }
+                
+                // Scheduler Modal
+                if showSchedulerModal {
+                    iPadModalOverlay(
+                        isPresented: $showSchedulerModal,
+                        title: "Document Schedule",
+                        icon: "calendar"
+                    ) {
+                        SermonCalendar(
+                            documents: documents,
+                            calendarDocuments: calendarDocuments,
+                            isExpanded: .constant(true), // Always expanded in modal
+                            onShowModal: { data in
+                                self.calendarModalData = data 
+                            },
+                            isCarouselMode: false, // Disable carousel mode in modal
+                            showExpandButtons: false, // No expand buttons in modal
+                            hideHeader: false, // Keep header area for padding, but hide content below
+                            showMonthSelectorOnly: true // ONLY show month selector
+                        )
+                    }
+                }
+            }
+        )
+    }
+    
+    // iPad Modal Overlay Helper
+    @ViewBuilder
+    private func iPadModalOverlay<Content: View>(
+        isPresented: Binding<Bool>,
+        title: String,
+        icon: String? = nil,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        ZStack {
+            // Background blur similar to smart study modals
+            Color.clear
+                .contentShape(Rectangle())
+                .ignoresSafeArea()
+                .onTapGesture {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        isPresented.wrappedValue = false
+                    }
+                }
+            
+            // Modal content centered on screen
+            VStack(spacing: 0) {
+                // Modal header with icon support
+                HStack(spacing: 8) {
+                    if let icon = icon {
+                        Image(systemName: icon)
+                            .font(.system(size: 18, weight: .medium))
+                            .foregroundStyle(theme.primary)
+                    }
+                    
+                    Text(title)
+                        .font(.custom("InterTight-Medium", size: 22))
+                        .foregroundStyle(theme.primary)
+                    
+                    Spacer()
+                    
+                    Button("Done") {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            isPresented.wrappedValue = false
+                        }
+                    }
+                    .font(.custom("InterTight-Medium", size: 16))
+                    .foregroundStyle(theme.accent)
+                }
+                .padding(.horizontal, 24)
+                .padding(.top, title == "Document Schedule" ? 100 : 20) // Extra top padding for Document Schedule
+                .padding(.bottom, 20)
+                .background(colorScheme == .dark ? Color(.sRGB, white: 0.12) : .white)
+                
+                // Divider after header
+                Rectangle()
+                    .fill(.separator)
+                    .frame(height: 1)
+                    .padding(.horizontal, 24)
+                
+                // Content
+                content()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(colorScheme == .dark ? Color(.sRGB, white: 0.12) : .white)
+            }
+            .frame(width: 600, height: 500)
+            .background(colorScheme == .dark ? Color(.sRGB, white: 0.12) : .white)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 10)
+            .transition(.asymmetric(
+                insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .center)),
+                removal: .opacity.combined(with: .scale(scale: 0.95, anchor: .center))
+            ))
+        }
     }
     
     // NEW: Extracted computed property for the main dashboard layout
     private var dashboardContent: some View {
         GeometryReader { geometry in
             let isPortrait = geometry.size.height > geometry.size.width
-            let isIPad = geometry.size.width > 700 // Rough iPad detection
+            let isIPad: Bool = {
+                #if os(iOS)
+                return UIDevice.current.userInterfaceIdiom == .pad
+                #else
+                return false // macOS is never an iPad
+                #endif
+            }()
+            
+            // Update landscape mode state for carousel sections
+            let _ = DispatchQueue.main.async {
+                #if os(macOS)
+                isLandscapeMode = false // macOS doesn't use carousel styling
+                shouldShowExpandButtons = true // but does show expand buttons
+                #else
+                isLandscapeMode = !isPortrait && isIPad // iPad only in landscape
+                shouldShowExpandButtons = !isPortrait && isIPad // iPad only in landscape
+                #endif
+            }
             
             if isPortrait && isIPad {
                 // iPad Portrait: Special layout that respects navigation
@@ -775,36 +989,71 @@ struct DashboardView: View {
                         .padding(.top, {
                             // Responsive header positioning based on percentage of screen height
                             let screenHeight = geometry.size.height
-                            return screenHeight * 0.10 // Increased from 9% to 10% to bring header down a little more
+                            return screenHeight * 0.08 // Increased from 5% to 8% for more breathing room from top of screen
                         }())
                         
                         // iPad Carousel for sections
                         iPadSectionCarousel
-                        .padding(.horizontal, 20)
+                        .padding(.horizontal, 10) // Reduced from 20 to 10 to make carousel wider
                         .padding(.top, {
-                            // Position carousel higher up on screen
+                            // Position carousel with comfortable breathing room from greeting
                             let screenHeight = geometry.size.height
-                            return screenHeight * 0.05 // Position at 5% from top
+                            return screenHeight * 0.10 // Increased from 7% to 10% for more noticeable breathing room between greeting and carousel
                         }())
                         
                     // All Documents section - with responsive spacing and height for different iPad sizes
                         allDocumentsSectionView
-                        .padding(.top, 40) // Add space between carousel and All Documents
-                        .padding(.horizontal, 20) // Proper padding on iPad to show corner radius
+                        .padding(.top, 10) // Further reduced space between carousel and All Documents from 20 to 10
+                        .padding(.horizontal, 10) // Reduced from 20 to 10 to make All Documents wider
                         .padding(.leading, {
                                     #if os(macOS)
                                     return 24 // Fixed alignment with carousel sections on macOS
                                     #else
-                                    return shouldAddNavigationPadding ? responsiveSize(base: 160, min: 100, max: 220) : responsiveSize(base: 16, min: 0, max: 30)
+                                    return shouldAddNavigationPadding ? 135 : 10  // Further reduced from 145 to 135 to widen left alignment with carousel
                                     #endif
-                                }()) // Platform-specific alignment - reduced to extend width to the left
+                                }()) // Platform-specific alignment - further reduced to better match carousel alignment
                         .animation(.spring(response: 0.6, dampingFraction: 0.75), value: showFloatingSidebar)
                         
                     // Remove Spacer to let All Documents fill remaining space
                     }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if !isPortrait && isIPad {
+                // iPad Landscape: Mirror the portrait layout structure
+                VStack(alignment: .leading, spacing: 0) {
+                    // Header with full width positioning - no longer affected by navigation
+                    iPadLandscapeHeaderView
+                        .padding(.horizontal, 20)
+                        .padding(.top, 65) // Fixed top padding for consistent header positioning
+                        
+                    // iPad Landscape: Use horizontal layout like macOS but with iPad styling
+                    iPadLandscapeSections
+                        .padding(.horizontal, 20)
+                        .padding(.leading, {
+                            // Push cards over when navigation is visible (landscape only)
+                            return shouldAddNavigationPadding ? 165 : 0  // Use fixed value for consistency
+                        }())
+                        .padding(.top, 45) // Increased from 25 to 45 for more breathing room between greeting and cards
+                        .animation(.spring(response: 0.6, dampingFraction: 0.75), value: showFloatingSidebar)
+                        
+                    // All Documents section - with responsive spacing and height for different iPad sizes
+                    allDocumentsSectionView
+                        .padding(.top, 30) // Reduced space between carousel and All Documents for landscape
+                        .padding(.trailing, 20) // Match right alignment with cards
+                        .padding(.leading, {
+                            #if os(macOS)
+                            return 44 // Fixed alignment with carousel sections on macOS (24 + 20 base padding)
+                            #else
+                            // Match the cards' padding logic for better alignment - use fixed value for consistency
+                            return shouldAddNavigationPadding ? 185 : 20  // 165 (cards) + 20 (base padding)
+                            #endif
+                        }()) // Platform-specific alignment - matches cards exactly including base padding
+                        .animation(.spring(response: 0.6, dampingFraction: 0.75), value: showFloatingSidebar)
+                        
+                    // Remove Spacer to let All Documents fill remaining space
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                // Non-iPad or Landscape: Original layout
+                // Non-iPad or other cases: Original layout
                 VStack(alignment: .leading, spacing: 0) {
                     // Remove top spacing for iPad portrait to bring header to the top
                     Spacer().frame(minHeight: 0)
@@ -853,14 +1102,26 @@ struct DashboardView: View {
                                 return screenHeight * 0.01 // Minimal spacing to eliminate gap
                                 #endif
                             }()) // Platform-specific spacing
-                            allDocumentsSectionView
-                                .padding(.leading, {
+                            HStack {
+                                if shouldAddNavigationPadding {
+                                    Spacer().frame(width: 185) // Fixed spacer width to reserve navigation space
+                                } else {
                                     #if os(macOS)
-                                    return 0 // Remove left padding to align with carousel sections
+                                    Spacer().frame(width: 0) // Extend to left edge for macOS to align with cards
                                     #else
-                                    return shouldAddNavigationPadding ? responsiveSize(base: 180, min: 120, max: 240) : responsiveSize(base: 36, min: 20, max: 50)
+                                    Spacer().frame(width: 20) // Minimal left margin when navigation hidden
                                     #endif
-                                }()) // Platform-specific alignment
+                                }
+                                
+                            allDocumentsSectionView
+                                    .frame(maxWidth: .infinity, alignment: .trailing) // Align to right edge
+                                
+                                    #if os(macOS)
+                                Spacer().frame(width: 0) // Extend to right edge for macOS to align with cards
+                                    #else
+                                Spacer().frame(width: 20) // Fixed right margin
+                                    #endif
+                            }
                                 .animation(.spring(response: 0.6, dampingFraction: 0.75), value: showFloatingSidebar)
                         }
 
@@ -1106,19 +1367,19 @@ struct DashboardView: View {
         let isIPad = false
         #endif
         
-        return HStack(spacing: 8) {
+        return HStack(spacing: 6) { // Reduced from 8 to 6
             // Left side - Title
-            HStack(spacing: 8) {
+            HStack(spacing: 6) { // Reduced from 8 to 6
                 Image(systemName: "doc.text.fill")
-                    .font(.custom("InterTight-Regular", size: 18))  // Increased from 14 to 18
+                    .font(.custom("InterTight-Regular", size: 16))  // Reduced from 18 to 16 for tighter fit
                     .foregroundStyle(theme.primary)
                 Text("All Documents")
-                    .font(.custom("InterTight-Medium", size: 20))  // Increased from 16 to 20
+                    .font(.custom("InterTight-Medium", size: 18))  // Reduced from 20 to 18 for tighter fit
                     .foregroundStyle(theme.primary)
                 Text("(\(filteredDocuments.count))")
-                    .font(.custom("InterTight-Regular", size: 18))  // Increased from 14 to 18
+                    .font(.custom("InterTight-Regular", size: 16))  // Reduced from 18 to 16 for tighter fit
                     .foregroundStyle(theme.secondary)
-                    .frame(width: 50, alignment: .leading)  // Increased width from 40 to 50
+                    .frame(width: 45, alignment: .leading)  // Reduced width from 50 to 45
                 
                 Menu {
                     ForEach(ListColumn.allColumns) { column in
@@ -1160,16 +1421,16 @@ struct DashboardView: View {
                         }
                     }
                 } label: {
-                    HStack(spacing: 4) {
+                    HStack(spacing: 3) { // Reduced from 4 to 3
                         Text("My List View")
-                            .font(.system(size: 15))  // Increased from 13 to 15
+                            .font(.system(size: 13))  // Reduced from 15 to 13 for tighter fit
                             .foregroundStyle(colorScheme == .dark ? .white : Color(.sRGB, white: 0.3))
                         Image(systemName: "line.3.horizontal.decrease")
-                            .font(.system(size: 12))  // Increased from 10 to 12
+                            .font(.system(size: 11))  // Reduced from 12 to 11
                             .foregroundStyle(colorScheme == .dark ? .white : Color(.sRGB, white: 0.3))
                     }
-                    .padding(.horizontal, 10)  // Increased from 8 to 10
-                    .padding(.vertical, 5)  // Increased from 4 to 5
+                    .padding(.horizontal, 8)  // Reduced from 10 to 8
+                    .padding(.vertical, 4)  // Reduced from 5 to 4
                     .background(
                         RoundedRectangle(cornerRadius: 6)
                             .fill(colorScheme == .dark ?
@@ -1195,13 +1456,13 @@ struct DashboardView: View {
             }
             
             if !allTags.isEmpty {
-                // Spacer to push tags to the right a bit
-                Spacer().frame(width: 32)
+                // Spacer to push tags to the right a bit - reduced for tighter fit
+                Spacer().frame(width: 20) // Reduced from 32 to 20
                 
                 // Tags section
-                HStack(spacing: 8) {
+                HStack(spacing: 6) { // Reduced from 8 to 6
                     Text("Tags")
-                        .font(.custom("InterTight-Medium", size: 15))  // Increased from 13 to 15
+                        .font(.custom("InterTight-Medium", size: 13))  // Reduced from 15 to 13 for tighter fit
                         .tracking(0.3)
                         .foregroundStyle(theme.primary)
                     
@@ -1209,7 +1470,7 @@ struct DashboardView: View {
                         showTagManager = true
                     }) {
                         Image(systemName: "info.circle")
-                            .font(.system(size: 15))  // Increased from 13 to 15
+                            .font(.system(size: 13))  // Reduced from 15 to 13 for tighter fit
                             .foregroundStyle(theme.primary)
                     }
                     .buttonStyle(.plain)
@@ -1277,7 +1538,7 @@ struct DashboardView: View {
             #if os(macOS)
             return 28 // Reduced from 72 to 28 to align with Pinned header on macOS
             #else
-            return isIPad ? 40 : 72 // Keep original iPad and iOS padding
+            return isIPad ? 24 : 72 // Reduced iPad padding from 40 to 24 for tighter fit when nav is visible
             #endif
         }())
         .padding(.top, isIPad ? 20 : 12) // More breathing room on iPad: 20 vs 12
@@ -1764,8 +2025,8 @@ struct DashboardView: View {
         )
 
         .frame(
-            maxWidth: isIPad ? 1200 : 1600
-        ) // Fixed width constraint on iPad to ensure corners are visible, original width for other platforms
+            maxWidth: .infinity // Allow full width expansion when navigation is hidden
+        )
         .frame(height: isIPad ? nil : 400)
         .frame(maxHeight: isIPad ? .infinity : 400) // Allow All Documents to fill remaining space on iPad
         .blur(radius: isSchedulerExpanded || isPinnedExpanded || isWIPExpanded ? 3 : 0)
@@ -1970,13 +2231,44 @@ struct DashboardView: View {
     }
     #endif
 
+    // iPad Landscape Sections - horizontal layout like macOS but with iPad carousel styling
+    private var iPadLandscapeSections: some View {
+        HStack(alignment: .top, spacing: 16) { // Reduced spacing from 24 to 16 for landscape
+            // Pinned Section - simplified for landscape
+                carouselPinnedSectionView
+            .frame(maxWidth: .infinity)
+            .frame(height: 260) // Fixed height for landscape cards
+            .background(cardBackground) // Use same glassmorphism background as carousel cards
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .shadow(color: cardShadowColor, radius: 12, x: 0, y: 4)
+            
+            // WIP Section - simplified for landscape
+                carouselWipSectionView
+            .frame(maxWidth: .infinity)
+            .frame(height: 260) // Fixed height for landscape cards
+            .background(cardBackground) // Use same glassmorphism background as carousel cards
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .shadow(color: cardShadowColor, radius: 12, x: 0, y: 4)
+            
+            // Document Schedule Section - simplified for landscape
+                carouselSermonCalendarView
+            .frame(maxWidth: .infinity)
+            .frame(height: 260) // Fixed height for landscape cards
+            .background(cardBackground) // Use same glassmorphism background as carousel cards
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .shadow(color: cardShadowColor, radius: 12, x: 0, y: 4)
+        }
+        .blur(radius: showDetailsCard || calendarModalData != nil ? 3 : 0)
+        .opacity(showDetailsCard || calendarModalData != nil ? 0.7 : 1.0)
+    }
+
     // iPad Carousel Component
     private var iPadSectionCarousel: some View {
         GeometryReader { geometry in
             let screenWidth = geometry.size.width
             let allDocumentsLeftPadding: CGFloat = shouldAddNavigationPadding ? 
-                responsiveSize(base: 160, min: 100, max: 220) : 
-                responsiveSize(base: 16, min: 0, max: 30)
+                165 : 
+                20
             let allDocumentsLeftEdge = allDocumentsLeftPadding + 20
             let cardWidth: CGFloat = shouldAddNavigationPadding ? 
                 (screenWidth - allDocumentsLeftEdge) * 0.8 : 
@@ -2018,15 +2310,7 @@ struct DashboardView: View {
             // Only apply carousel gesture when not in reorder mode
             .gesture(reorderMode ? nil : carouselDragGesture(cardWidth: cardWidth, cardSpacing: cardSpacing))
         }
-        .frame(height: {
-            // Responsive carousel height based on percentage of screen height
-            #if os(iOS)
-            let screenHeight = UIScreen.main.bounds.height
-            return screenHeight * 0.30 // Match exactly the card height (30%)
-            #else
-            return responsiveSize(base: 550, min: 400, max: 650) // macOS default
-            #endif
-        }())
+        .frame(height: 380) // Increased from 340 to 380 for even taller portrait cards
         .animation(.spring(response: 0.6, dampingFraction: 0.75), value: showFloatingSidebar)
 
     }
@@ -2080,27 +2364,17 @@ struct DashboardView: View {
                 let constrainedX = max(startX, 
                                      min(startX + totalCardsWidth - reorderCardWidth, 
                                          basePosition + draggedCardOffset.width))
-                #if os(iOS)
-                let screenHeight = UIScreen.main.bounds.height
-                #else
-                let screenHeight: CGFloat = 800 // Default for macOS
-                #endif
                 return CGPoint(
                     x: constrainedX,
-                    y: (screenHeight * 0.30) / 2 + draggedCardOffset.height * 0.2 // Position at half the card height
+                    y: 190 + draggedCardOffset.height * 0.2 // Fixed position at half the card height (380/2)
                 )
             } else {
                 // Other cards slide to their effective positions smoothly
                 let effectiveIndex = effectiveCardIndex(for: index)
                 let xPosition = startX + CGFloat(effectiveIndex) * (reorderCardWidth + reorderSpacing)
-                #if os(iOS)
-                let screenHeight = UIScreen.main.bounds.height
-                #else
-                let screenHeight: CGFloat = 800 // Default for macOS
-                #endif
                 return CGPoint(
                     x: xPosition,
-                    y: (screenHeight * 0.30) / 2 // Position at half the card height
+                    y: 190 // Fixed position at half the card height (380/2)
                 )
             }
         } else {
@@ -2111,8 +2385,8 @@ struct DashboardView: View {
             let centerX: CGFloat
             if shouldAddNavigationPadding {
                 // Navigation visible: align left edge of centered card with All Documents
-                let allDocumentsLeftPadding: CGFloat = responsiveSize(base: 160, min: 100, max: 220)
-                let allDocumentsLeftEdge = allDocumentsLeftPadding + 20 // Add the horizontal padding from All Documents
+                let allDocumentsLeftPadding: CGFloat = 145  // Updated to match All Documents section padding
+                let allDocumentsLeftEdge = allDocumentsLeftPadding + 10 // Add the horizontal padding from All Documents (reduced from 20 to 10)
                 // Account for the carousel container's shadowPadding (40pt) that shifts everything right
                 let centeredCardLeftEdge = allDocumentsLeftEdge - shadowPadding
                 centerX = centeredCardLeftEdge + (cardWidth / 2) + xOffset + dragOffset + 12 // Move 12pt to the right
@@ -2120,14 +2394,9 @@ struct DashboardView: View {
                 // Navigation hidden: center the cards in the available space
                 centerX = totalWidth / 2 + xOffset + dragOffset - 30 // Move 30pt to the left when centered
             }
-            #if os(iOS)
-            let screenHeight = UIScreen.main.bounds.height
-            #else
-            let screenHeight: CGFloat = 800 // Default for macOS
-            #endif
             return CGPoint(
                 x: centerX,
-                y: (screenHeight * 0.30) / 2 // Position at half the card height
+                y: 125 // Fixed position at half the card height (250/2)
             )
         }
     }
@@ -2147,30 +2416,14 @@ struct DashboardView: View {
         ZStack(alignment: .topTrailing) {
             // Main card content
             carouselSections[index].view
-                .frame(width: adjustedCardWidth, height: {
-                    // Responsive card height based on screen height - reduced to be less tall
-                    #if os(iOS)
-                    let screenHeight = UIScreen.main.bounds.height
-                    return screenHeight * 0.30 // Reduced from 36% to 30% of screen height for shorter cards
-                    #else
-                    return 380 // Reduced from 450 to 380 for macOS
-                    #endif
-                }(), alignment: .top)  // Force top alignment for consistent header positioning
+                .frame(width: adjustedCardWidth, height: 380, alignment: .top)  // Increased from 340 to 380 for even taller portrait cards
                 .clipped()  // Clip content that overflows the frame
             
             // Reorder mode overlay
             if reorderMode && !isDragged {
                 RoundedRectangle(cornerRadius: 16)
                     .fill(Color.black.opacity(0.15))
-                    .frame(width: adjustedCardWidth, height: {
-                        // Match the reduced responsive card height
-                        #if os(iOS)
-                        let screenHeight = UIScreen.main.bounds.height
-                        return screenHeight * 0.30 // Match the reduced card height
-                        #else
-                        return 380 // Match the reduced macOS height
-                        #endif
-                    }())
+                    .frame(width: adjustedCardWidth, height: 380)
             }
             
             // Reorder handle
@@ -2470,7 +2723,9 @@ struct DashboardView: View {
             document: $document,
             sidebarMode: $sidebarMode,
             isRightSidebarVisible: $isRightSidebarVisible,
-            isExpanded: $isPinnedExpanded
+            isExpanded: $isPinnedExpanded,
+            isCarouselMode: false, // macOS doesn't use carousel styling
+            showExpandButtons: shouldShowExpandButtons // separate parameter for expand buttons
         )
         .frame(maxWidth: CGFloat.infinity)
     }
@@ -2483,7 +2738,9 @@ struct DashboardView: View {
             document: $document,
             sidebarMode: $sidebarMode,
             isRightSidebarVisible: $isRightSidebarVisible,
-            isExpanded: $isWIPExpanded
+            isExpanded: $isWIPExpanded,
+            isCarouselMode: false, // macOS doesn't use carousel styling
+            showExpandButtons: shouldShowExpandButtons // separate parameter for expand buttons
         )
         .frame(maxWidth: CGFloat.infinity)
     }
@@ -2496,7 +2753,9 @@ struct DashboardView: View {
             isExpanded: $isSchedulerExpanded,
             onShowModal: { data in
                 self.calendarModalData = data 
-            }
+            },
+            isCarouselMode: false, // macOS doesn't use carousel styling
+            showExpandButtons: shouldShowExpandButtons // separate parameter for expand buttons
         )
         .frame(maxWidth: CGFloat.infinity)
     }
@@ -2684,10 +2943,10 @@ struct CarouselHeaderStyling: ViewModifier {
     
     func body(content: Content) -> some View {
         content
-            .environment(\.carouselHeaderFont, .custom("InterTight-Medium", size: content.responsiveSize(base: 21, min: 18, max: 26)))
+            .environment(\.carouselHeaderFont, .custom("InterTight-Medium", size: content.responsiveSize(base: 18, min: 18, max: 26)))
             .environment(\.carouselIconSize, {
                 #if os(iOS)
-                return 14 // Fixed size for consistent alignment across iPad sizes
+                return 12 // Reduced from 14 for a smaller header
                 #else
                 return 14 // Fixed size for macOS
                 #endif

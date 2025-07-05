@@ -1379,8 +1379,18 @@ struct BibleReaderView: View {
             content.frame(width: 1000, height: 700)
             #else // For iOS
             if UIDevice.current.userInterfaceIdiom == .pad {
-                // Provide a large, but not full-screen, size for iPad sheets
+                // Check orientation for iPad
+                let screenWidth = UIScreen.main.bounds.width
+                let screenHeight = UIScreen.main.bounds.height
+                let isLandscape = screenWidth > screenHeight
+                
+                if isLandscape {
+                    // iPad Landscape: Wider but shorter, leaving blue background visible
+                    content.frame(idealWidth: 1000, maxWidth: 1100, idealHeight: 700, maxHeight: 800)
+                } else {
+                    // iPad Portrait: Original sizing
                 content.frame(idealWidth: 800, maxWidth: 900, idealHeight: 1000, maxHeight: 1150)
+                }
             } else { // For iPhone
                 // iPhone sheets are typically full-screen or sized by content, .infinity is fine.
                 content.frame(maxWidth: .infinity, maxHeight: .infinity)

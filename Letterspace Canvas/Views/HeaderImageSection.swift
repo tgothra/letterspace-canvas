@@ -4,7 +4,8 @@ import CoreData
 #if os(macOS)
 import AppKit
 #elseif os(iOS)
-import UIKit // For UIImage and potentially other UIKit elements if needed later
+import UIKit
+import PhotosUI
 #endif
 
 // MARK: - Preference Key for Image Picker Source Rect
@@ -63,7 +64,7 @@ struct HeaderImageSection: View {
     #endif
     
     // Heights for the collapsed header bar
-    private let collapsedBarHeight: CGFloat = 64
+    private let collapsedBarHeight: CGFloat = 80
     
     // Access underlying NSWindow to manage first responder
     #if os(macOS)
@@ -277,12 +278,10 @@ struct HeaderImageSection: View {
             #if os(iOS)
             .confirmationDialog("Header Image Options", isPresented: $showImageActionSheet) {
                 Button("Photo Library") {
-                    // Set source type to photo library
-                    isShowingImagePicker = true
+                    presentPhotoLibraryPicker()
                 }
                 Button("Browse Files") {
-                    // Set source type to files browser
-                    isShowingImagePicker = true
+                    presentDocumentPicker()
                 }
                 Button("Remove Image", role: .destructive) {
                     removeHeaderImage()
@@ -306,7 +305,7 @@ struct HeaderImageSection: View {
         // Apply scroll-based scaling using headerCollapseProgress
         // When progress = 0.0 (fully expanded), use full height
         // When progress = 1.0 (fully collapsed), use collapsed height
-        let collapsedHeight: CGFloat = 64 // Target collapsed height (matches collapsed bar)
+        let collapsedHeight: CGFloat = 80 // Target collapsed height (matches collapsed bar)
         let currentHeight = baseHeaderHeight - (headerCollapseProgress * (baseHeaderHeight - collapsedHeight))
         
         // Calculate staggered transition timing for smoother effect
@@ -344,6 +343,11 @@ struct HeaderImageSection: View {
                                     .aspectRatio(contentMode: .fill)
                     .frame(width: paperWidth, height: currentHeight)
                                     .clipped()
+                                    .onTapGesture {
+                                        // iOS: Show action sheet when tapping the expanded image
+                                        print("📸 iOS: User tapped expanded header image - showing action sheet")
+                                        showImageActionSheet = true
+                                    }
                 #endif
                 
                 // Header menu (fade out as we approach collapsed state)
@@ -364,63 +368,85 @@ struct HeaderImageSection: View {
             
             // Collapsed state: solid bar with image thumbnail on left + title on right
             if collapsedOpacity > 0 {
-                HStack(spacing: 12) {
-                    // Image thumbnail on the left
-            #if os(macOS)
-            Image(nsImage: image)
-                .resizable()
-                .aspectRatio(contentMode: .fill)
-                        .frame(width: 40, height: 40)
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
-            #elseif os(iOS)
-            Image(uiImage: image)
-                .resizable()
-                .aspectRatio(contentMode: .fill)
-                        .frame(width: 40, height: 40)
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
-            #endif
+                ZStack {
+                                         // Background bar
+                     RoundedRectangle(cornerRadius: 12)
+                         .fill(collapsedBarColor)
+                         .frame(height: 80)
                     
-                    // Title and subtitle on the right
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(document.title.isEmpty ? "Untitled" : document.title)
-                        .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(textColor)
-                        .lineLimit(1)
-
-                    if document.subtitle.isNotEmpty {
-                        Text(document.subtitle)
-                            .font(.system(size: 12, weight: .regular))
-                                .foregroundColor(subtitleColor)
-                            .lineLimit(1)
+                    HStack(spacing: 12) {
+                        // Image thumbnail on the left - make it clickable
+                        Button(action: {
+                            #if os(iOS)
+                            print("📸 iOS: User tapped collapsed header image thumbnail - showing action sheet")
+                            showImageActionSheet = true
+                            #endif
+                        }) {
+                            #if os(macOS)
+                            Image(nsImage: image)
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(width: 40, height: 40)
+                                .clipShape(RoundedRectangle(cornerRadius: 6))
+                            #elseif os(iOS)
+                            Image(uiImage: image)
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(width: 40, height: 40)
+                                .clipShape(RoundedRectangle(cornerRadius: 6))
+                            #endif
                         }
+                        .buttonStyle(.plain)
+                        
+                                                 // Title and subtitle on the right - make them editable
+                         VStack(alignment: .leading, spacing: 2) {
+                                                           // Editable title
+                              TextField("Untitled", text: Binding(
+                                  get: { document.title.isEmpty ? "" : document.title },
+                                  set: { newValue in
+                                      document.title = newValue
+                                      document.save()
+                                  }
+                              ))
+                              .font(.system(size: 18, weight: .semibold))
+                              .foregroundColor(textColor)
+                              .textFieldStyle(.plain)
+                              .onSubmit {
+                                  // Move focus away when done
+                              }
+                              
+                              // Editable subtitle
+                              TextField("Add subtitle...", text: Binding(
+                                  get: { document.subtitle },
+                                  set: { newValue in
+                                      document.subtitle = newValue
+                                      document.save()
+                                  }
+                              ))
+                              .font(.system(size: 14, weight: .regular))
+                              .foregroundColor(subtitleColor)
+                              .textFieldStyle(.plain)
+                              .onSubmit {
+                                  // Move focus away when done
+                              }
+                         }
+                        
+                        Spacer()
                     }
-                    
-                    Spacer()
-                }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 12)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(collapsedBarColor)
-                )
-                .opacity(collapsedOpacity)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 12)
+                                 }
+                 .frame(height: 80)
+                 .opacity(collapsedOpacity)
             }
         }
         .frame(width: paperWidth, height: currentHeight)
         .clipShape(RoundedRectangle(cornerRadius: 12))
-        #if os(iOS)
-        .onTapGesture {
-            // iOS: Show action sheet when tapping the image
-            print("📸 iOS: User tapped header image - showing action sheet")
-            showImageActionSheet = true
-        }
-        #endif
         .transition(.asymmetric(
             insertion: .opacity.combined(with: .move(edge: .top).combined(with: .scale(scale: 0.98))),
             removal: .opacity.combined(with: .move(edge: .top).combined(with: .scale(scale: 0.98)))
         ))
         .animation(.easeInOut(duration: 0.35), value: isExpanded)
-        .drawingGroup()
     }
 
 
@@ -436,8 +462,11 @@ struct HeaderImageSection: View {
                                                        window.firstResponder is NSTextView {
                                                         window.makeFirstResponder(nil)
                                                     }
-                #endif
                                                     isShowingImagePicker = true
+                #elseif os(iOS)
+                                                    // On iOS, show the action sheet to choose Photo Library or Browse Files
+                                                    showImageActionSheet = true
+                #endif
                                                 }) {
                                                     Label("Replace Image", systemImage: "photo")
                                                 }
@@ -513,7 +542,6 @@ struct HeaderImageSection: View {
                                     removal: .opacity.combined(with: .move(edge: .top).combined(with: .scale(scale: 0.98)))
                                 ))
             .animation(.easeInOut(duration: 0.35), value: isExpanded) // Make sure this animation is desired here
-                                .drawingGroup()
             .background(
                 GeometryReader { geometry in
                     Color.clear
@@ -594,8 +622,60 @@ struct HeaderImageSection: View {
             removal: .opacity.combined(with: .move(edge: .bottom).combined(with: .scale(scale: 0.98)))
         ))
         .animation(.easeInOut(duration: 0.35), value: isExpanded)
-            .drawingGroup()
     }
+    
+    // MARK: - Image Selection Helper
+    #if os(iOS)
+    private func handleImageSelection(url: URL) {
+        // Post notification to DocumentArea to handle the image import
+        NotificationCenter.default.post(
+            name: NSNotification.Name("HandleImageImport"),
+            object: nil,
+            userInfo: ["imageURL": url]
+        )
+    }
+    
+    private func presentPhotoLibraryPicker() {
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let rootViewController = windowScene.windows.first?.rootViewController else {
+            return
+        }
+        
+        var topController = rootViewController
+        while let presented = topController.presentedViewController {
+            topController = presented
+        }
+        
+        var configuration = PHPickerConfiguration()
+        configuration.filter = .images
+        configuration.selectionLimit = 1
+        
+        let picker = PHPickerViewController(configuration: configuration)
+        picker.delegate = PhotoPickerCoordinator { url in
+            self.handleImageSelection(url: url)
+        }
+        topController.present(picker, animated: true)
+    }
+    
+    private func presentDocumentPicker() {
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let rootViewController = windowScene.windows.first?.rootViewController else {
+            return
+        }
+        
+        var topController = rootViewController
+        while let presented = topController.presentedViewController {
+            topController = presented
+        }
+        
+        let documentPicker = UIDocumentPickerViewController(forOpeningContentTypes: [.image, .jpeg, .png, .heic, .gif, .webP])
+        documentPicker.delegate = DocumentPickerCoordinator { url in
+            self.handleImageSelection(url: url)
+        }
+        documentPicker.allowsMultipleSelection = false
+        topController.present(documentPicker, animated: true)
+    }
+    #endif
     
     // MARK: - Scroll to Top Function
     private func scrollToTop() {
@@ -721,4 +801,62 @@ struct NoFlashButtonStyle: ButtonStyle {
             .animation(.easeInOut(duration: 0.35), value: configuration.isPressed)
     }
 }
+
+#if os(iOS)
+// Coordinator for PHPickerViewController
+class PhotoPickerCoordinator: NSObject, PHPickerViewControllerDelegate {
+    let onImagePicked: (URL) -> Void
+    
+    init(onImagePicked: @escaping (URL) -> Void) {
+        self.onImagePicked = onImagePicked
+    }
+    
+    func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
+        picker.dismiss(animated: true)
+        
+        guard let result = results.first else { return }
+        
+        result.itemProvider.loadFileRepresentation(forTypeIdentifier: UTType.image.identifier) { url, error in
+            DispatchQueue.main.async {
+                if let url = url, error == nil {
+                    // Copy to a temporary location since the provided URL is temporary
+                    let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".jpg")
+                    do {
+                        if let imageData = try? Data(contentsOf: url),
+                           let image = UIImage(data: imageData) {
+                            // Save as JPEG to ensure compatibility
+                            if let jpegData = image.jpegData(compressionQuality: 0.9) {
+                                try jpegData.write(to: tempURL)
+                                self.onImagePicked(tempURL)
+                            }
+                        }
+                    } catch {
+                        print("Error processing photo library image: \(error)")
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Coordinator for UIDocumentPickerViewController
+class DocumentPickerCoordinator: NSObject, UIDocumentPickerDelegate {
+    let onImagePicked: (URL) -> Void
+    
+    init(onImagePicked: @escaping (URL) -> Void) {
+        self.onImagePicked = onImagePicked
+    }
+    
+    func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+        controller.dismiss(animated: true)
+        if let url = urls.first {
+            onImagePicked(url)
+        }
+    }
+    
+    func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+        controller.dismiss(animated: true)
+    }
+}
+#endif
 

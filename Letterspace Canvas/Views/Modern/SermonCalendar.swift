@@ -18,6 +18,10 @@ internal struct SermonCalendar: View {
     @Binding var isExpanded: Bool
     let onShowModal: (ModalDisplayData?) -> Void
     var isCarouselMode: Bool = false // New parameter for carousel mode
+    var showExpandButtons: Bool = false // New parameter to control expand button visibility
+    var onShowExpandModal: (() -> Void)? = nil  // Callback for showing expand modal on iPad
+    var hideHeader: Bool = false // New parameter to hide header in modals
+    var showMonthSelectorOnly: Bool = false // New parameter for modal view
     @Environment(\.themeColors) var theme
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.carouselHeaderFont) var carouselHeaderFont
@@ -70,12 +74,16 @@ internal struct SermonCalendar: View {
         #endif
     }
     
-    init(documents: [Letterspace_CanvasDocument], calendarDocuments: Set<String>, isExpanded: Binding<Bool>, onShowModal: @escaping (ModalDisplayData?) -> Void, isCarouselMode: Bool = false) {
+    init(documents: [Letterspace_CanvasDocument], calendarDocuments: Set<String>, isExpanded: Binding<Bool>, onShowModal: @escaping (ModalDisplayData?) -> Void, isCarouselMode: Bool = false, showExpandButtons: Bool = false, onShowExpandModal: (() -> Void)? = nil, hideHeader: Bool = false, showMonthSelectorOnly: Bool = false) {
         self.documents = documents
         self.calendarDocuments = calendarDocuments
         _isExpanded = isExpanded
         self.onShowModal = onShowModal
         self.isCarouselMode = isCarouselMode
+        self.showExpandButtons = showExpandButtons
+        self.onShowExpandModal = onShowExpandModal
+        self.hideHeader = hideHeader
+        self.showMonthSelectorOnly = showMonthSelectorOnly
         let calendar = Calendar.current
         let date = Date()
         _selectedYear = State(initialValue: calendar.component(.year, from: date))
@@ -118,8 +126,11 @@ internal struct SermonCalendar: View {
     var body: some View {
         // Remove the outer ZStack for modal presentation
         // The main view is now just the VStack
-        VStack(alignment: .leading, spacing: isCarouselMode ? 6 : 0) {  // Match spacing with other carousel sections
+        VStack(alignment: .leading, spacing: hideHeader ? 0 : (isCarouselMode ? 6 : 0)) {  // Match spacing with other carousel sections, no spacing if hiding header
+            // Conditionally show header
+            if !hideHeader {
             // Header with title only (year picker moved to month row)
+                if !showMonthSelectorOnly {
             HStack(spacing: 8) {
                 Image(systemName: "calendar.badge.plus")
                     .font(.system(size: isCarouselMode ? carouselIconSize : 14))
@@ -130,11 +141,18 @@ internal struct SermonCalendar: View {
                 
                 Spacer()
 
-                // Add Expand Button (macOS only, or non-carousel mode)
-                if !isCarouselMode || !isIPad {
+                    // Add Expand Button (show when showExpandButtons is true)
+                    if showExpandButtons {
                 Button {
+                        print("🔄 SermonCalendar expand button tapped")
+                        if isCarouselMode && isIPad {
+                            // On iPad carousel mode, show modal instead of expanding
+                            onShowExpandModal?()
+                        } else {
+                            // Normal expansion for macOS and non-carousel modes
                     withAnimation(.easeInOut(duration: 0.2)) {
                         isExpanded.toggle()
+                            }
                     }
                 } label: {
                     let buttonIconName = isExpanded ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right"
@@ -161,19 +179,22 @@ internal struct SermonCalendar: View {
                     }
                 }
                 // Make button visible only when section is hovered
-                    .opacity(!isCarouselMode || !isIPad ? (isSectionHovered ? 1 : 0) : 1)
+                        .opacity(!isCarouselMode ? (isSectionHovered ? 1 : 0) : 1)  // Always visible in carousel mode
                 .animation(.easeInOut(duration: 0.15), value: isSectionHovered)
                 }
             }
             .padding(.horizontal, isCarouselMode ? carouselHeaderPadding : 12)
-            .padding(.top, isCarouselMode ? 20 : 20)  // Use consistent top padding for carousel alignment
+                .padding(.top, isCarouselMode ? 28 : 20)  // Final padding adjustment for precise header alignment
             .padding(.bottom, isCarouselMode ? 0 : 16)  // Remove bottom padding in carousel mode for consistent alignment
             
             Divider()
                 .padding(.horizontal, 12)
-                .padding(.vertical, isCarouselMode ? 8 : 4) // Increased carousel padding for more space between header and separator
+                    .padding(.vertical, isCarouselMode ? 6 : 4) // Aligned separator padding with other cards
+                }
+            }
             
-            // Month slider with year picker as first item
+            // Month slider with year picker as first item (only show when header is visible)
+            if !hideHeader {
             VStack(alignment: .leading, spacing: 0) {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) {
@@ -234,14 +255,15 @@ internal struct SermonCalendar: View {
                     }
                     .padding(.leading, 12)
                     .padding(.trailing, 12)
-                    .padding(.vertical, 8) // Reduced from 10 to 8
+                    .padding(.vertical, 4) // Reduced from 10 to 8
                 }
             }
-            .padding(.top, 2) // Reduced from 4 to 2
+            .padding(.top, showMonthSelectorOnly ? 16 : 0) // Add breathing room for modal only
+            .padding(.bottom, showMonthSelectorOnly ? 9 : 0) // Less bottom padding
             
             Divider()
-                .padding(.horizontal, 12)
-                .padding(.top, 4) // Reduced from 8 to 4
+                .padding(.horizontal, showMonthSelectorOnly ? 23 : 12) // Match top separator padding in modal
+            }
             
             // Active date/documents list with updated layout
             ScrollViewReader { proxy in
@@ -471,16 +493,27 @@ internal struct SermonCalendar: View {
                 // No longer need document list update handling since we removed the loading flag
             }
             // Apply dynamic height only to the ScrollView/ScrollViewReader
-            .frame(height: isExpanded ? 450 : (isCarouselMode ? 318 : 115))
+            .frame(height: isExpanded ? 450 : {
+                if isCarouselMode {
+                    return 141 // iPad landscape carousel (keep existing)
+                } else if isIPad && !isCarouselMode && !hideHeader {
+                    // iPad portrait cards need more height to fill the 380pt container
+                    // Container: 380pt, Header: ~50pt, Month selector: ~40pt, Padding: ~20pt = ~270pt available
+                    return 270 // Increased height for iPad portrait cards with extra UI elements
+                } else {
+                    return 115 // Default height for other cases
+                }
+            }())
         }
         // Apply styles and animations directly to the VStack (only if not in carousel mode)
         .animation(isCarouselMode ? .none : .easeInOut(duration: 0.35), value: isExpanded)
         .background(
             Group {
-                if !isCarouselMode {
-                    colorScheme == .dark ? Color(.sRGB, white: 0.12) : .white
-                } else {
+                // Remove background for all iPad carousel cards (portrait and landscape)
+                if isIPad || isCarouselMode || hideHeader {
                     Color.clear
+                } else {
+                    colorScheme == .dark ? Color(.sRGB, white: 0.12) : .white
                 }
             }
         )
@@ -488,10 +521,10 @@ internal struct SermonCalendar: View {
         .zIndex(isCarouselMode ? 0 : (isExpanded ? 10 : 0)) // Keep zIndex for expansion overlap (only if not in carousel mode)
         .scaleEffect(isCarouselMode ? 1.0 : (isExpanded ? 1.02 : 1.0)) // Keep scale effect (only if not in carousel mode)
         .shadow(
-            color: isCarouselMode ? .clear : (colorScheme == .dark ? .black.opacity(isExpanded ? 0.25 : 0.17) : .black.opacity(isExpanded ? 0.12 : 0.07)),
-            radius: isCarouselMode ? 0 : (isExpanded ? 12 : 8),
+            color: (isCarouselMode || hideHeader) ? .clear : (colorScheme == .dark ? .black.opacity(isExpanded ? 0.25 : 0.17) : .black.opacity(isExpanded ? 0.12 : 0.07)),
+            radius: (isCarouselMode || hideHeader) ? 0 : (isExpanded ? 12 : 8),
             x: 0,
-            y: isCarouselMode ? 0 : (isExpanded ? 4 : 1)
+            y: (isCarouselMode || hideHeader) ? 0 : (isExpanded ? 4 : 1)
         )
         .onHover { hovering in 
             if !isCarouselMode {
