@@ -229,6 +229,7 @@ struct DocumentArea: View {
     let onHeaderClick: () -> Void
     @Binding var isSearchActive: Bool
     let shouldPauseHover: Bool
+    let onNavigateBack: (() -> Void)?
     @State private var isDocumentVisible: Bool = false
     @State private var isInitialAppearance = true // New state for tracking initial load
     @State private var elementsReady = false // New state to track when all elements are ready
@@ -304,6 +305,25 @@ struct DocumentArea: View {
             // Main container for all document UI
             documentContainer(geo: geo)
         }
+        // Add swipe-right gesture for iPhone navigation (anywhere on screen)
+        #if os(iOS)
+        .gesture(
+            UIDevice.current.userInterfaceIdiom == .phone ? 
+            DragGesture(minimumDistance: 30, coordinateSpace: .global)
+                .onEnded { value in
+                    // Only trigger on rightward swipe (swipe right to go back)
+                    if value.translation.width > 50 && abs(value.translation.height) < 80 {
+                        // Provide immediate feedback
+                        HapticFeedback.impact(.medium)
+                        
+                        // Navigate back to dashboard with slide transition
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            onNavigateBack?()
+                        }
+                    }
+                } : nil
+        )
+        #endif
                 #if os(iOS)
         .background(
             IOSImagePickerController(

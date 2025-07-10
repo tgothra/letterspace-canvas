@@ -1589,10 +1589,10 @@ private func mainContentView(availableWidth: CGFloat) -> some View {
                 isRightSidebarVisible: $isRightSidebarVisible // Pass isRightSidebarVisible binding
                                     )
                                     .transition(.asymmetric(
-                                        insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .center)),
-                                        removal: .opacity.combined(with: .scale(scale: 1.05, anchor: .center))
+                                        insertion: .move(edge: .leading).combined(with: .opacity),
+                                        removal: .move(edge: .trailing).combined(with: .opacity)
                                     ))
-                                    .animation(.spring(response: 1.8, dampingFraction: 0.85), value: sidebarMode)
+                                    .animation(.easeInOut(duration: 0.3), value: sidebarMode)
             // .frame(maxWidth: .infinity) // Already applied by parent ZStack
             // .frame(maxHeight: dashboardGeo.size.height) // Use available height
                             } else {
@@ -1610,14 +1610,20 @@ private func mainContentView(availableWidth: CGFloat) -> some View {
                 availableWidth: availableWidth, // Pass dynamic width
                 onHeaderClick: { withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) { scrollOffset = 0 } },
                                     isSearchActive: $isSearchActive,
-                                    shouldPauseHover: isSearchActive
+                                    shouldPauseHover: isSearchActive,
+                                    onNavigateBack: {
+                                        // Navigate back to dashboard on swipe
+                                        sidebarMode = .allDocuments
+                                        isRightSidebarVisible = false
+                                        viewMode = .normal
+                                    }
                                 )
                                 .id(document.id)
                                 .transition(.asymmetric(
-                                    insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .center)),
-                                    removal: .opacity.combined(with: .scale(scale: 1.05, anchor: .center))
+                                    insertion: .move(edge: .trailing).combined(with: .opacity),
+                                    removal: .move(edge: .leading).combined(with: .opacity)
                                 ))
-                                .animation(.spring(response: 1.8, dampingFraction: 0.85), value: sidebarMode)
+                                .animation(.easeInOut(duration: 0.3), value: sidebarMode)
                             }
     }
     
