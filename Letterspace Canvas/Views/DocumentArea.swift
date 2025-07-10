@@ -450,7 +450,21 @@ struct DocumentArea: View {
                         .frame(width: paperWidth)
             // Remove overall animation on currentOverlap to prevent animating document title
             // when header is toggled (this was causing sliding effect)
-            .padding(.top, 24)
+            .padding(.top, {
+                #if os(iOS)
+                let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                if isPhone {
+                    // iPhone: Add extra breathing room from top of screen
+                    return 60 // Increased from 24 to 60 for better visual spacing
+                } else {
+                    // iPad: Keep original spacing
+                    return 24
+                }
+                #else
+                // macOS: Keep original spacing
+                return 24
+                #endif
+            }())
                         .opacity(isDocumentVisible ? 1 : 0)
                         .offset(y: isDocumentVisible ? 0 : 20)
                     }

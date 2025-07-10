@@ -301,17 +301,26 @@ struct SimpleIOSTextView: UIViewRepresentable {
                 return
             }
             
-            // Animate the toolbar fade-out along with keyboard dismissal
+            // Coordinate toolbar dismissal with keyboard animation
             if let toolbar = textView.inputAccessoryView {
-                UIView.animate(withDuration: animationDuration, 
+                // For slow swipes, use the full animation duration to stay coordinated
+                // For fast swipes, this will still be quick enough
+                let toolbarDuration = max(animationDuration * 0.8, 0.2) // At least 0.2 seconds, but scale with keyboard
+                
+                UIView.animate(withDuration: toolbarDuration, 
                              delay: 0,
-                             options: [.curveEaseInOut],
+                             options: [.curveEaseOut, .allowUserInteraction],
                              animations: {
                     toolbar.alpha = 0.0
                 }, completion: { _ in
-                    // After animation completes, dismiss the text view and reset toolbar alpha
-                    textView.resignFirstResponder()
-                    toolbar.alpha = 1.0
+                    // Only resign first responder after toolbar animation completes
+                    if textView.isFirstResponder {
+                        textView.resignFirstResponder()
+                    }
+                    // Reset alpha for next appearance
+                    DispatchQueue.main.async {
+                        toolbar.alpha = 1.0
+                    }
                 })
             }
             
