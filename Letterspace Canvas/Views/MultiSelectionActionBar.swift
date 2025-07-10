@@ -1,5 +1,9 @@
 import SwiftUI
 
+#if os(iOS)
+import UIKit
+#endif
+
 struct MultiSelectionActionBar: View {
     let selectedCount: Int
     let onPin: () -> Void
@@ -20,7 +24,10 @@ struct MultiSelectionActionBar: View {
             Divider()
                 .frame(height: 20)
             
-            Button(action: onPin) {
+            Button(action: {
+                HapticFeedback.impact(.light)
+                onPin()
+            }) {
                 HStack(spacing: 4) {
                     Image(systemName: "pin.fill")
                     Text("Pin")
@@ -41,7 +48,10 @@ struct MultiSelectionActionBar: View {
                 isPinHovered = hovering
             }
             
-            Button(action: onWIP) {
+            Button(action: {
+                HapticFeedback.impact(.light)
+                onWIP()
+            }) {
                 HStack(spacing: 4) {
                     Image(systemName: "clock.fill")
                     Text("WIP")
@@ -62,7 +72,10 @@ struct MultiSelectionActionBar: View {
                 isWIPHovered = hovering
             }
             
-            Button(action: onDelete) {
+            Button(action: {
+                HapticFeedback.impact(.medium)
+                onDelete()
+            }) {
                 HStack(spacing: 4) {
                     Image(systemName: "trash.fill")
                     Text("Delete")

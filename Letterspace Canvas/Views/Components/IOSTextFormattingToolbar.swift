@@ -355,6 +355,18 @@ private struct MainToolbarView: View {
                     IOSTextButton(text: "Bullet", isActive: hasBulletList, action: onBulletList)
                     IOSTextButton(text: "Alignment", action: onShowAlignmentPicker)
                 }
+                
+                // Separator 3
+                Rectangle()
+                    .fill(Color.primary.opacity(0.2))
+                    .frame(width: 1, height: 30)
+                    .padding(.horizontal, 20)
+                
+                // Keyboard dismissal button
+                IOSToolbarButton(icon: "keyboard.chevron.compact.down") {
+                    // Dismiss the keyboard
+                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                }
             }
             .padding(.horizontal, 16)
         }
@@ -784,8 +796,7 @@ private struct InlineColorButton: View {
         .buttonStyle(PlainButtonStyle())
         .onTapGesture {
             // Provide haptic feedback
-            let impact = UIImpactFeedbackGenerator(style: .light)
-            impact.impactOccurred()
+            HapticFeedback.impact(.light)
         }
         .simultaneousGesture(
             DragGesture(minimumDistance: 0)
@@ -850,8 +861,7 @@ private struct IOSTextButton: View {
         .scaleEffect(isPressed ? 0.95 : 1.0)
         .onTapGesture {
             // Provide haptic feedback
-            let impact = UIImpactFeedbackGenerator(style: .light)
-            impact.impactOccurred()
+            HapticFeedback.impact(.light)
         }
         .simultaneousGesture(
             DragGesture(minimumDistance: 0)
@@ -914,8 +924,7 @@ private struct IOSToolbarButton: View {
         .scaleEffect(isPressed ? 0.95 : 1.0)
         .onTapGesture {
             // Provide haptic feedback
-            let impact = UIImpactFeedbackGenerator(style: .light)
-            impact.impactOccurred()
+            HapticFeedback.impact(.light)
         }
         .simultaneousGesture(
             DragGesture(minimumDistance: 0)

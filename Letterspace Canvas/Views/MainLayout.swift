@@ -5,7 +5,7 @@ import UniformTypeIdentifiers
 #if os(macOS)
 import AppKit
 #elseif os(iOS)
-import UIKit // Needed for UIImage for profile picture
+import UIKit // Needed for UIImage for profile picture and haptic feedback
 #endif
 
 // MARK: - Responsive Sizing Helper
@@ -155,12 +155,14 @@ struct MainLayout: View {
     @State private var showLeftSidebarSheet: Bool = false // Added missing state variable for iPad sidebar sheet
     @State private var showFoldersModal = false // New state variable for Folders modal
     @State private var showTemplateBrowser = false // New state variable for template browser modal
+    @State private var showExportModal = false // New state variable for Export modal
+    @State private var showSettingsModal = false // New state variable for Settings modal
     
     // Floating sidebar states for iPad/iPhone
     @State private var showFloatingSidebar = {
         #if os(iOS)
-        // Always show floating sidebar on both iPad and iPhone (iPhone now uses iPad interface)
-        return true
+        // Show floating sidebar on iPad only (iPhone uses circular menu)
+        return UIDevice.current.userInterfaceIdiom == .pad
         #else
         return false
         #endif
@@ -191,6 +193,20 @@ struct MainLayout: View {
     }()
     @State private var toolbarDragAmount: CGSize = .zero
     
+    // iPhone Bottom Navigation State
+    @State private var bottomNavOffset: CGFloat = 0
+    @State private var currentBottomNavIndex: Int = 0
+    @State private var showBottomNavigation: Bool = {
+        #if os(iOS)
+        return false // Disabled - using circular menu instead
+        #else
+        return false
+        #endif
+    }()
+    
+    // Circular Menu State
+    @State private var isCircularMenuOpen: Bool = false
+    
     // Gradient wallpaper manager
     @StateObject private var gradientManager = GradientWallpaperManager.shared
     
@@ -201,7 +217,12 @@ struct MainLayout: View {
     private var floatingSidebarWidth: CGFloat {
         #if os(iOS)
         let screenWidth = UIScreen.main.bounds.width
-        return screenWidth * 0.08 // 8% of screen width for responsive sidebar
+        let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+        if isPhone {
+            return screenWidth * 0.06 // 6% of screen width for iPhone (more compact)
+        } else {
+            return screenWidth * 0.08 // 8% of screen width for iPad (existing)
+        }
         #else
         return 80 // Fixed width for macOS
         #endif
@@ -278,9 +299,9 @@ struct MainLayout: View {
             }
         }
         // Apply blur to background content when any modal is shown
-        .blur(radius: showUserProfileModal || showRecentlyDeletedModal || showSmartStudyModal || showBibleReaderModal || showFoldersModal ? 6 : 0)
-        .opacity(showUserProfileModal || showRecentlyDeletedModal || showSmartStudyModal || showBibleReaderModal || showFoldersModal ? 0.7 : 1.0)
-        .animation(.easeInOut(duration: 0.2), value: showUserProfileModal || showRecentlyDeletedModal || showSmartStudyModal || showBibleReaderModal || showFoldersModal)
+        .blur(radius: showUserProfileModal || showRecentlyDeletedModal || showSmartStudyModal || showBibleReaderModal || showFoldersModal || showExportModal || showSettingsModal ? 6 : 0)
+        .opacity(showUserProfileModal || showRecentlyDeletedModal || showSmartStudyModal || showBibleReaderModal || showFoldersModal || showExportModal || showSettingsModal ? 0.7 : 1.0)
+        .animation(.easeInOut(duration: 0.2), value: showUserProfileModal || showRecentlyDeletedModal || showSmartStudyModal || showBibleReaderModal || showFoldersModal || showExportModal || showSettingsModal)
         // Modal overlays (clean, no backdrop)
         .overlay {
                 if showUserProfileModal {
@@ -409,6 +430,90 @@ struct MainLayout: View {
                     insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .center)),
                     removal: .opacity.combined(with: .scale(scale: 0.95, anchor: .center))
                 ))
+                }
+            }
+        }
+        .overlay {
+            if showExportModal {
+                ZStack {
+                    // Dismiss layer
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .ignoresSafeArea()
+                        .onTapGesture {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                showExportModal = false
+                            }
+                        }
+                    
+                    // Export modal placeholder view
+                    VStack {
+                        Text("Export Options")
+                            .font(.title2)
+                            .fontWeight(.semibold)
+                            .padding(.bottom, 20)
+                        
+                        Text("Export functionality will be implemented here.")
+                            .multilineTextAlignment(.center)
+                            .padding(.bottom, 30)
+                        
+                        Button("Close") {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                showExportModal = false
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                    .padding(30)
+                    .background(colorScheme == .dark ? Color(.sRGB, white: 0.12) : Color.white)
+                    .cornerRadius(12)
+                    .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 10)
+                    .transition(.asymmetric(
+                        insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .center)),
+                        removal: .opacity.combined(with: .scale(scale: 0.95, anchor: .center))
+                    ))
+                }
+            }
+        }
+        .overlay {
+            if showSettingsModal {
+                ZStack {
+                    // Dismiss layer
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .ignoresSafeArea()
+                        .onTapGesture {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                showSettingsModal = false
+                            }
+                        }
+                    
+                    // Settings modal placeholder view
+                    VStack {
+                        Text("Settings")
+                            .font(.title2)
+                            .fontWeight(.semibold)
+                            .padding(.bottom, 20)
+                        
+                        Text("Settings functionality will be implemented here.")
+                            .multilineTextAlignment(.center)
+                            .padding(.bottom, 30)
+                        
+                        Button("Close") {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                showSettingsModal = false
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                    .padding(30)
+                    .background(colorScheme == .dark ? Color(.sRGB, white: 0.12) : Color.white)
+                    .cornerRadius(12)
+                    .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 10)
+                    .transition(.asymmetric(
+                        insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .center)),
+                        removal: .opacity.combined(with: .scale(scale: 0.95, anchor: .center))
+                    ))
                 }
             }
         }
@@ -1135,7 +1240,19 @@ struct MainLayout: View {
         }
         // Width is now set by compact/expanded navigation wrappers
         // Dynamic height: moderate height when expanded, content-sized for compact
-        .frame(maxHeight: shouldUseExpandedNavigation ? responsiveSize(base: 800, min: 600, max: 900) : .infinity)
+        .frame(maxHeight: shouldUseExpandedNavigation ? {
+            #if os(iOS)
+            if UIDevice.current.userInterfaceIdiom == .phone {
+                // iPhone: Slightly shorter navigation container but with room for all icons
+                return responsiveSize(base: 665, min: 515, max: 715)
+            } else {
+                // iPad: Keep original height
+                return responsiveSize(base: 800, min: 600, max: 900)
+            }
+            #else
+            return responsiveSize(base: 800, min: 600, max: 900)
+            #endif
+        }() : .infinity)
         .fixedSize(horizontal: false, vertical: shouldUseExpandedNavigation ? false : true)
         .animation(.spring(response: 0.6, dampingFraction: 0.75), value: shouldUseExpandedNavigation)
         .background(
@@ -1207,9 +1324,259 @@ struct MainLayout: View {
         )
     }
 
-    // Extracted Main Content View (original content)
-    @ViewBuilder
-    private func mainContentView(availableWidth: CGFloat) -> some View {
+    // iPhone Bottom Navigation Bar
+@ViewBuilder
+private var iPhoneBottomNavigation: some View {
+    #if os(iOS)
+    if UIDevice.current.userInterfaceIdiom == .phone {
+        VStack(spacing: 0) {
+            Spacer()
+            
+            // Bottom navigation container
+            ZStack {
+                // Background with glassmorphism
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(.ultraThinMaterial)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20)
+                            .stroke(
+                                LinearGradient(
+                                    gradient: Gradient(colors: [
+                                        Color.white.opacity(0.3),
+                                        Color.white.opacity(0.1)
+                                    ]),
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 1
+                            )
+                    )
+                    .shadow(
+                        color: colorScheme == .dark ? .black.opacity(0.3) : .black.opacity(0.15),
+                        radius: 12,
+                        x: 0,
+                        y: -2
+                    )
+                
+                // Horizontal scrollable navigation items
+                ScrollViewReader { proxy in
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 12) {
+                            // Navigation items
+                            ForEach(Array(bottomNavigationItems.enumerated()), id: \.offset) { index, item in
+                                BottomNavButton(
+                                    icon: item.icon,
+                                    title: item.title,
+                                    isSelected: currentBottomNavIndex == index,
+                                    action: {
+                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                            currentBottomNavIndex = index
+                                        }
+                                        item.action()
+                                    }
+                                )
+                                .id(index)
+                            }
+                        }
+                        .padding(.horizontal, 20)
+                        .onChange(of: currentBottomNavIndex) { newIndex in
+                            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                                proxy.scrollTo(newIndex, anchor: .center)
+                            }
+                        }
+                    }
+                    .frame(height: 60)
+                }
+                
+                // Scroll indicators (dots)
+                VStack {
+                    Spacer()
+                    HStack(spacing: 6) {
+                        ForEach(0..<max(1, (bottomNavigationItems.count + 4) / 5), id: \.self) { pageIndex in
+                            Circle()
+                                .fill(currentBottomNavIndex / 5 == pageIndex ? theme.accent : theme.accent.opacity(0.3))
+                                .frame(width: 6, height: 6)
+                        }
+                    }
+                    .padding(.bottom, 8)
+                }
+            }
+            .frame(height: 80)
+            .padding(.horizontal, 16)
+            .padding(.bottom, 34) // Safe area bottom padding
+            .offset(y: bottomNavOffset)
+            .gesture(
+                DragGesture()
+                    .onChanged { value in
+                        if value.translation.height > 0 {
+                            bottomNavOffset = min(value.translation.height, 100)
+                        }
+                    }
+                    .onEnded { value in
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                            if value.translation.height > 40 {
+                                bottomNavOffset = 100 // Hide
+                            } else {
+                                bottomNavOffset = 0 // Show
+                            }
+                        }
+                    }
+            )
+        }
+        .ignoresSafeArea(.all, edges: .bottom)
+    }
+    #endif
+}
+
+// Bottom navigation items configuration
+private var bottomNavigationItems: [(icon: String, title: String, action: () -> Void)] {
+    [
+        (
+            icon: "rectangle.3.group",
+            title: "Dashboard",
+            action: {
+                sidebarMode = .allDocuments
+                isRightSidebarVisible = false
+                viewMode = .normal
+            }
+        ),
+        (
+            icon: "magnifyingglass", 
+            title: "Search",
+            action: {
+                searchFieldFocused = true
+            }
+        ),
+        (
+            icon: "square.and.pencil",
+            title: "New Doc",
+            action: {
+                let docId = UUID().uuidString
+                var d = Letterspace_CanvasDocument(
+                    title: "Untitled", 
+                    subtitle: "", 
+                    elements: [DocumentElement(type: .textBlock, content: "", placeholder: "Start typing...")], 
+                    id: docId, 
+                    markers: [], 
+                    series: nil, 
+                    variations: [],
+                    isVariation: false, 
+                    parentVariationId: nil, 
+                    createdAt: Date(), 
+                    modifiedAt: Date(), 
+                    tags: nil, 
+                    isHeaderExpanded: false, 
+                    isSubtitleVisible: true, 
+                    links: []
+                )
+                d.save()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    document = d
+                    sidebarMode = .details
+                    isRightSidebarVisible = true
+                }
+            }
+        ),
+        (
+            icon: "folder",
+            title: "Folders", 
+            action: {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    showFoldersModal = true
+                }
+            }
+        ),
+        (
+            icon: "sparkles",
+            title: "Smart Study",
+            action: {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    showSmartStudyModal = true
+                }
+            }
+        ),
+        (
+            icon: "book.closed",
+            title: "Bible",
+            action: {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    showBibleReaderModal = true
+                }
+            }
+        ),
+        (
+            icon: "square.and.arrow.up",
+            title: "Export",
+            action: {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    showExportModal = true
+                }
+            }
+        ),
+        (
+            icon: "gear",
+            title: "Settings",
+            action: {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    showSettingsModal = true
+                }
+            }
+        )
+    ]
+}
+
+// Bottom navigation button component
+@ViewBuilder
+private func BottomNavButton(icon: String, title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
+    Button(action: action) {
+        VStack(spacing: 4) {
+            ZStack {
+                // Background circle for selected state
+                if isSelected {
+                    Circle()
+                        .fill(theme.accent.opacity(0.2))
+                        .frame(width: 32, height: 32)
+                }
+                
+                // Icon
+                if icon == "rectangle.3.group" {
+                    // Custom dashboard icon
+                    VStack(spacing: 1) {
+                        Rectangle()
+                            .fill(isSelected ? theme.accent : theme.primary)
+                            .frame(width: 8, height: 3)
+                            .cornerRadius(0.5)
+                        Rectangle()
+                            .fill(isSelected ? theme.accent : theme.primary)
+                            .frame(width: 12, height: 4)
+                            .cornerRadius(0.5)
+                        Rectangle()
+                            .fill(isSelected ? theme.accent : theme.primary)
+                            .frame(width: 10, height: 3)
+                            .cornerRadius(0.5)
+                    }
+                } else {
+                    Image(systemName: icon)
+                        .font(.system(size: 16, weight: isSelected ? .semibold : .medium))
+                        .foregroundColor(isSelected ? theme.accent : theme.primary)
+                }
+            }
+            .frame(width: 32, height: 32)
+            
+            // Title
+            Text(title)
+                .font(.system(size: 10, weight: isSelected ? .semibold : .medium))
+                .foregroundColor(isSelected ? theme.accent : theme.secondary)
+                .lineLimit(1)
+        }
+    }
+    .buttonStyle(.plain)
+    .frame(width: 60)
+}
+
+// Extracted Main Content View (original content)
+@ViewBuilder
+private func mainContentView(availableWidth: CGFloat) -> some View {
                             if sidebarMode == .allDocuments {
                                     DashboardView(
                 document: $document, // Pass document binding
@@ -1420,8 +1787,8 @@ struct MainLayout: View {
                              .transition(.move(edge: .trailing))
                      }
                      #elseif os(iOS)
-                     // On iPhone, show the sidebar normally. On iPad, never show it (use floating toolbar instead)
-                     if !viewMode.shouldHideSidebars && isRightSidebarVisible && UIDevice.current.userInterfaceIdiom == .phone {
+                     // iOS: Both iPhone and iPad use floating toolbar instead of traditional sidebar
+                     if false { // Disabled: Both iPhone and iPad use floating toolbar only
                          rightSidebarContent
                              .frame(width: rightSidebarWidth)
                              .transition(.move(edge: .trailing))
@@ -1432,8 +1799,8 @@ struct MainLayout: View {
             }
             
             #if os(iOS)
-            // iOS: Add floating sidebar overlay (always for both iPad and iPhone since iPhone now uses iPad interface)
-            if !viewMode.isDistractionFreeMode && (UIDevice.current.userInterfaceIdiom == .pad || UIDevice.current.userInterfaceIdiom == .phone) {
+            // iOS: Add floating sidebar overlay for iPad only (iPhone uses bottom navigation)
+            if !viewMode.isDistractionFreeMode && UIDevice.current.userInterfaceIdiom == .pad {
                                 VStack(alignment: .leading) {
                 HStack {
                         // Unified floating navigation with responsive size transitions
@@ -1443,34 +1810,52 @@ struct MainLayout: View {
                                 let screenWidth = UIScreen.main.bounds.width
                                 let allDocumentsLeftEdge = screenWidth * 0.065 // Approximate left edge of All Documents (based on padding)
                                 let centerPoint = allDocumentsLeftEdge / 2 // Center between screen edge and All Documents
+                                
+                                #if os(iOS)
+                                let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                                if isPhone {
+                                    // iPhone: Add more breathing room from left edge
+                                    return shouldUseExpandedNavigation ? centerPoint + 8 : 20
+                                } else {
+                                    // iPad: Keep original positioning
+                                    return shouldUseExpandedNavigation ? centerPoint : 20
+                                }
+                                #else
                                 return shouldUseExpandedNavigation ? centerPoint : 20
+                                #endif
                             }())
                             .padding(.top, {
                                 // Responsive top padding based on screen height and orientation
                                 let screenHeight = UIScreen.main.bounds.height
                                 let screenWidth = UIScreen.main.bounds.width
                                 let isLandscape = screenWidth > screenHeight
+                                let isPhone = UIDevice.current.userInterfaceIdiom == .phone
                                 
-                                                                 if shouldUseExpandedNavigation {
+                                if shouldUseExpandedNavigation {
                                     if isLandscape && UIDevice.current.userInterfaceIdiom == .pad {
                                         // In iPad landscape, move navigation lower
                                         return screenHeight * 0.14 + 35 // Adjusted to 14% + 35 for optimal positioning
                                     } else if isLandscape {
                                         // Other landscape devices
                                         return screenHeight * 0.05 + 10 // Original landscape value
-                                     } else {
-                                         // Portrait mode - use original calculation
-                                         return screenHeight * 0.28 // 28% of screen height when expanded
-                                     }
-                                 } else {
-                                     return 20 // Compact mode
-                                 }
+                                    } else if isPhone {
+                                        // iPhone portrait mode - positioned lower for better visual balance
+                                        return screenHeight * 0.26 + 40 // 26% + 40pt for iPhone (brought down from 22% + 35pt)
+                                    } else {
+                                        // iPad portrait mode - keep original calculation
+                                        return screenHeight * 0.28 // 28% of screen height when expanded for iPad
+                                    }
+                                } else {
+                                    return 20 // Compact mode
+                                }
                             }())
                             .offset(x: (showFloatingSidebar && (shouldShowNavigationPanel || isManuallyShown)) ? 0 : -200) // Hide when viewing documents unless manually shown
                             .animation(.spring(response: showFloatingSidebar ? 0.6 : 2.5, dampingFraction: showFloatingSidebar ? 0.75 : 0.9), value: showFloatingSidebar)
                             .animation(.spring(response: 0.6, dampingFraction: 0.75), value: shouldShowNavigationPanel)
                             .onChange(of: sidebarMode) { newMode in
-                                // Automatically show/hide navigation based on mode
+                                // Automatically show/hide navigation based on mode (iPad only)
+                                #if os(iOS)
+                                if UIDevice.current.userInterfaceIdiom == .pad {
                                 if newMode == .allDocuments {
                                     showFloatingSidebar = true  // Show when going to dashboard
                                     isManuallyShown = false  // Reset manual flag when auto-showing
@@ -1478,6 +1863,17 @@ struct MainLayout: View {
                                     showFloatingSidebar = false // Hide when going to document mode
                                     isManuallyShown = false  // Reset manual flag when auto-hiding
                                 }
+                                }
+                                #else
+                                // macOS behavior
+                                if newMode == .allDocuments {
+                                    showFloatingSidebar = true
+                                    isManuallyShown = false
+                                } else {
+                                    showFloatingSidebar = false
+                                    isManuallyShown = false
+                                }
+                                #endif
                             }
                             .gesture(
                                 // Add swipe-to-dismiss gesture for iPad
@@ -1501,8 +1897,8 @@ struct MainLayout: View {
                 .ignoresSafeArea()
                 
                 // Swipe indicator - interactive vertical bar on left edge
-                // Show on iPhone when in floating mode, or on iPad when navigation is dismissed
-                if (UIDevice.current.userInterfaceIdiom != .pad) || (UIDevice.current.userInterfaceIdiom == .pad && (!showFloatingSidebar || !shouldShowNavigationPanel)) {
+                // Show on iPad only when navigation is dismissed (iPhone uses circular menu)
+                if UIDevice.current.userInterfaceIdiom == .pad && (!showFloatingSidebar || !shouldShowNavigationPanel) {
                 VStack {
                     Spacer()
                     HStack {
@@ -1570,8 +1966,14 @@ struct MainLayout: View {
                 }
             }
             
-            // Swipe indicator when floating navigation is dismissed (both iPad and iPhone)
-            if (UIDevice.current.userInterfaceIdiom == .pad || UIDevice.current.userInterfaceIdiom == .phone) && !viewMode.isDistractionFreeMode && (!showFloatingSidebar || (!shouldShowNavigationPanel && !isManuallyShown)) {
+            // iPhone: Bottom Navigation Bar - Disabled (using circular menu instead)
+            // if UIDevice.current.userInterfaceIdiom == .phone {
+            //     iPhoneBottomNavigation
+            //         .zIndex(99) // Below floating sidebar but above content
+            // }
+            
+            // Swipe indicator when floating navigation is dismissed (iPad only)
+            if UIDevice.current.userInterfaceIdiom == .pad && !viewMode.isDistractionFreeMode && (!showFloatingSidebar || (!shouldShowNavigationPanel && !isManuallyShown)) {
                 VStack {
                     Spacer()
                     HStack {
@@ -1636,7 +2038,8 @@ struct MainLayout: View {
             }
             
             // Add swipe indicator for collapsed navigation in docked mode (iPhone only, iPad uses floating)
-            if !viewMode.isDistractionFreeMode && isDocked && isNavigationCollapsed && UIDevice.current.userInterfaceIdiom != .pad {
+            // Disabled for iPhone since it now uses circular menu instead
+            if false && !viewMode.isDistractionFreeMode && isDocked && isNavigationCollapsed && UIDevice.current.userInterfaceIdiom != .pad {
                 VStack {
                     Spacer()
                     HStack {
@@ -1757,7 +2160,93 @@ struct MainLayout: View {
             }
             #endif
             
-            // Floating Distraction-Free Mode Button - only show when in document mode
+            // Floating Action Buttons (iPhone only)
+            #if os(iOS)
+            if UIDevice.current.userInterfaceIdiom == .phone {
+                VStack {
+                    Spacer()
+                    HStack {
+                        Spacer()
+                        
+                        VStack(spacing: 12) {
+                            // Show distraction-free button when in document mode (top position)
+                            if sidebarMode != .allDocuments {
+                                Button(action: {
+                                    HapticFeedback.impact(.medium)
+                                    withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                                        if viewMode.isDistractionFreeMode {
+                                            viewMode = .normal
+                                            // Restore right sidebar when exiting distraction-free mode
+                                            isRightSidebarVisible = true
+                                        } else {
+                                            viewMode = .distractionFree
+                                            isRightSidebarVisible = false
+                                        }
+                                    }
+                                }) {
+                                    Image(systemName: viewMode.isDistractionFreeMode ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
+                                        .font(.system(size: 16, weight: .medium))
+                                        .foregroundStyle(theme.primary)
+                                        .frame(width: 48, height: 48)
+                                        .background(
+                                            ZStack {
+                                                // Base blur
+                                                Circle()
+                                                    .fill(.ultraThinMaterial)
+                                                
+                                                // Gradient overlay
+                                                Circle()
+                                                    .fill(
+                                                        LinearGradient(
+                                                            gradient: Gradient(colors: [
+                                                                theme.background.opacity(0.3),
+                                                                theme.background.opacity(0.1)
+                                                            ]),
+                                                            startPoint: .topLeading,
+                                                            endPoint: .bottomTrailing
+                                                        )
+                                                    )
+                                            }
+                                        )
+                                        .overlay(
+                                            Circle()
+                                                .stroke(
+                                                    LinearGradient(
+                                                        gradient: Gradient(colors: [
+                                                            Color.white.opacity(0.2),
+                                                            Color.white.opacity(0.05)
+                                                        ]),
+                                                        startPoint: .topLeading,
+                                                        endPoint: .bottomTrailing
+                                                    ),
+                                                    lineWidth: 1
+                                                )
+                                        )
+                                        .clipShape(Circle())
+                                        .shadow(color: Color.black.opacity(0.2), radius: 8, x: 0, y: 2)
+                                }
+                                .buttonStyle(.plain)
+                                .scaleEffect(isHoveringDistraction ? 1.05 : 1.0)
+                                .onHover { hovering in
+                                    withAnimation(.easeInOut(duration: 0.3)) {
+                                        isHoveringDistraction = hovering
+                                    }
+                                }
+                            }
+                            
+                            // Circular Menu Button (bottom position) - hidden in distraction-free mode
+                            if !viewMode.isDistractionFreeMode {
+                                CircularMenuButton(isMenuOpen: $isCircularMenuOpen)
+                            }
+                        }
+                        .padding(.trailing, 20)
+                        .padding(.bottom, 20)
+                    }
+                }
+                .allowsHitTesting(true)
+            }
+            #else
+            // Non-iPhone devices: Keep original distraction-free button for iPad/macOS
             if sidebarMode != .allDocuments {
                 VStack {
                     Spacer()
@@ -1765,6 +2254,7 @@ struct MainLayout: View {
                                             Spacer()
                     
                     Button(action: {
+                        HapticFeedback.impact(.medium)
                         withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
                             if viewMode.isDistractionFreeMode {
                                 viewMode = .normal
@@ -1778,16 +2268,44 @@ struct MainLayout: View {
                     }) {
                         Image(systemName: viewMode.isDistractionFreeMode ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
                             .font(.system(size: 16, weight: .medium))
-                            .foregroundStyle(Color.white)
-                            .frame(width: 44, height: 44)
+                                .foregroundStyle(theme.primary)
+                                .frame(width: 48, height: 48)
                             .background(
+                                    ZStack {
+                                        // Base blur
                                 Circle()
-                                    .fill(Color.black.opacity(0.8))
+                                            .fill(.ultraThinMaterial)
+                                        
+                                        // Gradient overlay
+                                        Circle()
+                                            .fill(
+                                                LinearGradient(
+                                                    gradient: Gradient(colors: [
+                                                        theme.background.opacity(0.3),
+                                                        theme.background.opacity(0.1)
+                                                    ]),
+                                                    startPoint: .topLeading,
+                                                    endPoint: .bottomTrailing
+                                                )
+                                            )
+                                    }
+                                )
                                     .overlay(
                                         Circle()
-                                            .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                                        .stroke(
+                                            LinearGradient(
+                                                gradient: Gradient(colors: [
+                                                    Color.white.opacity(0.2),
+                                                    Color.white.opacity(0.05)
+                                                ]),
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            ),
+                                            lineWidth: 1
                                     )
                             )
+                                .clipShape(Circle())
+                                .shadow(color: Color.black.opacity(0.2), radius: 8, x: 0, y: 2)
                     }
                     .buttonStyle(.plain)
                     .help(viewMode.isDistractionFreeMode ? "Exit Distraction-Free Mode" : "Enter Distraction-Free Mode")
@@ -1797,12 +2315,69 @@ struct MainLayout: View {
                             isHoveringDistraction = hovering
                         }
                     }
-                    .padding(.trailing, 20) // Position in far right corner
+                        .padding(.trailing, 20)
                     .padding(.bottom, 20)
                 }
             }
             .allowsHitTesting(true)
             }
+            #endif
+            
+            // Circular Menu Overlay (iPhone only)
+            #if os(iOS)
+            if UIDevice.current.userInterfaceIdiom == .phone {
+                CircularMenuOverlay(
+                    isMenuOpen: $isCircularMenuOpen,
+                    onDashboard: {
+                        sidebarMode = .allDocuments
+                        isRightSidebarVisible = false
+                        viewMode = .normal
+                    },
+                    onSearch: {
+                        searchFieldFocused = true
+                    },
+                    onNewDocument: {
+                        // Create new document directly for iPhone (same logic as floating sidebar)
+                        let docId = UUID().uuidString
+                        var d = Letterspace_CanvasDocument(
+                            title: "Untitled", 
+                            subtitle: "", 
+                            elements: [DocumentElement(type: .textBlock, content: "", placeholder: "Start typing...")], 
+                            id: docId, 
+                            markers: [], 
+                            series: nil, 
+                            variations: [],
+                            isVariation: false, 
+                            parentVariationId: nil, 
+                            createdAt: Date(), 
+                            modifiedAt: Date(), 
+                            tags: nil, 
+                            isHeaderExpanded: false, 
+                            isSubtitleVisible: true, 
+                            links: []
+                        )
+                        d.save()
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            document = d
+                            sidebarMode = .details
+                            // No need to show right sidebar on iPhone
+                        }
+                    },
+                    onFolders: {
+                        showFoldersModal = true
+                    },
+                    onSettings: {
+                        showSettingsModal = true
+                    },
+                    onBibleReader: {
+                        showBibleReaderModal = true
+                    },
+                    onExport: {
+                        showExportModal = true
+                    }
+                )
+            }
+            #endif
         }
     }
 
@@ -1862,6 +2437,7 @@ struct MainLayout: View {
                         Spacer()
                         
                         Button(action: {
+                            HapticFeedback.impact(.medium)
                             withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
                                 if viewMode.isDistractionFreeMode {
                                     viewMode = .normal
@@ -2373,32 +2949,40 @@ struct DocumentTransitionModifier: ViewModifier {
             .animation(.easeInOut(duration: 0.3), value: isVisible.wrappedValue)
             .onChange(of: isVisible.wrappedValue) { _ in
                 if isVisible.wrappedValue {
-                    // Reset scroll position when sidebar becomes visible
-                    scrollOffset.wrappedValue = 0
+                    // Animate scroll position reset when sidebar becomes visible
+                    withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                        scrollOffset.wrappedValue = 0
+                    }
                 }
             }
             .onChange(of: selectedElement.wrappedValue) { _ in
                 if selectedElement.wrappedValue != nil {
-                    // Reset scroll position when an element is selected
-                    scrollOffset.wrappedValue = 0
+                    // Animate scroll position reset when an element is selected
+                    withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                        scrollOffset.wrappedValue = 0
+                    }
                 }
             }
             .onChange(of: viewMode.wrappedValue) { _ in
-                if viewMode.wrappedValue != .normal {
-                    // Reset scroll position when view mode changes
+                // Animate scroll position reset when view mode changes
+                withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
                     scrollOffset.wrappedValue = 0
                 }
             }
             .onChange(of: isHeaderExpanded.wrappedValue) { _ in
                 if isHeaderExpanded.wrappedValue {
-                    // Reset scroll position when header is expanded
-                    scrollOffset.wrappedValue = 0
+                    // Animate scroll position reset when header is expanded
+                    withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                        scrollOffset.wrappedValue = 0
+                    }
                 }
             }
             .onChange(of: isSubtitleVisible.wrappedValue) { _ in
                 if isSubtitleVisible.wrappedValue {
-                    // Reset scroll position when subtitle is visible
-                    scrollOffset.wrappedValue = 0
+                    // Animate scroll position reset when subtitle is visible
+                    withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                        scrollOffset.wrappedValue = 0
+                    }
                 }
             }
     }
@@ -2685,6 +3269,8 @@ extension View {
         self.modifier(GlassmorphismBackground(cornerRadius: cornerRadius, isActive: isActive, carouselMode: carouselMode))
     }
 }
+
+
 
 
 

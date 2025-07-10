@@ -5,6 +5,7 @@ import CoreGraphics
 struct ListColumn: Identifiable, Hashable {
     let id: String
     let title: String
+    let icon: String
     
     // Add flex proportion method
     func flexProportion() -> CGFloat {
@@ -72,12 +73,12 @@ struct ListColumn: Identifiable, Hashable {
         return max(minWidth, maxWidth + padding)
     }
     
-    static let name = ListColumn(id: "name", title: "Name")
-    static let series = ListColumn(id: "series", title: "Series")
-    static let location = ListColumn(id: "location", title: "Location")
-    static let date = ListColumn(id: "date", title: "Last Modified")
-    static let createdDate = ListColumn(id: "createdDate", title: "Created On")
-    static let presentedDate = ListColumn(id: "presentedDate", title: "Presented On")
+    static let name = ListColumn(id: "name", title: "Name", icon: "doc.text")
+    static let series = ListColumn(id: "series", title: "Series", icon: "folder")
+    static let location = ListColumn(id: "location", title: "Location", icon: "location")
+    static let date = ListColumn(id: "date", title: "Last Modified", icon: "clock")
+    static let createdDate = ListColumn(id: "createdDate", title: "Created On", icon: "calendar")
+    static let presentedDate = ListColumn(id: "presentedDate", title: "Presented On", icon: "calendar.badge.clock")
     
     // Add allColumns for easy access
     static let allColumns: [ListColumn] = [

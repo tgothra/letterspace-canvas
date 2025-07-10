@@ -1,6 +1,10 @@
 import SwiftUI
 import Combine
 
+#if os(iOS)
+import UIKit
+#endif
+
 // Define the Identifiable struct for modal data (moved near top)
 struct ModalDisplayData: Identifiable {
     let id: UUID // Use presentationId as the stable identifier
@@ -206,6 +210,7 @@ internal struct SermonCalendar: View {
                                 let yearWeight: Font.Weight = isYearSelected ? .bold : .regular
                                 
                                 Button(action: {
+                                    HapticFeedback.impact(.light)
                                     selectedYear = year
                                 }) {
                                     Text(yearFormatter.string(from: NSNumber(value: year)) ?? "\(year)")
@@ -834,7 +839,10 @@ private struct MonthButton: View {
     }
     
     var body: some View {
-        Button(action: action) {
+        Button(action: {
+            HapticFeedback.impact(.light)
+            action()
+        }) {
             Text(Calendar.current.shortMonthSymbols[month - 1])
                 .font(.system(size: isIPad ? 16 : 12, weight: isSelected ? .medium : .regular)) // Larger for iPad
                 .foregroundStyle(isSelected ? .primary : (isHovered ? theme.primary : theme.secondary))
@@ -1087,6 +1095,8 @@ private struct DocumentItem: View {
                 return
             }
             
+            HapticFeedback.impact(.light)
+            
             if isIPad && isEditMode {
                 // In edit mode, toggle selection
                 withAnimation(.easeInOut(duration: 0.15)) {
@@ -1164,6 +1174,7 @@ private struct DocumentItem: View {
                             let hoverColor = Color.orange // Always orange on hover
                             
                             Button(action: {
+                                HapticFeedback.impact(.light)
                                 // Directly call the passed-in closure
                                 requestModalLoad(presentationId, document)
                             }) {
@@ -1195,6 +1206,7 @@ private struct DocumentItem: View {
                         
                         // Green "open" button when hovering
                         Button(action: {
+                            HapticFeedback.impact(.light)
                             // Open the document
                             NotificationCenter.default.post(
                                 name: NSNotification.Name("OpenDocument"),
@@ -1228,6 +1240,7 @@ private struct DocumentItem: View {
                         
                         // Red delete button
                         Button(action: {
+                            HapticFeedback.impact(.light)
                             unscheduleDocument() // Keep this action here
                             // Clear selection when deleting on iPad
                             if isIPad && selectedDocumentId == document.id {
@@ -1593,6 +1606,7 @@ struct PresentationNotesModal: View {
                 
                 // Updated Done button to match modern style
                 Button(action: {
+                    HapticFeedback.impact(.light)
                     saveChanges() 
                     onDismiss()
                 }) {

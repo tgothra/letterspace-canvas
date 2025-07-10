@@ -1,5 +1,9 @@
 import SwiftUI
 
+#if os(iOS)
+import UIKit
+#endif
+
 // MARK: - Floating Contextual Toolbar for iPad
 struct FloatingContextualToolbar: View {
     @Environment(\.themeColors) var theme
@@ -117,7 +121,10 @@ struct FloatingContextualToolbar: View {
         VStack(spacing: 12) {
             // Show only bookmarks in distraction-free mode, all tools in normal mode
             ForEach(availableTools, id: \.self) { toolType in
-                Button(action: { toggleTool(toolType) }) {
+                Button(action: { 
+                    HapticFeedback.impact(.light)
+                    toggleTool(toolType) 
+                }) {
                     Image(systemName: toolType.icon)
                         .font(.system(size: 18, weight: .medium))
                         .foregroundStyle(activePanel == toolType ? Color.white : theme.primary)
@@ -142,6 +149,7 @@ struct FloatingContextualToolbar: View {
             
             // Collapse arrow (no button styling)
             Button(action: { 
+                HapticFeedback.impact(.light)
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     isCollapsed = true
                     UserDefaults.standard.set(true, forKey: "floatingToolbarIsCollapsed")

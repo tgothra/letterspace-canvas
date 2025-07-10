@@ -1,5 +1,6 @@
 #if os(iOS)
 import SwiftUI
+import UIKit
 
 // iOS Dashboard Document Row View for touch-friendly interactions
 struct DashboardDocumentRow: View {
@@ -50,7 +51,59 @@ struct DashboardDocumentRow: View {
         return useThemeColors ? theme.secondary : .green
     }
     
-    // Computed property for theme-aware selection color
+    // Helper function to calculate flexible column widths for iPhone
+    private func calculateFlexibleColumnWidths() -> (statusWidth: CGFloat, nameWidth: CGFloat, seriesWidth: CGFloat, locationWidth: CGFloat, dateWidth: CGFloat, createdDateWidth: CGFloat) {
+        let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+        if isPhone {
+            // Get available width (93% of screen width minus padding)
+            let availableWidth = UIScreen.main.bounds.width * 0.93 - 32 // Account for container padding
+            
+            // Fixed width for status column
+            let statusWidth: CGFloat = 55
+            
+            // Calculate remaining width for other columns
+            let remainingWidth = availableWidth - statusWidth
+            
+            // Get visible columns (excluding status)
+            let visibleNonStatusColumns = visibleColumns.filter { $0 != "status" }
+            
+            // If only name column is visible, it takes all remaining space
+            if visibleNonStatusColumns.count == 1 && visibleNonStatusColumns.contains("name") {
+                return (statusWidth: statusWidth, nameWidth: remainingWidth, seriesWidth: 0, locationWidth: 0, dateWidth: 0, createdDateWidth: 0)
+            }
+            
+            // Define flex ratios for each column type
+            let flexRatios: [String: CGFloat] = [
+                "name": 2.0,        // Name gets double space
+                "series": 1.2,      // Series gets slightly more
+                "location": 1.4,    // Location gets more space
+                "date": 0.8,        // Date columns get less space
+                "createdDate": 0.8
+            ]
+            
+            // Calculate total flex ratio for visible columns
+            let totalFlexRatio = visibleNonStatusColumns.reduce(0) { sum, columnId in
+                sum + (flexRatios[columnId] ?? 1.0)
+            }
+            
+            // Calculate individual widths
+            let nameWidth = visibleNonStatusColumns.contains("name") ? 
+                max(120, remainingWidth * (flexRatios["name"] ?? 1.0) / totalFlexRatio) : 0
+            let seriesWidth = visibleNonStatusColumns.contains("series") ? 
+                max(80, remainingWidth * (flexRatios["series"] ?? 1.0) / totalFlexRatio) : 0
+            let locationWidth = visibleNonStatusColumns.contains("location") ? 
+                max(90, remainingWidth * (flexRatios["location"] ?? 1.0) / totalFlexRatio) : 0
+            let dateWidth = visibleNonStatusColumns.contains("date") ? 
+                max(70, remainingWidth * (flexRatios["date"] ?? 1.0) / totalFlexRatio) : 0
+            let createdDateWidth = visibleNonStatusColumns.contains("createdDate") ? 
+                max(70, remainingWidth * (flexRatios["createdDate"] ?? 1.0) / totalFlexRatio) : 0
+            
+            return (statusWidth: statusWidth, nameWidth: nameWidth, seriesWidth: seriesWidth, locationWidth: locationWidth, dateWidth: dateWidth, createdDateWidth: createdDateWidth)
+        }
+        
+        // Default values for non-iPhone devices
+        return (statusWidth: 55, nameWidth: 120, seriesWidth: 100, locationWidth: 120, dateWidth: 90, createdDateWidth: 80)
+    }
     
     // Add default parameter values for backward compatibility
     init(
@@ -94,6 +147,8 @@ struct DashboardDocumentRow: View {
     var body: some View {
         let isIPad = UIDevice.current.userInterfaceIdiom == .pad
         let isPortrait = UIScreen.main.bounds.height > UIScreen.main.bounds.width
+        let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+        let columnWidths = calculateFlexibleColumnWidths()
         
         ZStack {
             // Full-width selection background for non-iPad devices
@@ -119,36 +174,36 @@ struct DashboardDocumentRow: View {
                     if !isEditMode {
                     if isPinned {
                         Image(systemName: "pin.fill")
-                                .font(.system(size: isIPad ? 10 : 16))
-                                .foregroundColor(pinColor)
+                            .font(.system(size: isPhone ? 9 : (isIPad ? 10 : 16)))
+                            .foregroundColor(pinColor)
                     } else {
                         Image(systemName: "pin.fill")
-                                .font(.system(size: isIPad ? 10 : 16))
+                            .font(.system(size: isPhone ? 9 : (isIPad ? 10 : 16)))
                             .foregroundColor(.clear)
                     }
                     
                     if isWIP {
-                            Image(systemName: "clock.badge.checkmark")
-                                .font(.system(size: isIPad ? 10 : 16))
-                                .foregroundColor(wipColor)
+                        Image(systemName: "clock.badge.checkmark")
+                            .font(.system(size: isPhone ? 9 : (isIPad ? 10 : 16)))
+                            .foregroundColor(wipColor)
                     } else {
-                            Image(systemName: "clock.badge.checkmark")
-                                .font(.system(size: isIPad ? 10 : 16))
+                        Image(systemName: "clock.badge.checkmark")
+                            .font(.system(size: isPhone ? 9 : (isIPad ? 10 : 16)))
                             .foregroundColor(.clear)
                     }
                     
                     if hasCalendar {
                         Image(systemName: "calendar")
-                                .font(.system(size: isIPad ? 10 : 16))
-                                .foregroundColor(calendarColor)
+                            .font(.system(size: isPhone ? 9 : (isIPad ? 10 : 16)))
+                            .foregroundColor(calendarColor)
                     } else {
                         Image(systemName: "calendar")
-                                .font(.system(size: isIPad ? 10 : 16))
+                            .font(.system(size: isPhone ? 9 : (isIPad ? 10 : 16)))
                             .foregroundColor(.clear)
                     }
                     }
                 }
-                .frame(width: isIPad ? 30 : 80, alignment: isIPad ? .center : .leading)
+                .frame(width: isIPad ? 30 : (isPhone ? columnWidths.statusWidth : 80), alignment: isIPad ? .center : .leading)
                 
                 // Add breathing room between status indicators and name column on iPad
                 if isIPad {
@@ -181,155 +236,175 @@ struct DashboardDocumentRow: View {
                         HStack(spacing: 8) {
                             // Document icon - positioned at start of name column
                             Image(systemName: "doc.text")
-                                .font(.system(size: isPortrait && isIPad ? 16 : 14))
+                                .font(.system(size: isPhone ? 12 : (isPortrait && isIPad ? 16 : 14)))
                                 .foregroundColor(theme.secondary)
-                                .frame(width: 24, alignment: .center)
+                                .frame(width: isPhone ? 20 : 24, alignment: .center)
                             
                             // Document title and subtitle
-                VStack(alignment: .leading, spacing: isPortrait && isIPad ? 3 : 2) {
-                    Text(document.title.isEmpty ? "Untitled" : document.title)
-                                    .font(.system(size: isPortrait && isIPad ? 17 : 18, weight: .regular))
-                        .foregroundColor(theme.primary)
-                        .lineLimit(1)
-                    
-                    if !document.subtitle.isEmpty {
-                        Text(document.subtitle)
-                                        .font(.system(size: isPortrait && isIPad ? 16 : 16))
-                            .foregroundColor(theme.secondary)
-                            .lineLimit(1)
+                            VStack(alignment: .leading, spacing: isPortrait && isIPad ? 3 : 2) {
+                                Text(document.title.isEmpty ? "Untitled" : document.title)
+                                    .font(.system(size: isPhone ? 14 : (isPortrait && isIPad ? 17 : 18), weight: .regular))
+                                    .foregroundColor(theme.primary)
+                                    .lineLimit(1)
+                                
+                                if !document.subtitle.isEmpty {
+                                    Text(document.subtitle)
+                                        .font(.system(size: isPhone ? 13 : (isPortrait && isIPad ? 16 : 16)))
+                                        .foregroundColor(theme.secondary)
+                                        .lineLimit(1)
                                 }
-                    }
-                }
-                .frame(minWidth: 120, alignment: .leading)
-                
-                Spacer()
-                
+                            }
+                            
+                            // Add spacer to fill available width when only name column is visible
+                            if visibleColumns.count <= 1 {
+                                Spacer()
+                            }
+                        }
+                        .frame(width: isPhone ? columnWidths.nameWidth : (visibleColumns.count > 1 ? nil : .infinity), alignment: .leading)
+                        
                         // Series column (if visible, aligned with header)
                         if visibleColumns.contains("series") {
                             Group {
                                 if let series = document.series, !series.name.isEmpty {
                                     Text(series.name)
-                                        .font(.system(size: isPortrait && isIPad ? 15 : 16))
-                        .foregroundColor(theme.secondary)
-                                        .padding(.horizontal, isPortrait && isIPad ? 10 : 8)
-                                        .padding(.vertical, isPortrait && isIPad ? 4 : 3)
+                                        .font(.system(size: isPhone ? 12 : (isPortrait && isIPad ? 15 : 16)))
+                                        .foregroundColor(theme.secondary)
+                                        .padding(.horizontal, isPhone ? 6 : (isPortrait && isIPad ? 10 : 8))
+                                        .padding(.vertical, isPhone ? 2 : (isPortrait && isIPad ? 4 : 3))
                                         .background(
-                                            RoundedRectangle(cornerRadius: isPortrait && isIPad ? 8 : 6)
+                                            RoundedRectangle(cornerRadius: isPhone ? 4 : (isPortrait && isIPad ? 8 : 6))
                                                 .fill(Color(UIColor.systemGray5))
                                         )
                                 } else {
                                     Text("-")
-                                        .font(.system(size: isPortrait && isIPad ? 15 : 16))
+                                        .font(.system(size: isPhone ? 12 : (isPortrait && isIPad ? 15 : 16)))
                                         .foregroundColor(theme.secondary.opacity(0.5))
                                 }
                             }
-                            .frame(width: 100, alignment: .leading)
-                }
-                
-                        // Location column (if visible, aligned with header) - moved before date
-                if visibleColumns.contains("location") {
-                    Group {
-                        if let location = document.variations.first?.location, !location.isEmpty {
-                            Text(location)
-                                        .font(.system(size: isPortrait && isIPad ? 15 : 16))
-                                .foregroundColor(theme.secondary)
-                                        .padding(.horizontal, isPortrait && isIPad ? 10 : 8)
-                                        .padding(.vertical, isPortrait && isIPad ? 4 : 3)
-                                .background(
-                                            RoundedRectangle(cornerRadius: isPortrait && isIPad ? 8 : 6)
-                                        .fill(Color(UIColor.systemGray5))
-                                )
-                        } else {
-                            Text("-")
-                                        .font(.system(size: isPortrait && isIPad ? 15 : 16))
-                                .foregroundColor(theme.secondary.opacity(0.5))
+                            .frame(width: isPhone ? columnWidths.seriesWidth : 100, alignment: .leading)
                         }
-                    }
-                            .frame(width: 120, alignment: .leading)
+                        
+                        // Location column (if visible, aligned with header) - moved before date
+                        if visibleColumns.contains("location") {
+                            Group {
+                                if let location = document.variations.first?.location, !location.isEmpty {
+                                    Text(location)
+                                        .font(.system(size: isPhone ? 12 : (isPortrait && isIPad ? 15 : 16)))
+                                        .foregroundColor(theme.secondary)
+                                        .padding(.horizontal, isPhone ? 6 : (isPortrait && isIPad ? 10 : 8))
+                                        .padding(.vertical, isPhone ? 2 : (isPortrait && isIPad ? 4 : 3))
+                                        .background(
+                                            RoundedRectangle(cornerRadius: isPhone ? 4 : (isPortrait && isIPad ? 8 : 6))
+                                                .fill(Color(UIColor.systemGray5))
+                                        )
+                                } else {
+                                    Text("-")
+                                        .font(.system(size: isPhone ? 12 : (isPortrait && isIPad ? 15 : 16)))
+                                        .foregroundColor(theme.secondary.opacity(0.5))
+                                }
+                            }
+                            .frame(width: isPhone ? columnWidths.locationWidth : 120, alignment: .leading)
                         }
                         
                         // Date column (if visible, aligned with header) - moved after location
                         if visibleColumns.contains("date") {
                             Text(formatDate(document.modifiedAt))
-                                .font(.system(size: isPortrait && isIPad ? 15 : 16))
+                                .font(.system(size: isPhone ? 12 : (isPortrait && isIPad ? 15 : 16)))
                                 .foregroundColor(theme.secondary)
-                                .frame(width: 90, alignment: .leading)
-                }
-                
-                // Created date column (if visible, aligned with header)
-                if visibleColumns.contains("createdDate") {
-                    Text(formatDate(document.createdAt))
-                                .font(.system(size: isPortrait && isIPad ? 15 : 16))
-                        .foregroundColor(theme.secondary)
-                                .frame(width: 80, alignment: .leading)
+                                .frame(width: isPhone ? columnWidths.dateWidth : 90, alignment: .leading)
+                        }
+                        
+                        // Created date column (if visible, aligned with header)
+                        if visibleColumns.contains("createdDate") {
+                            Text(formatDate(document.createdAt))
+                                .font(.system(size: isPhone ? 12 : (isPortrait && isIPad ? 15 : 16)))
+                                .foregroundColor(theme.secondary)
+                                .frame(width: isPhone ? columnWidths.createdDateWidth : 80, alignment: .leading)
                         }
                     }
                 }
                 
-                // Add spacing before Actions column
-                Spacer().frame(width: 16)
-                
-                // Actions column (aligned with header) - Enhanced touch target for iPad
-                HStack(spacing: 8) {
-                    // Info button for document details (only when not in edit mode)
-                    if !isEditMode {
-                        Button(action: onShowDetails) {
-                            Image(systemName: "info.circle")
-                                .font(.system(size: isPortrait && isIPad ? 18 : 18))
-                        .foregroundColor(theme.secondary)
-                                .frame(width: isPortrait && isIPad ? 36 : 28, height: isPortrait && isIPad ? 36 : 28)
-                        .background(
-                            Circle()
-                                .fill(Color(UIColor.systemGray6).opacity(0.7))
-                        )
-                }
-                .buttonStyle(.plain)
-                    }
+                // Add spacing before Actions column (iPad only)
+                if !isPhone {
+                    Spacer().frame(width: 16)
                     
-                    // Menu button (only when not in edit mode)
-                    if !isEditMode {
-                        Menu {
-            Button(isPinned ? "Unpin" : "Pin") {
-                onPin()
-            }
-            
-            Button(isWIP ? "Remove from WIP" : "Add to WIP") {
-                onWIP()
-            }
-            
-            Button(hasCalendar ? "Remove from Calendar" : "Add to Calendar") {
-                onCalendar()
-            }
-                            
-                            Divider()
-            
-            Button("Schedule Presentation") {
-                onCalendarAction()
-            }
-            
-                            Divider()
-                            
-                            Button("Delete") {
-                                onDelete()
+                    // Actions column (aligned with header) - Enhanced touch target for iPad
+                    HStack(spacing: 8) {
+                        // Info button for document details (iPad only)
+                        if !isEditMode {
+                            Button(action: {
+                                HapticFeedback.impact(.light)
+                                onShowDetails()
+                            }) {
+                                Image(systemName: "info.circle")
+                                    .font(.system(size: isPortrait && isIPad ? 18 : 18))
+                                    .foregroundColor(theme.secondary)
+                                    .frame(width: isPortrait && isIPad ? 36 : 28, 
+                                           height: isPortrait && isIPad ? 36 : 28)
+                                    .background(
+                                        Circle()
+                                            .fill(Color(UIColor.systemGray6).opacity(0.7))
+                                    )
                             }
-                            .foregroundColor(.red)
-                        } label: {
-                            Image(systemName: "ellipsis")
-                                .font(.system(size: isPortrait && isIPad ? 18 : 18))
-                                .foregroundColor(theme.secondary)
-                                .frame(width: isPortrait && isIPad ? 36 : 28, height: isPortrait && isIPad ? 36 : 28)
-                                .background(
-                                    Circle()
-                                        .fill(Color(UIColor.systemGray6).opacity(0.7))
-                                )
-            }
-                        .buttonStyle(.plain)
+                            .buttonStyle(.plain)
+                        }
+                        
+                        // Menu button (iPad only, no iPhone-specific content)
+                        if !isEditMode {
+                            Menu {
+                                Button(isPinned ? "Unpin" : "Pin") {
+                                    HapticFeedback.impact(.light)
+                                    onPin()
+                                }
+                                
+                                Button(isWIP ? "Remove from WIP" : "Add to WIP") {
+                                    HapticFeedback.impact(.light)
+                                    onWIP()
+                                }
+                                
+                                Button(hasCalendar ? "Remove from Calendar" : "Add to Calendar") {
+                                    HapticFeedback.impact(.light)
+                                    onCalendar()
+                                }
+                                
+                                Divider()
+                                
+                                Button("Schedule Presentation") {
+                                    HapticFeedback.impact(.light)
+                                    onCalendarAction()
+                                }
+                                
+                                Divider()
+                                
+                                Button("Delete") {
+                                    HapticFeedback.impact(.medium)
+                                    onDelete()
+                                }
+                                .foregroundColor(.red)
+                            } label: {
+                                Button(action: {
+                                    HapticFeedback.impact(.medium)
+                                }) {
+                                    Image(systemName: "ellipsis")
+                                        .font(.system(size: isPortrait && isIPad ? 18 : 18))
+                                        .foregroundColor(theme.secondary)
+                                        .frame(width: isPortrait && isIPad ? 36 : 28, 
+                                               height: isPortrait && isIPad ? 36 : 28)
+                                        .background(
+                                            Circle()
+                                                .fill(Color(UIColor.systemGray6).opacity(0.7))
+                                        )
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            .buttonStyle(.plain)
+                        }
                     }
+                    .frame(width: 80, alignment: .center)
                 }
-                .frame(width: 80, alignment: .center)
             }
-            .padding(.horizontal, isPortrait && isIPad ? 16 : 16)
-            .padding(.vertical, isPortrait && isIPad ? 16 : 10) // Increased vertical padding for iPad
+            .padding(.horizontal, isPhone ? 0 : (isPortrait && isIPad ? 16 : 16)) // iPhone: Remove padding to fill full width
+            .padding(.vertical, isPhone ? 8 : (isPortrait && isIPad ? 16 : 10))
         }
         .overlay(
             Group {
@@ -338,10 +413,69 @@ struct DashboardDocumentRow: View {
                     Rectangle()
                         .frame(height: 0.5)
                         .foregroundColor(Color(UIColor.separator).opacity(0.3))
-            }
+                }
             },
             alignment: .bottom
         )
+        .overlay(alignment: .trailing) {
+            // Floating action button for iPhone (only when not in edit mode)
+            if isPhone && !isEditMode {
+                Menu {
+                    Button("Document Details") {
+                        HapticFeedback.impact(.light)
+                        onShowDetails()
+                    }
+                    
+                    Divider()
+                    
+                    Button(isPinned ? "Unpin" : "Pin") {
+                        HapticFeedback.impact(.light)
+                        onPin()
+                    }
+                    
+                    Button(isWIP ? "Remove from WIP" : "Add to WIP") {
+                        HapticFeedback.impact(.light)
+                        onWIP()
+                    }
+                    
+                    Button(hasCalendar ? "Remove from Calendar" : "Add to Calendar") {
+                        HapticFeedback.impact(.light)
+                        onCalendar()
+                    }
+                    
+                    Divider()
+                    
+                    Button("Schedule Presentation") {
+                        HapticFeedback.impact(.light)
+                        onCalendarAction()
+                    }
+                    
+                    Divider()
+                    
+                    Button("Delete") {
+                        HapticFeedback.impact(.medium)
+                        onDelete()
+                    }
+                    .foregroundColor(.red)
+                } label: {
+                    Button(action: {
+                        HapticFeedback.impact(.medium)
+                    }) {
+                        Image(systemName: "ellipsis")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(theme.secondary)
+                            .frame(width: 28, height: 28)
+                            .background(
+                                Circle()
+                                    .fill(colorScheme == .dark ? Color(UIColor.systemGray5) : Color(UIColor.systemGray6))
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
+                .buttonStyle(.plain)
+                .padding(.trailing, -15)
+            }
+        }
         .overlay(alignment: .topLeading) {
             // Selection circle for edit mode
             if isEditMode {
@@ -381,7 +515,7 @@ struct DashboardDocumentRow: View {
         .onTapGesture {
             onTap()
         }
-        .frame(minHeight: isPortrait && isIPad ? 72 : 56) // Increased minimum height for iPad
+        .frame(minHeight: isPhone ? 44 : (isPortrait && isIPad ? 72 : 56))
     }
     
     private func formatDate(_ date: Date) -> String {

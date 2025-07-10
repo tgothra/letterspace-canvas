@@ -1,5 +1,9 @@
 import SwiftUI
 
+#if os(iOS)
+import UIKit
+#endif
+
 struct WIPDocumentButton: View {
     let document: Letterspace_CanvasDocument
     let action: () -> Void
@@ -56,6 +60,8 @@ struct WIPDocumentButton: View {
                 justLongPressed = false
                 return
             }
+            
+            HapticFeedback.impact(.light)
             
             if isIPad && isEditMode {
                 // In edit mode, toggle selection
@@ -115,7 +121,10 @@ struct WIPDocumentButton: View {
                 if shouldShowButtons {
                     HStack(spacing: 6) {
                         // Green "open" button when hovering
-                        Button(action: action) {
+                        Button(action: {
+                            HapticFeedback.impact(.light)
+                            action()
+                        }) {
                             ZStack {
                                 Circle()
                                     // iPad: Use hover color when selected, Mac: Use hover color when hovered
@@ -141,6 +150,7 @@ struct WIPDocumentButton: View {
                         
                         // Red remove button
                         Button(action: {
+                            HapticFeedback.impact(.light)
                             // Directly modify the wipDocuments collection
                             wipDocuments.remove(document.id)
                             

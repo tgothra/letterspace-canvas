@@ -1,6 +1,10 @@
 import SwiftUI
 import Foundation
 
+#if os(iOS)
+import UIKit
+#endif
+
 struct PinnedDocumentButton: View {
     let document: Letterspace_CanvasDocument
     let action: () -> Void
@@ -57,6 +61,8 @@ struct PinnedDocumentButton: View {
                 justLongPressed = false
                 return
             }
+            
+            HapticFeedback.impact(.light)
             
             if isIPad && isEditMode {
                 // In edit mode, toggle selection
@@ -117,7 +123,10 @@ struct PinnedDocumentButton: View {
                 if shouldShowButtons {
                     HStack(spacing: 6) {
                         // Green "open" button when hovering
-                        Button(action: action) {
+                        Button(action: {
+                            HapticFeedback.impact(.light)
+                            action()
+                        }) {
                             ZStack {
                                 Circle()
                                     // iPad: Use hover color when selected, Mac: Use hover color when hovered
@@ -143,6 +152,7 @@ struct PinnedDocumentButton: View {
                         
                         // Red unpin button
                         Button(action: {
+                            HapticFeedback.impact(.light)
                             pinnedDocuments.remove(document.id)
                             UserDefaults.standard.set(Array(pinnedDocuments), forKey: "PinnedDocuments")
                             NotificationCenter.default.post(name: NSNotification.Name("DocumentListDidUpdate"), object: nil)

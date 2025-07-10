@@ -260,7 +260,19 @@ struct DocumentArea: View {
     }
     
     private var paperWidth: CGFloat {
-        800  // Fixed width 
+        #if os(iOS)
+        let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+        if isPhone {
+            // iPhone: Use 93% of screen width to match the dashboard layout
+            return UIScreen.main.bounds.width * 0.93
+        } else {
+            // iPad: Keep original wider width
+            return 800
+        }
+        #else
+        // macOS: Keep original width
+        return 800
+        #endif
     }
     
     private var headerImageHeight: CGFloat {
@@ -1417,6 +1429,8 @@ struct DocumentArea: View {
                     }
                 )
                     .allowsHitTesting(!isAnimatingHeaderCollapse)
+                    .animation(.spring(response: 0.6, dampingFraction: 0.8), value: viewMode)
+                    .animation(.spring(response: 0.6, dampingFraction: 0.8), value: isDistractionFreeMode)
                     .overlay(
                         GeometryReader { geometry in
                             Color.clear // Use Color.clear for geometry reading
@@ -1432,6 +1446,8 @@ struct DocumentArea: View {
                 #endif
             }
             .frame(maxWidth: .infinity)
+            .animation(.spring(response: 0.6, dampingFraction: 0.8), value: viewMode)
+            .animation(.spring(response: 0.6, dampingFraction: 0.8), value: isDistractionFreeMode)
             
             // Add extra space at bottom to ensure scrollbar is contained (only on non-iPad)
             #if os(iOS)

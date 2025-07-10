@@ -39,6 +39,8 @@ struct DashboardView: View {
     @Binding var isRightSidebarVisible: Bool
     @State private var folders: [Folder] = []
     @State private var selectedTags: Set<String> = []
+    @State private var selectedFilterColumn: String? = nil
+    @State private var selectedFilterCategory: String = "Filter" // "Filter" or "Tags" - Filter is now first
     @State private var showTagManager = false
     @State private var isHoveringInfo = false
     @State private var hoveredTag: String? = nil
@@ -113,8 +115,8 @@ struct DashboardView: View {
         #if os(iOS)
         let isPhone = UIDevice.current.userInterfaceIdiom == .phone
         if isPhone {
-            // iPhone: Use existing buffer
-            return floatingSidebarWidth + 40 // Sidebar width + 40pt buffer
+            // iPhone: Extra breathing room between nav and content
+            return floatingSidebarWidth + 60 // Sidebar width + 60pt buffer (increased from 55pt)
         } else {
             // iPad: More breathing room between nav and content
             return floatingSidebarWidth + 70 // Sidebar width + 70pt buffer for more breathing room
@@ -124,6 +126,62 @@ struct DashboardView: View {
         #endif
     }
     
+    // Helper function to calculate flexible column widths for iPhone
+    private func calculateFlexibleColumnWidths() -> (statusWidth: CGFloat, nameWidth: CGFloat, seriesWidth: CGFloat, locationWidth: CGFloat, dateWidth: CGFloat, createdDateWidth: CGFloat) {
+        #if os(iOS)
+        let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+        if isPhone {
+            // Get available width (93% of screen width minus padding)
+            let availableWidth = UIScreen.main.bounds.width * 0.93 - 32 // Account for container padding
+            
+            // Fixed width for status column
+            let statusWidth: CGFloat = 55
+            
+            // Calculate remaining width for other columns
+            let remainingWidth = availableWidth - statusWidth
+            
+            // Get visible columns (excluding status)
+            let visibleNonStatusColumns = visibleColumns.filter { $0 != "status" }
+            
+            // If only name column is visible, it takes all remaining space
+            if visibleNonStatusColumns.count == 1 && visibleNonStatusColumns.contains("name") {
+                return (statusWidth: statusWidth, nameWidth: remainingWidth, seriesWidth: 0, locationWidth: 0, dateWidth: 0, createdDateWidth: 0)
+            }
+            
+            // Define flex ratios for each column type
+            let flexRatios: [String: CGFloat] = [
+                "name": 2.0,        // Name gets double space
+                "series": 1.2,      // Series gets slightly more
+                "location": 1.4,    // Location gets more space
+                "date": 0.8,        // Date columns get less space
+                "createdDate": 0.8
+            ]
+            
+            // Calculate total flex ratio for visible columns
+            let totalFlexRatio = visibleNonStatusColumns.reduce(0) { sum, columnId in
+                sum + (flexRatios[columnId] ?? 1.0)
+            }
+            
+            // Calculate individual widths
+            let nameWidth = visibleNonStatusColumns.contains("name") ? 
+                max(120, remainingWidth * (flexRatios["name"] ?? 1.0) / totalFlexRatio) : 0
+            let seriesWidth = visibleNonStatusColumns.contains("series") ? 
+                max(80, remainingWidth * (flexRatios["series"] ?? 1.0) / totalFlexRatio) : 0
+            let locationWidth = visibleNonStatusColumns.contains("location") ? 
+                max(90, remainingWidth * (flexRatios["location"] ?? 1.0) / totalFlexRatio) : 0
+            let dateWidth = visibleNonStatusColumns.contains("date") ? 
+                max(70, remainingWidth * (flexRatios["date"] ?? 1.0) / totalFlexRatio) : 0
+            let createdDateWidth = visibleNonStatusColumns.contains("createdDate") ? 
+                max(70, remainingWidth * (flexRatios["createdDate"] ?? 1.0) / totalFlexRatio) : 0
+            
+            return (statusWidth: statusWidth, nameWidth: nameWidth, seriesWidth: seriesWidth, locationWidth: locationWidth, dateWidth: dateWidth, createdDateWidth: createdDateWidth)
+        }
+        #endif
+        
+        // Default values for non-iPhone devices
+        return (statusWidth: 55, nameWidth: 120, seriesWidth: 100, locationWidth: 120, dateWidth: 90, createdDateWidth: 80)
+    }
+
     // Computed property for selection bar background
     private var selectionBarBackground: some View {
         let useGlassmorphism = colorScheme == .dark ? 
@@ -327,6 +385,20 @@ struct DashboardView: View {
         )
     }
     
+    private func updateVisibleColumns() {
+        // Update visible columns based on the selected filter column
+        if let selectedColumn = selectedFilterColumn {
+            // Show only the name column and the selected filter column
+            visibleColumns = Set(["name", selectedColumn])
+        } else {
+            // Default: only show name column (pinned/wip/calendar icons and actions are always shown)
+            visibleColumns = Set(["name"])
+        }
+        
+        // Save column preferences
+        UserDefaults.standard.set(Array(visibleColumns), forKey: "VisibleColumns")
+    }
+    
     private func getTimeBasedGreeting() -> String {
         let hour = Calendar.current.component(.hour, from: Date())
         let firstName = UserProfileManager.shared.userProfile.firstName.isEmpty ? "Friend" : UserProfileManager.shared.userProfile.firstName
@@ -375,7 +447,14 @@ struct DashboardView: View {
     // Extracted computed property for the dashboard header (iPad version)
     private var iPadDashboardHeaderView: some View {
         HStack {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: {
+                #if os(iOS)
+                let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                return isPhone ? 8 : 12 // iPhone: closer spacing, iPad: original spacing
+                #else
+                return 12
+                #endif
+            }()) {
                 Text("Dashboard")
                     .font(.system(size: {
                         // Responsive dashboard title size using screen bounds
@@ -403,9 +482,9 @@ struct DashboardView: View {
                         let screenWidth = UIScreen.main.bounds.width
                         let isPhone = UIDevice.current.userInterfaceIdiom == .phone
                         if isPhone {
-                            // iPhone: smaller, more appropriate sizing
-                            let calculatedSize = screenWidth * 0.08 // 8% of screen width for iPhone
-                            return max(28, min(35, calculatedSize)) // Constrain between 28-35pt for iPhone
+                            // iPhone: smaller, more appropriate sizing - reduced slightly
+                            let calculatedSize = screenWidth * 0.075 // 7.5% of screen width for iPhone (reduced from 8%)
+                            return max(26, min(33, calculatedSize)) // Constrain between 26-33pt for iPhone (reduced from 28-35pt)
                         } else {
                             // iPad: original sizing
                             let calculatedSize = screenWidth * 0.065 // 6.5% of screen width
@@ -568,15 +647,15 @@ struct DashboardView: View {
                     #if os(iOS)
                     let isIPad = UIDevice.current.userInterfaceIdiom == .pad
                     if isIPad {
-                        // iPad default: only modified date and location, never both date columns
-                        visibleColumns = Set(["date", "location"])
+                        // iPad default: only name column
+                        visibleColumns = Set(["name"])
                     } else {
-                        // iPhone default
-                    visibleColumns = Set(["date", "location"])
+                        // iPhone default: only name column
+                        visibleColumns = Set(["name"])
                     }
                     #else
-                    // macOS default
-                    visibleColumns = Set(["date", "location"])
+                    // macOS default: only name column
+                    visibleColumns = Set(["name"])
                     #endif
                 }
                 
@@ -1023,7 +1102,7 @@ struct DashboardView: View {
                             let screenHeight = geometry.size.height
                             #if os(iOS)
                             if UIDevice.current.userInterfaceIdiom == .phone {
-                                return screenHeight * 0.12 // More top padding on iPhone to lower the greeting
+                                return screenHeight * 0.10 // Slightly less top padding on iPhone (reduced from 12%)
                             } else {
                                 return screenHeight * 0.08 // Original iPad padding
                             }
@@ -1034,7 +1113,17 @@ struct DashboardView: View {
                         
                         // iPad & iPhone Carousel for sections
                         iPadSectionCarousel
-                        .padding(.horizontal, 10) // Reduced from 20 to 10 to make carousel wider
+                        .padding(.horizontal, {
+                            #if os(iOS)
+                            if UIDevice.current.userInterfaceIdiom == .phone {
+                                return 20 // iPhone: centered with breathing room
+                            } else {
+                                return 10 // iPad: reduced from 20 to 10 to make carousel wider
+                            }
+                            #else
+                            return 10
+                            #endif
+                        }())
                         .padding(.top, {
                             // Position carousel with comfortable breathing room from greeting
                             let screenHeight = geometry.size.height
@@ -1050,12 +1139,18 @@ struct DashboardView: View {
                             #endif
                         }())
                         
-                    
+                        // Carousel Navigation Pills (iPhone only)
+                        #if os(iOS)
+                        if UIDevice.current.userInterfaceIdiom == .phone {
+                            carouselNavigationPills
+                        }
+                        #endif
+                        
                         allDocumentsSectionView
                         .padding(.top, {
                             #if os(iOS)
                             if UIDevice.current.userInterfaceIdiom == .phone {
-                                return 85 // Optimal breathing room for iPhone after reducing card height
+                                return 110 // Increased breathing room for iPhone between carousel and All Documents
                             } else {
                                 return 60 // Optimal breathing room for iPad carousel cards
                             }
@@ -1063,15 +1158,35 @@ struct DashboardView: View {
                             return 10 // Keep reduced spacing for other platforms
                             #endif
                         }()) // Device-specific spacing between carousel and All Documents
-                        .padding(.horizontal, 10) // Reduced from 20 to 10 to make All Documents wider
+                        .padding(.horizontal, {
+                            #if os(iOS)
+                            if UIDevice.current.userInterfaceIdiom == .phone {
+                                // iPhone: Calculate padding to center 93% width content
+                                let screenWidth = UIScreen.main.bounds.width
+                                return screenWidth * 0.035 // 3.5% on each side for 93% centered content
+                            } else {
+                                return 10 // iPad: reduced from 20 to 10 to make All Documents wider
+                            }
+                            #else
+                            return 10 // Keep reduced spacing for other platforms
+                            #endif
+                        }())
                         .padding(.leading, {
                                     #if os(macOS)
                                     return 24 // Fixed alignment with carousel sections on macOS
                                     #else
-                                    // Use the new responsive navPadding
+                                    #if os(iOS)
+                                    if UIDevice.current.userInterfaceIdiom == .phone {
+                                        return 0 // iPhone: no additional leading padding for centering
+                                    } else {
+                                        // Use the new responsive navPadding for iPad
+                                        return shouldAddNavigationPadding ? navPadding : 10
+                                    }
+                                    #else
                                     return shouldAddNavigationPadding ? navPadding : 10
                                     #endif
-                                }()) // Platform-specific alignment - further reduced to better match carousel alignment
+                                    #endif
+                                }()) // Platform-specific alignment - iPhone centered, iPad aligned
                         .animation(.spring(response: 0.6, dampingFraction: 0.75), value: showFloatingSidebar)
                         
                     // Remove Spacer to let All Documents fill remaining space
@@ -1095,18 +1210,46 @@ struct DashboardView: View {
                         .padding(.top, 45) // Increased from 25 to 45 for more breathing room between greeting and cards
                         .animation(.spring(response: 0.6, dampingFraction: 0.75), value: showFloatingSidebar)
                         
+                    // Carousel Navigation Pills for Landscape (iPhone only)
+                    #if os(iOS)
+                    if UIDevice.current.userInterfaceIdiom == .phone {
+                        carouselNavigationPills
+                            .padding(.horizontal, 20) // Consistent padding for centering in landscape
+                    }
+                    #endif
+                    
                     // All Documents section - with responsive spacing and height for different iPad sizes
                     allDocumentsSectionView
-                        .padding(.top, 30) // Reduced space between carousel and All Documents for landscape
+                        .padding(.top, {
+                            #if os(iOS)
+                            if UIDevice.current.userInterfaceIdiom == .phone {
+                                return 110 // Increased breathing room for iPhone between carousel and All Documents in landscape
+                            } else {
+                                return 30 // Reduced space between carousel and All Documents for iPad landscape
+                            }
+                            #else
+                            return 30 // Keep original spacing for other platforms
+                            #endif
+                        }()) // Device-specific spacing between carousel and All Documents
                         .padding(.trailing, 20) // Match right alignment with cards
                         .padding(.leading, {
                             #if os(macOS)
                             return 44 // Fixed alignment with carousel sections on macOS (24 + 20 base padding)
                             #else
+                            #if os(iOS)
+                            if UIDevice.current.userInterfaceIdiom == .phone {
+                                // iPhone: Calculate padding to center 93% width content
+                                let screenWidth = UIScreen.main.bounds.width
+                                return screenWidth * 0.035 // 3.5% on each side for 93% centered content
+                            } else {
                             // Match the cards' padding logic for better alignment - use fixed value for consistency
                             return shouldAddNavigationPadding ? 185 : 20  // 165 (cards) + 20 (base padding)
+                            }
+                            #else
+                            return shouldAddNavigationPadding ? 185 : 20
                             #endif
-                        }()) // Platform-specific alignment - matches cards exactly including base padding
+                            #endif
+                        }()) // Platform-specific alignment - iPhone centered, iPad aligned
                         .animation(.spring(response: 0.6, dampingFraction: 0.75), value: showFloatingSidebar)
                         
                     // Remove Spacer to let All Documents fill remaining space
@@ -1423,43 +1566,226 @@ struct DashboardView: View {
     private var documentSectionHeader: some View {
         #if os(iOS)
         let isIPad = UIDevice.current.userInterfaceIdiom == .pad
+        let isPhone = UIDevice.current.userInterfaceIdiom == .phone
         #else
         let isIPad = false
+        let isPhone = false
         #endif
         
-        return HStack(spacing: 6) { // Reduced from 8 to 6
-            // Left side - Title
-            HStack(spacing: 6) { // Reduced from 8 to 6
+        return Group {
+            if isPhone {
+                // iPhone: Tall header with stacked rows
+                iPhoneDocumentHeader
+            } else {
+                // iPad/macOS: Original horizontal layout
+                iPadMacDocumentHeader
+            }
+        }
+    }
+    
+    // iPhone-specific header with stacked rows
+    private var iPhoneDocumentHeader: some View {
+        VStack(spacing: 10) { // Increased spacing for better breathing room
+            // Title row - matching carousel header style
+            HStack(spacing: 8) {
                 Image(systemName: "doc.text.fill")
-                    .font(.custom("InterTight-Regular", size: 16))  // Reduced from 18 to 16 for tighter fit
+                    .font(.system(size: 12)) // Match carousel icon size
                     .foregroundStyle(theme.primary)
                 Text("All Documents")
-                    .font(.custom("InterTight-Medium", size: 18))  // Reduced from 20 to 18 for tighter fit
+                    .font(.custom("InterTight-Medium", size: 16)) // Match carousel header font size
                     .foregroundStyle(theme.primary)
                 Text("(\(filteredDocuments.count))")
-                    .font(.custom("InterTight-Regular", size: 16))  // Reduced from 18 to 16 for tighter fit
+                    .font(.custom("InterTight-Regular", size: 14)) // Proportionally smaller
                     .foregroundStyle(theme.secondary)
-                    .frame(width: 45, alignment: .leading)  // Reduced width from 50 to 45
+                Spacer()
                 
-                Menu {
+                // Clear all filters button
+                if !selectedTags.isEmpty || selectedFilterColumn != nil {
+                    Button("Clear") {
+                        selectedTags.removeAll()
+                        selectedFilterColumn = nil
+                        updateVisibleColumns()
+                        tableRefreshID = UUID()
+                        
+                        // Haptic feedback
+                        HapticFeedback.impact(.light)
+                    }
+                    .font(.custom("InterTight-Medium", size: 11)) // Smaller clear button
+                    .foregroundStyle(theme.accent)
+                }
+            }
+            
+            // Filter selection row - Segmented control on left, filter options on right
+            HStack(spacing: 12) {
+                // Segmented control for category selection (left side)
+                ZStack {
+                    // Background container
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(theme.secondary.opacity(0.1))
+                        .frame(width: 120, height: 32) // Bigger size
+                    
+                    // Sliding background indicator
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(theme.accent)
+                        .frame(width: 56, height: 28)
+                        .offset(x: selectedFilterCategory == "Filter" ? -28 : 28) // Filter left, Tags right
+                        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: selectedFilterCategory)
+                    
+                    // Category buttons
+                    HStack(spacing: 0) {
+                        Button(action: {
+                            selectedFilterCategory = "Filter"
+                            // Haptic feedback
+                            HapticFeedback.impact(.light)
+                        }) {
+                            Text("Filter")
+                                .font(.custom("InterTight-Medium", size: 11))
+                                .foregroundStyle(selectedFilterCategory == "Filter" ? .white : theme.primary)
+                                .frame(width: 56, height: 28)
+                        }
+                        .buttonStyle(.plain)
+                        
+                        Button(action: {
+                            selectedFilterCategory = "Tags"
+                            // Haptic feedback
+                            HapticFeedback.impact(.light)
+                        }) {
+                            Text("Tags")
+                                .font(.custom("InterTight-Medium", size: 11))
+                                .foregroundStyle(selectedFilterCategory == "Tags" ? .white : theme.primary)
+                                .frame(width: 56, height: 28)
+                        }
+                        .buttonStyle(.plain)
+                        .opacity(allTags.isEmpty ? 0.4 : 1.0) // Dim if no tags available
+                        .disabled(allTags.isEmpty)
+                    }
+                }
+                .frame(width: 120, height: 32)
+                
+                // Single scrollable filter area (right side)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 5) {
+                        if selectedFilterCategory == "Filter" {
+                            // Show columns
                     ForEach(ListColumn.allColumns) { column in
+                                if column.id != "name" { // Exclude name column
+                                    Button(action: {
+                                        // Clear any tag selection
+                                        selectedTags.removeAll()
+                                        
+                                        // Toggle column selection (only one at a time)
+                                        if selectedFilterColumn == column.id {
+                                            selectedFilterColumn = nil
+                                        } else {
+                                            selectedFilterColumn = column.id
+                                        }
+                                        
+                                        updateVisibleColumns()
+                                        tableRefreshID = UUID()
+                                        
+                                        // Haptic feedback
+                                        HapticFeedback.impact(.light)
+                                    }) {
+                                        HStack(spacing: 3) { // Increased from 2 to 3
+                                            Image(systemName: column.icon)
+                                                .font(.system(size: 10)) // Increased from 8 to 10
+                                            Text(column.title)
+                                                .font(.custom("InterTight-Medium", size: 11)) // Increased from 9 to 11
+                                        }
+                                        .foregroundStyle(selectedFilterColumn == column.id ? .white : theme.primary)
+                                        .padding(.horizontal, 10) // Increased from 6 to 10
+                                        .padding(.vertical, 6) // Increased from 4 to 6
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 7) // Increased from 5 to 7
+                                                .fill(selectedFilterColumn == column.id ? theme.accent : Color.clear)
+                                                .stroke(theme.accent, lineWidth: 1.5)
+                                        )
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                        } else if selectedFilterCategory == "Tags" && !allTags.isEmpty {
+                            // Show tags
+                            ForEach(allTags, id: \.self) { tag in
+                                Button(action: {
+                                    // Clear any column selection
+                                    selectedFilterColumn = nil
+                                    
+                                    // Toggle tag selection (only one at a time)
+                                    if selectedTags.contains(tag) {
+                                        selectedTags.remove(tag)
+                                    } else {
+                                        selectedTags.removeAll()
+                                        selectedTags.insert(tag)
+                                    }
+                                    
+                                    updateVisibleColumns()
+                                    tableRefreshID = UUID()
+                                    
+                                    // Haptic feedback
+                                    HapticFeedback.impact(.light)
+                                }) {
+                                    Text(tag)
+                                        .font(.custom("InterTight-Medium", size: 12)) // Increased from 10 to 12
+                                        .foregroundStyle(selectedTags.contains(tag) ? .white : tagColor(for: tag))
+                                        .padding(.horizontal, 12) // Increased from 8 to 12
+                                        .padding(.vertical, 6) // Increased from 4 to 6
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 7) // Increased from 5 to 7
+                                                .fill(selectedTags.contains(tag) ? tagColor(for: tag) : Color.clear)
+                                                .stroke(tagColor(for: tag), lineWidth: 1.5)
+                                        )
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6) // Add vertical padding to prevent clipping
+                    .padding(.trailing, 8)
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .padding(.top, 4) // Add breathing room above
+            .padding(.bottom, 6) // Add breathing room below
+        }
+        .padding(.horizontal, 12) // Reduced from 16 to match carousel padding
+        .padding(.top, 12) // Reduced from 16 to match carousel padding
+        .padding(.bottom, 12) // Reduced from 20 to match carousel padding
+        .onAppear {
+            // Default to Filter category
+            selectedFilterCategory = "Filter"
+        }
+    }
+    
+    // iPad/macOS header (original layout)
+    private var iPadMacDocumentHeader: some View {
                         #if os(iOS)
                         let isIPad = UIDevice.current.userInterfaceIdiom == .pad
                         #else
                         let isIPad = false
                         #endif
                         
-                        // Always show name column, and exclude "Presented On" on iPad
+        return HStack(spacing: 6) {
+            // Left side - Title
+            HStack(spacing: 6) {
+                Image(systemName: "doc.text.fill")
+                    .font(.custom("InterTight-Regular", size: 16))
+                    .foregroundStyle(theme.primary)
+                Text("All Documents")
+                    .font(.custom("InterTight-Medium", size: 18))
+                    .foregroundStyle(theme.primary)
+                Text("(\(filteredDocuments.count))")
+                    .font(.custom("InterTight-Regular", size: 16))
+                    .foregroundStyle(theme.secondary)
+                    .frame(width: 45, alignment: .leading)
+                
+                Menu {
+                    ForEach(ListColumn.allColumns) { column in
                         if column.id != "name" && !(isIPad && column.id == "presentedDate") {
                             Toggle(column.title, isOn: Binding(
                                 get: { visibleColumns.contains(column.id) },
                                 set: { isOn in
-                                    #if os(iOS)
-                                    let isIPad = UIDevice.current.userInterfaceIdiom == .pad
-                                    #else
-                                    let isIPad = false
-                                    #endif
-                                    
                                     if isOn {
                                         visibleColumns.insert(column.id)
                                         
@@ -1481,16 +1807,16 @@ struct DashboardView: View {
                         }
                     }
                 } label: {
-                    HStack(spacing: 3) { // Reduced from 4 to 3
+                    HStack(spacing: 3) {
                         Text("My List View")
-                            .font(.system(size: 13))  // Reduced from 15 to 13 for tighter fit
+                            .font(.system(size: 13))
                             .foregroundStyle(colorScheme == .dark ? .white : Color(.sRGB, white: 0.3))
                         Image(systemName: "line.3.horizontal.decrease")
-                            .font(.system(size: 11))  // Reduced from 12 to 11
+                            .font(.system(size: 11))
                             .foregroundStyle(colorScheme == .dark ? .white : Color(.sRGB, white: 0.3))
                     }
-                    .padding(.horizontal, 8)  // Reduced from 10 to 8
-                    .padding(.vertical, 4)  // Reduced from 5 to 4
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
                     .background(
                         RoundedRectangle(cornerRadius: 6)
                             .fill(colorScheme == .dark ?
@@ -1516,13 +1842,12 @@ struct DashboardView: View {
             }
             
             if !allTags.isEmpty {
-                // Spacer to push tags to the right a bit - reduced for tighter fit
-                Spacer().frame(width: 20) // Reduced from 32 to 20
+                Spacer().frame(width: 20)
                 
                 // Tags section
-                HStack(spacing: 6) { // Reduced from 8 to 6
+                HStack(spacing: 6) {
                     Text("Tags")
-                        .font(.custom("InterTight-Medium", size: 13))  // Reduced from 15 to 13 for tighter fit
+                        .font(.custom("InterTight-Medium", size: 13))
                         .tracking(0.3)
                         .foregroundStyle(theme.primary)
                     
@@ -1530,7 +1855,7 @@ struct DashboardView: View {
                         showTagManager = true
                     }) {
                         Image(systemName: "info.circle")
-                            .font(.system(size: 13))  // Reduced from 15 to 13 for tighter fit
+                            .font(.system(size: 13))
                             .foregroundStyle(theme.primary)
                     }
                     .buttonStyle(.plain)
@@ -1563,16 +1888,16 @@ struct DashboardView: View {
                                     tableRefreshID = UUID()
                                 }) {
                                     Text(tag)
-                                        .font(.custom("InterTight-Medium", size: 12))  // Increased from 10 to 12
+                                        .font(.custom("InterTight-Medium", size: 12))
                                         .tracking(0.7)
                                         .foregroundStyle(tagColor(for: tag))
-                                        .padding(.horizontal, 12)  // Increased from 10 to 12
-                                        .padding(.vertical, 4)  // Increased from 3 to 4
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 6)
                                         .background(
-                                            RoundedRectangle(cornerRadius: 6)
+                                            RoundedRectangle(cornerRadius: 7) // Increased from 5 to 7
                                                 .stroke(tagColor(for: tag), lineWidth: 1.5)
                                                 .background(
-                                                    RoundedRectangle(cornerRadius: 6)
+                                                    RoundedRectangle(cornerRadius: 7) // Increased from 5 to 7
                                                         .fill(Color(colorScheme == .dark ? .black : .white).opacity(0.1))
                                                 )
                                         )
@@ -1596,13 +1921,13 @@ struct DashboardView: View {
         }
         .padding(.horizontal, {
             #if os(macOS)
-            return 28 // Reduced from 72 to 28 to align with Pinned header on macOS
+            return 28
             #else
-            return isIPad ? 24 : 72 // Reduced iPad padding from 40 to 24 for tighter fit when nav is visible
+            return isIPad ? 24 : 72
             #endif
         }())
-        .padding(.top, isIPad ? 20 : 12) // More breathing room on iPad: 20 vs 12
-        .padding(.bottom, isIPad ? 16 : 8) // More breathing room on iPad: 16 vs 8
+        .padding(.top, isIPad ? 20 : 12)
+        .padding(.bottom, isIPad ? 16 : 8)
     }
     
     private var topContainers: some View {
@@ -1980,8 +2305,7 @@ struct DashboardView: View {
                     }
                     
                     // Add haptic feedback
-                    let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
-                    impactFeedback.impactOccurred()
+                    HapticFeedback.impact(.medium)
                 } else {
                     // Non-iPad: show details modal
                     showDetails(for: document)
@@ -2057,6 +2381,28 @@ struct DashboardView: View {
             .frame(height: 325)
             #elseif os(iOS)
             // iOS: SwiftUI-based document list optimized for touch
+            let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+            
+            if isPhone {
+                // iPhone: Table always fills full width, no horizontal scrolling needed
+                VStack(alignment: .leading, spacing: 0) {
+                    // Column Header Row
+                    iosColumnHeaderRow
+                    
+                    // Document Rows
+                    ScrollView(.vertical) {
+                        LazyVStack(alignment: .leading, spacing: 0) {
+                            ForEach(Array(filteredDocuments.enumerated()), id: \.element.id) { index, document in
+                                documentRowForIndex(index, document: document)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .frame(height: 435)
+                }
+                .padding(.horizontal, 0) // iPhone: Remove padding to allow table to fill full width
+            } else {
+                // iPad: Original layout without horizontal scrolling
             VStack(spacing: 0) {
                 // Column Header Row
                 iosColumnHeaderRow
@@ -2072,7 +2418,8 @@ struct DashboardView: View {
                 .frame(height: isIPad ? nil : 435) // Remove fixed height on iPad to allow expansion
                 .frame(maxHeight: isIPad ? .infinity : 435) // Allow it to fill available space on iPad
             }
-            .padding(.horizontal, isIPad ? 20 : 16) // Add breathing room on the sides
+                .padding(.horizontal, isIPad ? 20 : 16) // iPad: original padding
+                }
             #endif
         }
         .glassmorphismBackground(cornerRadius: 12)
@@ -2085,7 +2432,19 @@ struct DashboardView: View {
         )
 
         .frame(
-            maxWidth: .infinity // Allow full width expansion when navigation is hidden
+            maxWidth: {
+                #if os(iOS)
+                let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                if isPhone {
+                    // iPhone: 93% width to match carousel cards
+                    return UIScreen.main.bounds.width * 0.93
+                } else {
+                    return .infinity // iPad: allow full width expansion
+                }
+                #else
+                return .infinity // macOS: allow full width expansion
+                #endif
+            }()
         )
         .frame(height: isIPad ? nil : 400)
         .frame(maxHeight: isIPad ? .infinity : 400) // Allow All Documents to fill remaining space on iPad
@@ -2104,7 +2463,9 @@ struct DashboardView: View {
     // iOS Column Header Row
     #if os(iOS)
     private var iosColumnHeaderRow: some View {
-        HStack(spacing: 0) {
+        let columnWidths = calculateFlexibleColumnWidths()
+        
+        return HStack(spacing: 0) {
             // Status indicators column (icons)
             Button(action: {}) {
                 HStack(spacing: 4) {
@@ -2115,18 +2476,18 @@ struct DashboardView: View {
                     let isIPad = UIDevice.current.userInterfaceIdiom == .pad
                     
                     Image(systemName: "pin.fill")
-                        .font(.system(size: isIPad ? 10 : 14))
+                        .font(.system(size: isIPad ? 10 : 9))
                         .foregroundColor(useThemeColors ? theme.accent : .orange)
                     Image(systemName: "clock.badge.checkmark")
-                        .font(.system(size: isIPad ? 10 : 14))
+                        .font(.system(size: isIPad ? 10 : 9))
                         .foregroundColor(useThemeColors ? theme.primary : .blue)
                     Image(systemName: "calendar")
-                        .font(.system(size: isIPad ? 10 : 14))
+                        .font(.system(size: isIPad ? 10 : 9))
                         .foregroundColor(useThemeColors ? theme.secondary : .green)
                 }
             }
             .buttonStyle(.plain)
-            .frame(width: UIDevice.current.userInterfaceIdiom == .pad ? 30 : 80, alignment: UIDevice.current.userInterfaceIdiom == .pad ? .center : .leading)
+            .frame(width: UIDevice.current.userInterfaceIdiom == .pad ? 30 : columnWidths.statusWidth, alignment: UIDevice.current.userInterfaceIdiom == .pad ? .center : .leading)
             
             // Add breathing room between status indicators and name column on iPad (to match row)
             #if os(iOS)
@@ -2137,31 +2498,34 @@ struct DashboardView: View {
             #endif
             
             // Name column (sortable) - icon should align with document icons in rows
-            Button(action: {
-                if selectedColumn == .name {
-                    sortAscending.toggle()
-                } else {
-                    selectedColumn = .name
-                    sortAscending = true
-                }
-                documents = sortDocuments(documents)
-            }) {
-                HStack(spacing: 4) {
-                    Text("Name")
-                        .font(.system(size: 16, weight: .medium))  // Increased from 12 to 16
-                        .foregroundColor(theme.secondary)
-                    
+            if visibleColumns.contains("name") {
+                Button(action: {
                     if selectedColumn == .name {
-                        Image(systemName: sortAscending ? "chevron.up" : "chevron.down")
-                            .font(.system(size: 12))  // Increased from 8 to 12
+                        sortAscending.toggle()
+                    } else {
+                        selectedColumn = .name
+                        sortAscending = true
+                    }
+                    documents = sortDocuments(documents)
+                }) {
+                    HStack(spacing: 4) {
+                        let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                        Text("Name")
+                            .font(.system(size: isPhone ? 13 : 16, weight: .medium))  // Smaller for iPhone
                             .foregroundColor(theme.secondary)
+                        
+                        if selectedColumn == .name {
+                            Image(systemName: sortAscending ? "chevron.up" : "chevron.down")
+                                .font(.system(size: isPhone ? 10 : 12))  // Smaller for iPhone
+                                .foregroundColor(theme.secondary)
+                        }
+                        
+                        Spacer() // This will push sort indicator to the right side of name column
                     }
                 }
+                .buttonStyle(.plain)
+                .frame(width: UIDevice.current.userInterfaceIdiom == .pad ? nil : columnWidths.nameWidth, alignment: .leading)
             }
-            .buttonStyle(.plain)
-            .frame(minWidth: 120, alignment: .leading)
-            
-            Spacer()
             
             // Series column (sortable) - if visible
             if visibleColumns.contains("series") {
@@ -2175,19 +2539,20 @@ struct DashboardView: View {
                     documents = sortDocuments(documents)
                 }) {
                     HStack(spacing: 4) {
+                        let isPhone = UIDevice.current.userInterfaceIdiom == .phone
                         Text("Series")
-                            .font(.system(size: 16, weight: .medium))  // Increased from 12 to 16
+                            .font(.system(size: isPhone ? 13 : 16, weight: .medium))  // Smaller for iPhone
                             .foregroundColor(theme.secondary)
                         
                         if selectedColumn == .series {
                             Image(systemName: sortAscending ? "chevron.up" : "chevron.down")
-                                .font(.system(size: 12))  // Increased from 8 to 12
+                                .font(.system(size: isPhone ? 10 : 12))  // Smaller for iPhone
                                 .foregroundColor(theme.secondary)
                         }
                     }
                 }
                 .buttonStyle(.plain)
-                .frame(width: 100, alignment: .leading)
+                .frame(width: UIDevice.current.userInterfaceIdiom == .pad ? 100 : columnWidths.seriesWidth, alignment: .leading)
             }
             
             // Location column (sortable) - if visible
@@ -2202,19 +2567,20 @@ struct DashboardView: View {
                     documents = sortDocuments(documents)
                 }) {
                     HStack(spacing: 4) {
+                        let isPhone = UIDevice.current.userInterfaceIdiom == .phone
                         Text("Location")
-                            .font(.system(size: 16, weight: .medium))  // Increased from 12 to 16
+                            .font(.system(size: isPhone ? 13 : 16, weight: .medium))  // Smaller for iPhone
                             .foregroundColor(theme.secondary)
                         
                         if selectedColumn == .location {
                             Image(systemName: sortAscending ? "chevron.up" : "chevron.down")
-                                .font(.system(size: 12))  // Increased from 8 to 12
+                                .font(.system(size: isPhone ? 10 : 12))  // Smaller for iPhone
                                 .foregroundColor(theme.secondary)
                         }
                     }
                 }
                 .buttonStyle(.plain)
-                .frame(width: 120, alignment: .leading)
+                .frame(width: UIDevice.current.userInterfaceIdiom == .pad ? 120 : columnWidths.locationWidth, alignment: .leading)
             }
             
             // Date column (sortable) - if visible (moved after location)
@@ -2229,19 +2595,20 @@ struct DashboardView: View {
                     documents = sortDocuments(documents)
                 }) {
                     HStack(spacing: 4) {
+                        let isPhone = UIDevice.current.userInterfaceIdiom == .phone
                         Text("Modified")
-                            .font(.system(size: 16, weight: .medium))  // Increased from 12 to 16
+                            .font(.system(size: isPhone ? 13 : 16, weight: .medium))  // Smaller for iPhone
                             .foregroundColor(theme.secondary)
                         
                         if selectedColumn == .date {
                             Image(systemName: sortAscending ? "chevron.up" : "chevron.down")
-                                .font(.system(size: 12))  // Increased from 8 to 12
+                                .font(.system(size: isPhone ? 10 : 12))  // Smaller for iPhone
                                 .foregroundColor(theme.secondary)
                         }
                     }
                 }
                 .buttonStyle(.plain)
-                .frame(width: 90, alignment: .leading)
+                .frame(width: UIDevice.current.userInterfaceIdiom == .pad ? 90 : columnWidths.dateWidth, alignment: .leading)
             }
             
             // Created date column - if visible
@@ -2256,31 +2623,35 @@ struct DashboardView: View {
                     documents = sortDocuments(documents)
                 }) {
                     HStack(spacing: 4) {
+                        let isPhone = UIDevice.current.userInterfaceIdiom == .phone
                         Text("Created")
-                            .font(.system(size: 16, weight: .medium))  // Increased from 12 to 16
+                            .font(.system(size: isPhone ? 13 : 16, weight: .medium))  // Smaller for iPhone
                             .foregroundColor(theme.secondary)
                         
                         if selectedColumn == .createdDate {
                             Image(systemName: sortAscending ? "chevron.up" : "chevron.down")
-                                .font(.system(size: 12))  // Increased from 8 to 12
+                                .font(.system(size: isPhone ? 10 : 12))  // Smaller for iPhone
                                 .foregroundColor(theme.secondary)
                         }
                     }
                 }
                 .buttonStyle(.plain)
-                .frame(width: 80, alignment: .leading)
+                .frame(width: UIDevice.current.userInterfaceIdiom == .pad ? 80 : columnWidths.createdDateWidth, alignment: .leading)
             }
             
-            // Add spacing before Actions column
+            // Add spacing before Actions column (iPad only)
+            let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+            if !isPhone {
             Spacer().frame(width: 16)
             
-            // Actions column
+                // Actions column (iPad only)
             Text("Actions")
-                .font(.system(size: 16, weight: .medium))  // Increased from 12 to 16
+                    .font(.system(size: 16, weight: .medium))
                 .foregroundColor(theme.secondary)
-                .frame(width: 80, alignment: .center)
+                    .frame(width: 80, alignment: .center)
+            }
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, 0) // iPhone: Remove padding to match table content
         .padding(.vertical, 8)
         .overlay(
             Rectangle()
@@ -2333,8 +2704,8 @@ struct DashboardView: View {
                 #if os(iOS)
                 let isPhone = UIDevice.current.userInterfaceIdiom == .phone
                 if isPhone {
-                    // iPhone: narrower cards that are centered properly
-                    return screenWidth * 0.7
+                    // iPhone: consistent card width with breathing room on both sides
+                    return screenWidth * 0.93 // Full width with breathing room (increased to 93%)
                 } else {
                     // iPad: original sizing
                     return shouldAddNavigationPadding ? (screenWidth - allDocumentsLeftEdge) * 0.8 : screenWidth * 0.75
@@ -2487,18 +2858,8 @@ struct DashboardView: View {
             #if os(iOS)
             let isPhone = UIDevice.current.userInterfaceIdiom == .phone
             if isPhone {
-                // iPhone: Simple centering logic
-                if shouldAddNavigationPadding {
-                    // Navigation visible: align left edge of centered card with All Documents
-                    let allDocumentsLeftPadding = navPadding
-                    let allDocumentsLeftEdge = allDocumentsLeftPadding + 10 // Add the horizontal padding from All Documents
-                    // Account for the carousel container's shadowPadding (40pt) that shifts everything right
-                    let centeredCardLeftEdge = allDocumentsLeftEdge - shadowPadding
-                    centerX = centeredCardLeftEdge + (cardWidth / 2) + xOffset + dragOffset
-                } else {
-                    // Navigation hidden: center the cards in the available space
-                    centerX = totalWidth / 2 + xOffset + dragOffset
-                }
+                // iPhone: Center the carousel cards with proper spacing, accounting for shadowPadding
+                centerX = (totalWidth / 2) + xOffset + dragOffset - shadowPadding
             } else {
                 // iPad: Proper alignment with All Documents list
                 if shouldAddNavigationPadding {
@@ -2720,10 +3081,7 @@ struct DashboardView: View {
                         }
                         
                         // Add haptic feedback
-                        #if os(iOS)
-                        let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
-                        impactFeedback.impactOccurred()
-                        #endif
+                        HapticFeedback.impact(.medium)
                     }
                 }
         )
@@ -2908,6 +3266,56 @@ struct DashboardView: View {
             showExpandButtons: shouldShowExpandButtons // separate parameter for expand buttons
         )
         .frame(maxWidth: CGFloat.infinity)
+    }
+
+    // NEW: Carousel Navigation Pills
+    private var carouselNavigationPills: some View {
+        HStack(spacing: 6) {
+            ForEach(0..<carouselSections.count, id: \.self) { index in
+                Button(action: {
+                    withAnimation(.spring(response: 0.6, dampingFraction: 0.75)) {
+                        selectedCarouselIndex = index
+                        saveCarouselPosition()
+                    }
+                }) {
+                    HStack(spacing: 5) {
+                        // Icon for each section
+                        Image(systemName: {
+                            switch index {
+                            case 0: return "pin.fill"
+                            case 1: return "clock.badge.checkmark"
+                            case 2: return "calendar"
+                            default: return "doc.text"
+                            }
+                        }())
+                        .font(.system(size: 11, weight: .medium)) // Slightly smaller icon
+                        
+                        // Title for each section
+                        Text({
+                            switch index {
+                            case 0: return "Pinned"
+                            case 1: return "WIP"
+                            case 2: return "Schedule"
+                            default: return "Section"
+                            }
+                        }())
+                        .font(.custom("InterTight-Medium", size: 12)) // Slightly smaller text
+                    }
+                    .foregroundStyle(selectedCarouselIndex == index ? .white : theme.primary)
+                    .padding(.horizontal, 10) // Slightly smaller horizontal padding
+                    .padding(.vertical, 7) // Slightly smaller vertical padding
+                    .background(
+                        RoundedRectangle(cornerRadius: 14) // Slightly smaller corner radius
+                            .fill(selectedCarouselIndex == index ? theme.accent : theme.accent.opacity(0.1))
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .frame(maxWidth: .infinity) // Center the pills in the available space
+        .padding(.horizontal, 20) // Consistent horizontal padding for centering
+        .padding(.vertical, 12)
+        .animation(.spring(response: 0.6, dampingFraction: 0.75), value: showFloatingSidebar)
     }
 }
 

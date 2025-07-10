@@ -102,6 +102,7 @@ struct SimpleIOSTextView: UIViewRepresentable {
         scrollView.showsVerticalScrollIndicator = true
         scrollView.alwaysBounceVertical = true
         scrollView.delegate = context.coordinator
+        scrollView.keyboardDismissMode = .interactive // Enable swipe-to-dismiss keyboard
         
         // Configure text view
         textView.delegate = context.coordinator
@@ -216,6 +217,17 @@ struct SimpleIOSTextView: UIViewRepresentable {
                 return
             }
             
+            // Animate the toolbar fade-in along with keyboard appearance
+            if let toolbar = textView.inputAccessoryView {
+                toolbar.alpha = 0.0
+                UIView.animate(withDuration: animationDuration,
+                             delay: 0,
+                             options: [.curveEaseInOut],
+                             animations: {
+                    toolbar.alpha = 1.0
+                })
+            }
+            
             // Check if the document text view is NOT the first responder (likely a header TextField is focused)
             if !textView.isFirstResponder {
                 print("🎹 Document text view is not first responder (likely header TextField), skipping auto-scroll to cursor")
@@ -284,11 +296,26 @@ struct SimpleIOSTextView: UIViewRepresentable {
         
         @objc private func keyboardWillHide(_ notification: Notification) {
             guard let scrollView = scrollView,
+                  let textView = textView,
                   let animationDuration = notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double else {
                 return
             }
             
-            // Reset content insets
+            // Animate the toolbar fade-out along with keyboard dismissal
+            if let toolbar = textView.inputAccessoryView {
+                UIView.animate(withDuration: animationDuration, 
+                             delay: 0,
+                             options: [.curveEaseInOut],
+                             animations: {
+                    toolbar.alpha = 0.0
+                }, completion: { _ in
+                    // After animation completes, dismiss the text view and reset toolbar alpha
+                    textView.resignFirstResponder()
+                    toolbar.alpha = 1.0
+                })
+            }
+            
+            // Reset content insets with animation
             UIView.animate(withDuration: animationDuration) {
                 scrollView.contentInset = .zero
                 scrollView.scrollIndicatorInsets = .zero
