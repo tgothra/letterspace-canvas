@@ -23,7 +23,7 @@ struct CircularMenuButton: View {
                 // Solid green background circle
                 Circle()
                     .fill(theme.accent)
-                    .frame(width: 48, height: 48)
+                    .frame(width: 56, height: 56)
                 .overlay(
                     Circle()
                         .stroke(
@@ -37,34 +37,36 @@ struct CircularMenuButton: View {
                             ),
                             lineWidth: 1
                         )
-                        .frame(width: 48, height: 48)
+                        .frame(width: 56, height: 56)
                 )
                 .clipShape(Circle())
                 
                 // Menu icon (hamburger or close) - white on green background
-                VStack(spacing: 3) {
+                VStack(spacing: 3.5) {
                     RoundedRectangle(cornerRadius: 1)
                         .fill(Color.white)
-                        .frame(width: 14, height: 2)
+                        .frame(width: 16, height: 2.5)
                         .rotationEffect(.degrees(isMenuOpen ? 45 : 0))
-                        .offset(y: isMenuOpen ? 2.5 : 0)
+                        .offset(y: isMenuOpen ? 3 : 0)
                     
                     if !isMenuOpen {
                         RoundedRectangle(cornerRadius: 1)
                             .fill(Color.white)
-                            .frame(width: 14, height: 2)
+                            .frame(width: 16, height: 2.5)
                             .opacity(isMenuOpen ? 0 : 1)
                     }
                     
                     RoundedRectangle(cornerRadius: 1)
                         .fill(Color.white)
-                        .frame(width: 14, height: 2)
+                        .frame(width: 16, height: 2.5)
                         .rotationEffect(.degrees(isMenuOpen ? -45 : 0))
-                        .offset(y: isMenuOpen ? -2.5 : 0)
+                        .offset(y: isMenuOpen ? -3 : 0)
                 }
                 .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isMenuOpen)
             }
         }
+        .frame(width: 65, height: 65) // Increased tappable area
+        .contentShape(Rectangle()) // Makes entire frame tappable
         .buttonStyle(.plain)
         .scaleEffect(isPressed ? 0.95 : 1.0)
         .onTapGesture {
@@ -101,11 +103,10 @@ struct CircularMenuOverlay: View {
     
     var body: some View {
         ZStack {
-            // Background overlay - transparent but still allows tap to close
-            Rectangle()
-                .fill(Color.clear)
-                .ignoresSafeArea()
+            // Background overlay - clear like modals
+            Color.clear
                 .contentShape(Rectangle())
+                .ignoresSafeArea()
                 .onTapGesture {
                     closeMenu()
                 }
@@ -130,6 +131,7 @@ struct CircularMenuOverlay: View {
                             menuItem(icon: "trash", title: "Recently Deleted", action: onRecentlyDeleted)
                             menuItem(icon: "person.crop.circle.fill", title: "Settings", action: onSettings, isUserProfile: true)
                         }
+                        .padding(.vertical, 10) // Add breathing room above and below menu items
                         .frame(width: 250)
                         .background(
                             RoundedRectangle(cornerRadius: 20)

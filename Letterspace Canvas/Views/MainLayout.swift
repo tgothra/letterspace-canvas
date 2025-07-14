@@ -298,10 +298,7 @@ struct MainLayout: View {
                 print("🔄 Posted DocumentListDidUpdate notification after switching to dashboard")
             }
         }
-        // Apply blur to background content when any modal is shown
-        .blur(radius: showUserProfileModal || showRecentlyDeletedModal || showSmartStudyModal || showBibleReaderModal || showFoldersModal || showExportModal || showSettingsModal ? 6 : 0)
-        .opacity(showUserProfileModal || showRecentlyDeletedModal || showSmartStudyModal || showBibleReaderModal || showFoldersModal || showExportModal || showSettingsModal ? 0.7 : 1.0)
-        .animation(.easeInOut(duration: 0.2), value: showUserProfileModal || showRecentlyDeletedModal || showSmartStudyModal || showBibleReaderModal || showFoldersModal || showExportModal || showSettingsModal)
+        // Modal overlays will be applied at the layout level
         // Modal overlays (clean, no backdrop)
         .overlay {
                 if showUserProfileModal {
@@ -1736,12 +1733,14 @@ private func mainContentView(availableWidth: CGFloat) -> some View {
     @ViewBuilder
     private func macOSLayout(geometry: GeometryProxy) -> some View {
         ZStack {
-            // Gradient wallpaper background
-            Rectangle()
-                .fill(gradientManager.getCurrentGradient(for: colorScheme))
-                .ignoresSafeArea()
-            
-            HStack(spacing: 0) {
+            // Main content area (background + content) - this gets blurred for modals
+            Group {
+                // Gradient wallpaper background
+                Rectangle()
+                    .fill(gradientManager.getCurrentGradient(for: colorScheme))
+                    .ignoresSafeArea()
+                
+                HStack(spacing: 0) {
                 let isLeftSidebarActuallyVisible = !viewMode.isDistractionFreeMode
                 
                 #if os(macOS)
@@ -2185,6 +2184,11 @@ private func mainContentView(availableWidth: CGFloat) -> some View {
                 .ignoresSafeArea()
             }
             #endif
+            }
+            // Apply blur to main content area when any modal is shown
+            .blur(radius: showUserProfileModal || showRecentlyDeletedModal || showSmartStudyModal || showBibleReaderModal || showFoldersModal || showExportModal || showSettingsModal || isCircularMenuOpen ? 6 : 0)
+            .opacity(showUserProfileModal || showRecentlyDeletedModal || showSmartStudyModal || showBibleReaderModal || showFoldersModal || showExportModal || showSettingsModal || isCircularMenuOpen ? 0.7 : 1.0)
+            .animation(.easeInOut(duration: 0.2), value: showUserProfileModal || showRecentlyDeletedModal || showSmartStudyModal || showBibleReaderModal || showFoldersModal || showExportModal || showSettingsModal || isCircularMenuOpen)
             
             // Floating Action Buttons (iPhone only)
             #if os(iOS)
@@ -2211,9 +2215,9 @@ private func mainContentView(availableWidth: CGFloat) -> some View {
                                     }
                                 }) {
                                     Image(systemName: viewMode.isDistractionFreeMode ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
-                                        .font(.system(size: 16, weight: .medium))
+                                        .font(.system(size: 18, weight: .medium))
                                         .foregroundStyle(theme.primary)
-                                        .frame(width: 48, height: 48)
+                                        .frame(width: 56, height: 56)
                                         .background(
                                             ZStack {
                                                 // Base blur
@@ -2251,6 +2255,8 @@ private func mainContentView(availableWidth: CGFloat) -> some View {
                                         .clipShape(Circle())
                                         .shadow(color: Color.black.opacity(0.2), radius: 8, x: 0, y: 2)
                                 }
+                                .frame(width: 65, height: 65) // Increased tappable area
+                                .contentShape(Rectangle()) // Makes entire frame tappable
                                 .buttonStyle(.plain)
                                 .scaleEffect(isHoveringDistraction ? 1.05 : 1.0)
                                 .onHover { hovering in
