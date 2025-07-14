@@ -455,52 +455,40 @@ struct BibleReaderView: View {
     var onDismiss: () -> Void
     
     var body: some View {
-        VStack(spacing: 0) {
-            // Header with navigation
-            headerView
-            
-            Divider()
-            
-            // Main content
-            HStack(spacing: 0) {
-                // Left sidebar with book selection - conditionally visible on iPad
-                #if os(iOS)
-                if UIDevice.current.userInterfaceIdiom == .pad {
-                    if isBookSelectorSidebarVisible {
-                bookSelectorSidebar
-                            .transition(.move(edge: .leading))
-                Divider()
+        #if os(iOS)
+        let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+        #endif
+        
+        Group {
+            #if os(iOS)
+            if isPhone {
+                // iPhone: Wrap in ScrollView for content that might overflow
+                ScrollView {
+                    VStack(spacing: 0) {
+                        bibleReaderBody
                     }
-                } else {
-                    // On iPhone, sidebar is always present if it were part of this layout
-                    // Or handle iPhone-specific layout if different
-                    bookSelectorSidebar
-                    Divider()
+                    .padding(.bottom, 20)  // Add bottom padding for scroll content
                 }
-                #else // macOS
-                // On macOS, sidebar is always present
-                bookSelectorSidebar
-                Divider()
-                #endif
-                
-                // Main reading area with splash page overlay
-                ZStack {
-                    // Bible content area
-                    readingArea
-                    
-                    // Splash page overlay - only covers the reading area, not the sidebar
-                    if showingSplashPage {
-                        splashPageView
-                            .background(theme.surface)
-                    }
+                .clipped() // Prevent content from expanding beyond bounds
+            } else {
+                // iPad: Use regular VStack
+                VStack(spacing: 0) {
+                    bibleReaderBody
                 }
             }
+            #else
+            // macOS: Use regular VStack
+            VStack(spacing: 0) {
+                bibleReaderBody
+            }
+            #endif
         }
         .modifier(BibleReaderFrameModifier())
         .background(theme.surface)
         .cornerRadius(12)
         .shadow(color: Color.black.opacity(0.1), radius: 20, x: 0, y: 10)
         .shadow(color: Color.black.opacity(0.05), radius: 6, x: 0, y: 4)
+        .animation(.none) // Disable all layout animations
         .onAppear {
             // Load last read position
             selectedBook = readerData.lastReadBook
@@ -513,33 +501,256 @@ struct BibleReaderView: View {
             }
             
             // Load the content in the background while showing splash page
+            // For iPhone, preload content immediately to prevent layout changes
+            #if os(iOS)
+            let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+            if isPhone {
+                // Preload content without showing loading state
+                Task {
+                    do {
+                        let result = try await BibleAPI.fetchChapter(
+                            book: selectedBook,
+                            chapter: selectedChapter,
+                            translation: selectedTranslation,
+                            focusedVerses: []
+                        )
+                        
+                        await MainActor.run {
+                            chapterData = result
+                            // Don't change isLoading state to prevent layout changes
+                        }
+                    } catch {
+                        await MainActor.run {
+                            errorMessage = error.localizedDescription
+                        }
+                    }
+                }
+            } else {
+                loadCurrentChapter()
+            }
+            #else
             loadCurrentChapter()
+            #endif
         }
         .sheet(isPresented: $showingAddBookmarkSheet) {
             addBookmarkView
         }
     }
     
-    private var headerView: some View {
-        HStack {
-            #if os(iOS)
-            // Add a button to toggle sidebar visibility only on iPad
-            if UIDevice.current.userInterfaceIdiom == .pad {
-                Button(action: {
-                    withAnimation(.easeInOut) {
-                        isBookSelectorSidebarVisible.toggle()
+    private var bibleReaderBody: some View {
+        Group {
+            // Header with navigation
+            headerView
+            
+            Divider()
+            
+            // Main content
+            HStack(spacing: 0) {
+                // Left sidebar with book selection - Hide on iPhone due to space constraints
+                #if os(iOS)
+                if UIDevice.current.userInterfaceIdiom == .pad {
+                    if isBookSelectorSidebarVisible {
+                bookSelectorSidebar
+                            .transition(.move(edge: .leading))
+                Divider()
                     }
-                }) {
-                    Image(systemName: isBookSelectorSidebarVisible ? "sidebar.left" : "sidebar.squares.left")
-                        .font(.system(size: 18, weight: .medium)) // Increased from 16
-                        .foregroundColor(.blue)
-                        .frame(width: 44, height: 44) // Increased from 32x32
-                        .contentShape(Rectangle()) // Better tap area
                 }
-                .buttonStyle(.plain)
-                .padding(.trailing, 12) // Increased spacing
+                // iPhone: Hide sidebar completely due to 340pt width constraint
+                #else // macOS
+                // On macOS, sidebar is always present
+                bookSelectorSidebar
+                Divider()
+                #endif
+                
+                // Main reading area with splash page overlay
+                #if os(iOS)
+                let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                if isPhone {
+                    // iPhone: Use conditional rendering instead of ZStack to prevent layout changes
+                    Group {
+                        if showingSplashPage {
+                            splashPageView
+                                .background(theme.surface)
+                        } else {
+                            readingArea
+                        }
+                    }
+                } else {
+                    // iPad: Use ZStack overlay
+                    ZStack {
+                        readingArea
+                        
+                        if showingSplashPage {
+                            splashPageView
+                                .background(theme.surface)
+                        }
+                    }
+                }
+                #else
+                // macOS: Use ZStack overlay
+                ZStack {
+                    readingArea
+                    
+                    if showingSplashPage {
+                        splashPageView
+                            .background(theme.surface)
+                    }
+                }
+                #endif
             }
+        }
+    }
+    
+    private var headerView: some View {
+        Group {
+            #if os(iOS)
+            let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+            
+            if isPhone {
+                // iPhone: Separate title and navigation layout
+                VStack(spacing: 12) {
+                    // Title section
+                    HStack {
+                        Text("Bible Reader")
+                            .font(.system(size: 18, weight: .semibold))
+                        
+                        Spacer()
+                        
+                        // Close button - removed for iPhone, only show on iPad/macOS
+                    }
+                    
+                    // Navigation section
+                    if !showingSplashPage {
+                        HStack(spacing: 8) {
+                            // Book selector
+                            Menu {
+                                ForEach(allBooks, id: \.0) { book, chapterCount in
+                                    Button(book) {
+                                        selectedBook = book
+                                        maxChapters = chapterCount
+                                        selectedChapter = 1
+                                        loadCurrentChapter()
+                                    }
+                                }
+                            } label: {
+                                Text(selectedBook)
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(.blue)
+                                    .frame(height: 32)
+                                    .padding(.horizontal, 12)
+                                    .background(Color.blue.opacity(0.1))
+                                    .cornerRadius(8)
+                            }
+                            
+                            // Chapter selector
+                            Menu {
+                                ForEach(1...maxChapters, id: \.self) { chapter in
+                                    Button("\(chapter)") {
+                                        selectedChapter = chapter
+                                        loadCurrentChapter()
+                                    }
+                                }
+                            } label: {
+                                Text("\(selectedChapter)")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(.blue)
+                                    .frame(width: 32, height: 32)
+                                    .background(Color.blue.opacity(0.1))
+                                    .cornerRadius(8)
+                            }
+                            
+                            Spacer()
+                            
+                            // Navigation arrows - centered
+                            HStack(spacing: 8) {
+                                Button(action: loadPreviousChapter) {
+                                    Image(systemName: "chevron.left")
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundColor(.blue)
+                                        .frame(width: 32, height: 32)
+                                        .background(Circle().fill(Color.blue.opacity(0.1)))
+                                        .contentShape(Circle())
+                                }
+                                .buttonStyle(.plain)
+                                
+                                Button(action: loadNextChapter) {
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundColor(.blue)
+                                        .frame(width: 32, height: 32)
+                                        .background(Circle().fill(Color.blue.opacity(0.1)))
+                                        .contentShape(Circle())
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            
+                            Spacer()
+                            
+                            // Action buttons - right aligned
+                            HStack(spacing: 8) {
+                                Button(action: {
+                                    bookmarkNotes = ""
+                                    currentVerseForBookmark = 1
+                                    showingAddBookmarkSheet = true
+                                }) {
+                                    Image(systemName: "bookmark")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(.blue)
+                                        .frame(width: 32, height: 32)
+                                        .background(Circle().fill(Color.blue.opacity(0.1)))
+                                        .contentShape(Circle())
+                                }
+                                .buttonStyle(.plain)
+                                
+                                Button(action: {
+                                    readerData.saveLastRead(book: selectedBook, chapter: selectedChapter, translation: selectedTranslation)
+                                    withAnimation(.easeInOut(duration: 0.3)) {
+                                        showingSplashPage = true
+                                    }
+                                }) {
+                                    Image(systemName: "house")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(.blue)
+                                        .frame(width: 32, height: 32)
+                                        .background(Circle().fill(Color.blue.opacity(0.1)))
+                                        .contentShape(Circle())
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 8)
+                .padding(.top, 4) // Add breathing room at the top for iPhone
+                .background(theme.surface)
+            } else {
+                // iPad: Original layout
+                iPadHeaderLayout
+            }
+            #else
+            // macOS: Original layout
+            macOSHeaderLayout
             #endif
+        }
+    }
+    
+    private var iPadHeaderLayout: some View {
+        HStack {
+            // Add a button to toggle sidebar visibility only on iPad
+            Button(action: {
+                withAnimation(.easeInOut) {
+                    isBookSelectorSidebarVisible.toggle()
+                }
+            }) {
+                Image(systemName: isBookSelectorSidebarVisible ? "sidebar.left" : "sidebar.squares.left")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundColor(.blue)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .padding(.trailing, 12)
 
             Text("Bible Reader")
                 .font(.system(size: 24, weight: .semibold))
@@ -548,14 +759,14 @@ struct BibleReaderView: View {
             
             if !showingSplashPage {
                 // Centered navigation section
-                HStack(spacing: 16) { // Increased spacing between elements
+                HStack(spacing: 16) {
                     Button(action: loadPreviousChapter) {
                         Image(systemName: "chevron.left")
-                            .font(.system(size: 16, weight: .medium)) // Increased from 14
+                            .font(.system(size: 16, weight: .medium))
                             .foregroundColor(.blue)
-                            .frame(width: 44, height: 44) // Increased from 32x32
+                            .frame(width: 44, height: 44)
                             .background(Circle().fill(Color.blue.opacity(0.1)))
-                            .contentShape(Circle()) // Better tap area
+                            .contentShape(Circle())
                     }
                     .buttonStyle(.plain)
                     .help("Previous Chapter")
@@ -578,7 +789,7 @@ struct BibleReaderView: View {
                             }
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
-                            .contentShape(Rectangle()) // Better tap area
+                            .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                         .help("Change Bible Translation")
@@ -589,11 +800,11 @@ struct BibleReaderView: View {
                     
                     Button(action: loadNextChapter) {
                         Image(systemName: "chevron.right")
-                            .font(.system(size: 16, weight: .medium)) // Increased from 14
+                            .font(.system(size: 16, weight: .medium))
                             .foregroundColor(.blue)
-                            .frame(width: 44, height: 44) // Increased from 32x32
+                            .frame(width: 44, height: 44)
                             .background(Circle().fill(Color.blue.opacity(0.1)))
-                            .contentShape(Circle()) // Better tap area
+                            .contentShape(Circle())
                     }
                     .buttonStyle(.plain)
                     .help("Next Chapter")
@@ -601,54 +812,170 @@ struct BibleReaderView: View {
                 
                 Spacer()
                 
-                // Right side buttons with improved sizing
-                HStack(spacing: 12) { // Added spacing between buttons
-                // Bookmark button
-                Button(action: {
-                    bookmarkNotes = ""
-                    currentVerseForBookmark = 1 // Default to verse 1
-                    showingAddBookmarkSheet = true
-                }) {
-                    Image(systemName: "bookmark")
-                            .font(.system(size: 16)) // Increased from 12
-                        .foregroundColor(.blue)
-                            .frame(width: 44, height: 44) // Increased from 26x26
-                        .background(Circle().fill(Color.blue.opacity(0.1)))
-                            .contentShape(Circle()) // Better tap area
-                }
-                .buttonStyle(.plain)
-                .help("Bookmark this chapter")
-                
-                // Home button to return to splash page
-                Button(action: {
-                    // Save current position before returning to splash page
-                    readerData.saveLastRead(book: selectedBook, chapter: selectedChapter, translation: selectedTranslation)
-                    withAnimation(.easeInOut(duration: 0.3)) {
-                        showingSplashPage = true
+                // Right side buttons
+                HStack(spacing: 12) {
+                    // Bookmark button
+                    Button(action: {
+                        bookmarkNotes = ""
+                        currentVerseForBookmark = 1
+                        showingAddBookmarkSheet = true
+                    }) {
+                        Image(systemName: "bookmark")
+                            .font(.system(size: 16))
+                            .foregroundColor(.blue)
+                            .frame(width: 44, height: 44)
+                            .background(Circle().fill(Color.blue.opacity(0.1)))
+                            .contentShape(Circle())
                     }
-                }) {
-                    Image(systemName: "house")
-                            .font(.system(size: 16)) // Increased from 12
-                        .foregroundColor(.blue)
-                            .frame(width: 44, height: 44) // Increased from 26x26
-                        .background(Circle().fill(Color.blue.opacity(0.1)))
-                            .contentShape(Circle()) // Better tap area
-                }
-                .buttonStyle(.plain)
-                .help("Return to home")
+                    .buttonStyle(.plain)
+                    .help("Bookmark this chapter")
+                    
+                    // Home button
+                    Button(action: {
+                        readerData.saveLastRead(book: selectedBook, chapter: selectedChapter, translation: selectedTranslation)
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            showingSplashPage = true
+                        }
+                    }) {
+                        Image(systemName: "house")
+                            .font(.system(size: 16))
+                            .foregroundColor(.blue)
+                            .frame(width: 44, height: 44)
+                            .background(Circle().fill(Color.blue.opacity(0.1)))
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .help("Return to home")
                 }
             } else {
-                Spacer() // When splash page is showing, just add spacer before close button
+                Spacer()
             }
             
-            // Close button - always visible, increased size
+            // Close button
             Button(action: onDismiss) {
                 Image(systemName: "xmark")
-                    .font(.system(size: 14, weight: .bold)) // Increased from 10
+                    .font(.system(size: 14, weight: .bold))
                     .foregroundColor(.white)
-                    .frame(width: 36, height: 36) // Increased from 22x22
+                    .frame(width: 36, height: 36)
                     .background(Circle().fill(Color.gray.opacity(0.5)))
-                    .contentShape(Circle()) // Better tap area
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 16)
+        .background(theme.surface)
+    }
+    
+    private var macOSHeaderLayout: some View {
+        HStack {
+            Text("Bible Reader")
+                .font(.system(size: 24, weight: .semibold))
+            
+            Spacer()
+            
+            if !showingSplashPage {
+                // Centered navigation section
+                HStack(spacing: 16) {
+                    Button(action: loadPreviousChapter) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(.blue)
+                            .frame(width: 44, height: 44)
+                            .background(Circle().fill(Color.blue.opacity(0.1)))
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .help("Previous Chapter")
+                    
+                    VStack(spacing: 2) {
+                        Text("\(selectedBook) \(selectedChapter)")
+                            .font(.system(size: 16, weight: .bold))
+                        
+                        // Clickable translation selector
+                        Button(action: {
+                            showingTranslationSelector = true
+                        }) {
+                            HStack(spacing: 4) {
+                                Text(selectedTranslationName)
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.secondary)
+                                Image(systemName: "chevron.down")
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .help("Change Bible Translation")
+                        .popover(isPresented: $showingTranslationSelector) {
+                            translationSelectorPopover
+                        }
+                    }
+                    
+                    Button(action: loadNextChapter) {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(.blue)
+                            .frame(width: 44, height: 44)
+                            .background(Circle().fill(Color.blue.opacity(0.1)))
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .help("Next Chapter")
+                }
+                
+                Spacer()
+                
+                // Right side buttons
+                HStack(spacing: 12) {
+                    // Bookmark button
+                    Button(action: {
+                        bookmarkNotes = ""
+                        currentVerseForBookmark = 1
+                        showingAddBookmarkSheet = true
+                    }) {
+                        Image(systemName: "bookmark")
+                            .font(.system(size: 16))
+                            .foregroundColor(.blue)
+                            .frame(width: 44, height: 44)
+                            .background(Circle().fill(Color.blue.opacity(0.1)))
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .help("Bookmark this chapter")
+                    
+                    // Home button
+                    Button(action: {
+                        readerData.saveLastRead(book: selectedBook, chapter: selectedChapter, translation: selectedTranslation)
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            showingSplashPage = true
+                        }
+                    }) {
+                        Image(systemName: "house")
+                            .font(.system(size: 16))
+                            .foregroundColor(.blue)
+                            .frame(width: 44, height: 44)
+                            .background(Circle().fill(Color.blue.opacity(0.1)))
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .help("Return to home")
+                }
+            } else {
+                Spacer()
+            }
+            
+            // Close button
+            Button(action: onDismiss) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(width: 36, height: 36)
+                    .background(Circle().fill(Color.gray.opacity(0.5)))
+                    .contentShape(Circle())
             }
             .buttonStyle(.plain)
         }
@@ -945,88 +1272,281 @@ struct BibleReaderView: View {
     private var readingArea: some View {
         VStack(spacing: 0) {
             ScrollView(.vertical) {
-                VStack(alignment: .leading, spacing: 0) {
-                    // Show loading overlay if we're loading a new chapter
-                    if isLoading {
-                        HStack {
-                            ProgressView()
-                                .controlSize(.small)
-                            Text("Loading \(selectedBook) \(selectedChapter)...")
-                                .font(.system(size: 12))
-                                .foregroundColor(.secondary)
-                            Spacer()
-                        }
-                        .padding(.horizontal, 32)
-                        .padding(.vertical, 12)
-                        .background(Color.blue.opacity(0.05))
+                #if os(iOS)
+                let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                // iPhone: Use regular VStack to prevent lazy loading layout changes
+                if isPhone {
+                    VStack(alignment: .leading, spacing: 0) {
+                        iPhoneReadingContent
                     }
-                    
-                    if let chapter = chapterData, !isLoading {
-                        // Show verses when we have chapter data and aren't loading
-                        ForEach(chapter.verses) { verse in
-                            verseView(verse)
-                        }
-                    } else if let errorMessage = errorMessage {
-                        // Error state
-                        VStack(spacing: 16) {
-                            Spacer()
-                                .frame(height: 30)
-                            Image(systemName: "exclamationmark.triangle")
-                                .font(.system(size: 24))
-                                .foregroundColor(.orange)
-                            Text("Error loading chapter")
-                                .font(.system(size: 16, weight: .medium))
-                            Text(errorMessage)
-                                .font(.system(size: 12))
-                                .foregroundColor(.secondary)
-                                .multilineTextAlignment(.center)
-                                .padding(.horizontal, 40)
-                            Spacer()
-                        }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .padding(.bottom, 40)
-                    } else if !isLoading {
-                        // Only show placeholder if not loading
-                        VStack(spacing: 16) {
-                            Spacer()
-                                .frame(height: 30)
-                            Image(systemName: "book.closed")
-                                .font(.system(size: 48))
-                                .foregroundColor(.blue)
-                            Text("Select a chapter to read")
-                                .font(.system(size: 16, weight: .medium))
-                            Spacer()
-                        }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .padding(.bottom, 40)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 12)
+                } else {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        iPadReadingContent
                     }
+                    .padding(.horizontal, 32)
+                    .padding(.vertical, 24)
+                }
+                #else
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    macOSReadingContent
                 }
                 .padding(.horizontal, 32)
                 .padding(.vertical, 24)
+                #endif
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(theme.surface)
     }
     
-    private func verseView(_ verse: BibleVerse) -> some View {
-        HStack(alignment: .top, spacing: 12) {
+    // iPhone-specific content with no loading states
+    @ViewBuilder
+    private var iPhoneReadingContent: some View {
+        if let chapter = chapterData {
+            // iPhone: Always show verses if data is available
+            ForEach(chapter.verses) { verse in
+                iPhoneVerseView(verse)
+            }
+        } else if let errorMessage = errorMessage {
+            // Error state
+            VStack(spacing: 12) {
+                Spacer().frame(height: 20)
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.system(size: 24))
+                    .foregroundColor(.orange)
+                Text("Error loading chapter")
+                    .font(.system(size: 16, weight: .medium))
+                Text(errorMessage)
+                    .font(.system(size: 12))
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 24)
+                Spacer()
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.bottom, 20)
+        } else {
+            // Placeholder
+            VStack(spacing: 12) {
+                Spacer().frame(height: 20)
+                Image(systemName: "book.closed")
+                    .font(.system(size: 40))
+                    .foregroundColor(.blue)
+                Text("Select a chapter to read")
+                    .font(.system(size: 16, weight: .medium))
+                Spacer()
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.bottom, 20)
+        }
+    }
+    
+    // iPad-specific content with loading states
+    @ViewBuilder
+    private var iPadReadingContent: some View {
+        if isLoading {
+            HStack {
+                ProgressView()
+                    .controlSize(.small)
+                Text("Loading \(selectedBook) \(selectedChapter)...")
+                    .font(.system(size: 12))
+                    .foregroundColor(.secondary)
+                Spacer()
+            }
+            .padding(.horizontal, 32)
+            .padding(.vertical, 12)
+            .background(Color.blue.opacity(0.05))
+        }
+        
+        if let chapter = chapterData, !isLoading {
+            ForEach(chapter.verses) { verse in
+                verseView(verse)
+                    .animation(.none, value: verse.id)
+            }
+        } else if let errorMessage = errorMessage {
+            VStack(spacing: 16) {
+                Spacer().frame(height: 30)
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.system(size: 24))
+                    .foregroundColor(.orange)
+                Text("Error loading chapter")
+                    .font(.system(size: 16, weight: .medium))
+                Text(errorMessage)
+                    .font(.system(size: 12))
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 40)
+                Spacer()
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.bottom, 40)
+        } else if !isLoading {
+            VStack(spacing: 16) {
+                Spacer().frame(height: 30)
+                Image(systemName: "book.closed")
+                    .font(.system(size: 48))
+                    .foregroundColor(.blue)
+                Text("Select a chapter to read")
+                    .font(.system(size: 16, weight: .medium))
+                Spacer()
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.bottom, 40)
+        }
+    }
+    
+    // macOS-specific content with loading states
+    @ViewBuilder
+    private var macOSReadingContent: some View {
+        if isLoading {
+            HStack {
+                ProgressView()
+                    .controlSize(.small)
+                Text("Loading \(selectedBook) \(selectedChapter)...")
+                    .font(.system(size: 12))
+                    .foregroundColor(.secondary)
+                Spacer()
+            }
+            .padding(.horizontal, 32)
+            .padding(.vertical, 12)
+            .background(Color.blue.opacity(0.05))
+        }
+        
+        if let chapter = chapterData, !isLoading {
+            ForEach(chapter.verses) { verse in
+                verseView(verse)
+                    .animation(.none, value: verse.id)
+            }
+        } else if let errorMessage = errorMessage {
+            VStack(spacing: 16) {
+                Spacer().frame(height: 30)
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.system(size: 24))
+                    .foregroundColor(.orange)
+                Text("Error loading chapter")
+                    .font(.system(size: 16, weight: .medium))
+                Text(errorMessage)
+                    .font(.system(size: 12))
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 40)
+                Spacer()
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.bottom, 40)
+        } else if !isLoading {
+            VStack(spacing: 16) {
+                Spacer().frame(height: 30)
+                Image(systemName: "book.closed")
+                    .font(.system(size: 48))
+                    .foregroundColor(.blue)
+                Text("Select a chapter to read")
+                    .font(.system(size: 16, weight: .medium))
+                Spacer()
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.bottom, 40)
+        }
+    }
+    
+    // iPhone-specific verse view with ultra-compact spacing
+    private func iPhoneVerseView(_ verse: BibleVerse) -> some View {
+        HStack(alignment: .top, spacing: 8) {
             // Verse number
             Text("\(extractVerseNumber(from: verse.reference))")
-                .font(.system(size: 12, weight: .medium))
+                .font(.system(size: 10, weight: .medium))
                 .foregroundColor(.blue)
-                .frame(width: 24, height: 24)
+                .frame(width: 20, height: 20)
                 .background(Circle().fill(Color.blue.opacity(0.12)))
             
             // Verse text
             Text(verse.text)
-                .font(.system(size: 16))
-                .lineHeight(1.6)
+                .font(.system(size: 14))
+                .lineSpacing(-1)
+                .foregroundColor(.primary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.vertical, 4)
+        .padding(.horizontal, 4)
+    }
+    
+    private func verseView(_ verse: BibleVerse) -> some View {
+        HStack(alignment: .top, spacing: {
+            #if os(iOS)
+            let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+            return isPhone ? 4 : 12 // Ultra-small spacing for iPhone
+            #else
+            return 12 // macOS default
+            #endif
+        }()) {
+            // Verse number
+            Text("\(extractVerseNumber(from: verse.reference))")
+                .font(.system(size: {
+                    #if os(iOS)
+                    let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                    return isPhone ? 10 : 12 // Smaller font for iPhone
+                    #else
+                    return 12 // macOS default
+                    #endif
+                }(), weight: .medium))
+                .foregroundColor(.blue)
+                .frame(width: {
+                    #if os(iOS)
+                    let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                    return isPhone ? 20 : 24 // Smaller circle for iPhone
+                    #else
+                    return 24 // macOS default
+                    #endif
+                }(), height: {
+                    #if os(iOS)
+                    let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                    return isPhone ? 20 : 24 // Smaller circle for iPhone
+                    #else
+                    return 24 // macOS default
+                    #endif
+                }())
+                .background(Circle().fill(Color.blue.opacity(0.12)))
+            
+            // Verse text
+            Text(verse.text)
+                .font(.system(size: {
+                    #if os(iOS)
+                    let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                    return isPhone ? 14 : 16 // Smaller font for iPhone
+                    #else
+                    return 16 // macOS default
+                    #endif
+                }()))
+                .lineSpacing({
+                    #if os(iOS)
+                    let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                    return isPhone ? -4 : 2 // More negative spacing for iPhone to compress lines
+                    #else
+                    return 2 // macOS default
+                    #endif
+                }())
                 .foregroundColor(.primary)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 16)
+                        .padding(.vertical, {
+                    #if os(iOS)
+                    let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                    return isPhone ? 1 : 8 // Ultra-small vertical padding for iPhone
+                    #else
+                    return 8 // macOS default
+                    #endif
+                }())
+        .padding(.horizontal, {
+            #if os(iOS)
+            let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+            return isPhone ? 4 : 16 // Smaller padding for iPhone
+            #else
+            return 16 // macOS default
+            #endif
+        }())
     }
     
     // MARK: - Navigation Functions
@@ -1061,9 +1581,18 @@ struct BibleReaderView: View {
         let shouldShowLoading = chapterData == nil || 
                               (chapterData?.book != book || chapterData?.chapter != chapter)
         
+        // For iPhone, never show loading state to prevent layout changes
+        #if os(iOS)
+        let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+        if shouldShowLoading && !isPhone {
+            isLoading = true
+        }
+        #else
         if shouldShowLoading {
             isLoading = true
         }
+        #endif
+        
         errorMessage = nil
         
         Task {
@@ -1077,12 +1606,26 @@ struct BibleReaderView: View {
                 
                 await MainActor.run {
                     chapterData = result
+                    #if os(iOS)
+                    let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                    if !isPhone {
+                        isLoading = false
+                    }
+                    #else
                     isLoading = false
+                    #endif
                 }
             } catch {
                 await MainActor.run {
                     errorMessage = error.localizedDescription
+                    #if os(iOS)
+                    let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                    if !isPhone {
+                        isLoading = false
+                    }
+                    #else
                     isLoading = false
+                    #endif
                 }
             }
         }
@@ -1097,22 +1640,73 @@ struct BibleReaderView: View {
     }
     
     private var splashPageView: some View {
-        VStack(spacing: 30) {
+        ScrollView(.vertical, showsIndicators: true) {
+            VStack(spacing: {
+                #if os(iOS)
+                let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                return isPhone ? 12 : 30 // Better spacing for iPhone
+                #else
+                return 30 // macOS default
+                #endif
+            }()) {
             // Header
-            VStack(spacing: 12) {
+            VStack(spacing: {
+                #if os(iOS)
+                let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                return isPhone ? 6 : 12 // Better header spacing for iPhone
+                #else
+                return 12 // macOS default
+                #endif
+            }()) {
                 Text("Bible Reader")
-                    .font(.system(size: 36, weight: .bold))
+                    .font(.system(size: {
+                        #if os(iOS)
+                        let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                        return isPhone ? 28 : 36 // Slightly larger title for iPhone
+                        #else
+                        return 36 // macOS default
+                        #endif
+                    }(), weight: .bold))
                 
                 Text("Study God's Word")
-                    .font(.system(size: 18))
+                    .font(.system(size: {
+                        #if os(iOS)
+                        let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                        return isPhone ? 16 : 18 // Slightly larger subtitle for iPhone
+                        #else
+                        return 18 // macOS default
+                        #endif
+                    }()))
                     .foregroundColor(.secondary)
             }
-            .padding(.top, 50)
+            .padding(.top, {
+                #if os(iOS)
+                let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                return isPhone ? 20 : 50 // Better top padding for iPhone
+                #else
+                return 50 // macOS default
+                #endif
+            }())
             
-            Spacer(minLength: 0)
+            Spacer()
+                .frame(minHeight: {
+                    #if os(iOS)
+                    let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                    return isPhone ? 40 : 0 // Add more breathing room for iPhone
+                    #else
+                    return 0 // macOS default
+                    #endif
+                }())
             
             // Reading options
-            VStack(spacing: 20) {
+            VStack(spacing: {
+                #if os(iOS)
+                let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                return isPhone ? 16 : 20 // Better button spacing for iPhone
+                #else
+                return 20 // macOS default
+                #endif
+            }()) {
                 // Continue reading button
                 Button(action: {
                     // Continue from last reading position
@@ -1125,7 +1719,15 @@ struct BibleReaderView: View {
                         maxChapters = bookChapters
                     }
                     
+                    #if os(iOS)
+                    let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                    if !isPhone {
+                        loadCurrentChapter()
+                    }
+                    // For iPhone, content is already preloaded, just dismiss splash
+                    #else
                     loadCurrentChapter()
+                    #endif
                     withAnimation(.easeInOut(duration: 0.3)) {
                         showingSplashPage = false
                     }
@@ -1154,7 +1756,34 @@ struct BibleReaderView: View {
                     selectedChapter = 1
                     selectedTranslation = "KJV"
                     maxChapters = 50 // Genesis has 50 chapters
+                    #if os(iOS)
+                    let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                    if !isPhone {
+                        loadCurrentChapter()
+                    } else {
+                        // For iPhone, load Genesis content without showing loading state
+                        Task {
+                            do {
+                                let result = try await BibleAPI.fetchChapter(
+                                    book: "Genesis",
+                                    chapter: 1,
+                                    translation: "KJV",
+                                    focusedVerses: []
+                                )
+                                
+                                await MainActor.run {
+                                    chapterData = result
+                                }
+                            } catch {
+                                await MainActor.run {
+                                    errorMessage = error.localizedDescription
+                                }
+                            }
+                        }
+                    }
+                    #else
                     loadCurrentChapter()
+                    #endif
                     withAnimation(.easeInOut(duration: 0.3)) {
                         showingSplashPage = false
                     }
@@ -1166,10 +1795,25 @@ struct BibleReaderView: View {
                 .buttonStyle(.plain)
             }
             
-            Spacer(minLength: 0)
+            Spacer()
+                .frame(minHeight: {
+                    #if os(iOS)
+                    let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                    return isPhone ? 30 : 0 // Add breathing room between sections for iPhone
+                    #else
+                    return 0 // macOS default
+                    #endif
+                }())
             
             // Bookmarks section
-            VStack(alignment: .leading, spacing: 15) {
+            VStack(alignment: .leading, spacing: {
+                #if os(iOS)
+                let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                return isPhone ? 8 : 15 // Better bookmarks spacing for iPhone
+                #else
+                return 15 // macOS default
+                #endif
+            }()) {
                 Text("Your Bookmarks")
                     .font(.system(size: 18, weight: .bold))
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -1177,90 +1821,128 @@ struct BibleReaderView: View {
                 if readerData.bookmarks.isEmpty {
                     HStack {
                         Spacer()
-                        VStack(spacing: 10) {
+                        VStack(spacing: {
+                            #if os(iOS)
+                            let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                            return isPhone ? 8 : 10 // Better empty state spacing for iPhone
+                            #else
+                            return 10 // macOS default
+                            #endif
+                        }()) {
                             Image(systemName: "bookmark.slash")
-                                .font(.system(size: 32))
+                                .font(.system(size: {
+                                    #if os(iOS)
+                                    let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                                    return isPhone ? 28 : 32 // Better icon size for iPhone
+                                    #else
+                                    return 32 // macOS default
+                                    #endif
+                                }()))
                                 .foregroundColor(.secondary)
                             Text("No bookmarks yet")
                                 .font(.system(size: 14))
                                 .foregroundColor(.secondary)
                         }
-                        .padding(.vertical, 30)
+                        .padding(.vertical, {
+                            #if os(iOS)
+                            let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                            return isPhone ? 20 : 30 // Better empty state padding for iPhone
+                            #else
+                            return 30 // macOS default
+                            #endif
+                        }())
                         Spacer()
                     }
                 } else {
-                    ScrollView(.vertical, showsIndicators: true) {
-                        VStack(spacing: 0) {
-                            ForEach(readerData.bookmarks.indices, id: \.self) { index in
-                                let bookmark = readerData.bookmarks[index]
-                                Button(action: {
-                                    // Load the bookmarked chapter
-                                    selectedBook = bookmark.book
-                                    selectedChapter = bookmark.chapter
-                                    selectedTranslation = bookmark.translation
-                                    
-                                    // Update max chapters
-                                    if let bookChapters = allBooks.first(where: { $0.0 == selectedBook })?.1 {
-                                        maxChapters = bookChapters
-                                    }
-                                    
-                                    loadCurrentChapter()
-                                    withAnimation(.easeInOut(duration: 0.3)) {
-                                        showingSplashPage = false
-                                    }
-                                }) {
-                                    HStack(alignment: .top) {
-                                        VStack(alignment: .leading, spacing: 4) {
-                                            Text("\(bookmark.book) \(bookmark.chapter):\(bookmark.verse)")
-                                                .font(.system(size: 16, weight: .medium))
-                                                .foregroundColor(.primary)
-                                            
-                                            if !bookmark.notes.isEmpty {
-                                                Text(bookmark.notes)
-                                                    .font(.system(size: 12))
-                                                    .foregroundColor(.secondary)
-                                                    .lineLimit(2)
-                                            }
-                                            
-                                            Text(formattedDate(bookmark.dateAdded))
-                                                .font(.system(size: 11))
-                                                .foregroundColor(.secondary)
-                                        }
-                                        
-                                        Spacer()
-                                        
-                                        // Delete bookmark button
-                                        Button(action: {
-                                            readerData.removeBookmark(at: index)
-                                        }) {
-                                            Image(systemName: "xmark.circle.fill")
-                                                .font(.system(size: 14))
-                                                .foregroundColor(.gray)
-                                        }
-                                        .buttonStyle(.plain)
-                                    }
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 12)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 8)
-                                            .fill(colorScheme == .dark ? Color(.darkGray).opacity(0.3) : Color.white)
-                                            .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
-                                    )
+                    VStack(spacing: 8) {
+                        ForEach(readerData.bookmarks.indices, id: \.self) { index in
+                            let bookmark = readerData.bookmarks[index]
+                            Button(action: {
+                                // Load the bookmarked chapter
+                                selectedBook = bookmark.book
+                                selectedChapter = bookmark.chapter
+                                selectedTranslation = bookmark.translation
+                                
+                                // Update max chapters
+                                if let bookChapters = allBooks.first(where: { $0.0 == selectedBook })?.1 {
+                                    maxChapters = bookChapters
                                 }
-                                .buttonStyle(.plain)
-                                .padding(.vertical, 4)
+                                
+                                loadCurrentChapter()
+                                withAnimation(.easeInOut(duration: 0.3)) {
+                                    showingSplashPage = false
+                                }
+                            }) {
+                                HStack(alignment: .top) {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("\(bookmark.book) \(bookmark.chapter):\(bookmark.verse)")
+                                            .font(.system(size: 16, weight: .medium))
+                                            .foregroundColor(.primary)
+                                        
+                                        if !bookmark.notes.isEmpty {
+                                            Text(bookmark.notes)
+                                                .font(.system(size: 12))
+                                                .foregroundColor(.secondary)
+                                                .lineLimit(nil)
+                                        }
+                                        
+                                        Text(formattedDate(bookmark.dateAdded))
+                                            .font(.system(size: 11))
+                                            .foregroundColor(.secondary)
+                                    }
+                                    
+                                    Spacer()
+                                    
+                                    // Delete bookmark button
+                                    Button(action: {
+                                        readerData.removeBookmark(at: index)
+                                    }) {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .font(.system(size: 14))
+                                            .foregroundColor(.gray)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 12)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .fill(colorScheme == .dark ? Color(.darkGray).opacity(0.3) : Color.white)
+                                        .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
+                                )
                             }
+                            .buttonStyle(.plain)
                         }
-                        .padding(.vertical, 8)
                     }
-                    .frame(maxHeight: 250)
                 }
             }
-            .padding(.horizontal, 60)
+            .padding(.horizontal, {
+                #if os(iOS)
+                let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                return isPhone ? 8 : 60 // Much smaller padding for iPhone
+                #else
+                return 60 // macOS default
+                #endif
+            }())
             
-            Spacer(minLength: 40)
+            Spacer(minLength: {
+                #if os(iOS)
+                let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                return isPhone ? 12 : 40 // Better bottom spacing for iPhone
+                #else
+                return 40 // macOS default
+                #endif
+            }())
+            }
+            .padding(.horizontal, {
+                #if os(iOS)
+                let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                return isPhone ? 16 : 30 // Better outer padding for iPhone
+                #else
+                return 30 // macOS default
+                #endif
+            }())
         }
-        .padding(.horizontal, 30)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
     
@@ -1392,8 +2074,8 @@ struct BibleReaderView: View {
                 content.frame(idealWidth: 800, maxWidth: 900, idealHeight: 1000, maxHeight: 1150)
                 }
             } else { // For iPhone
-                // iPhone sheets are typically full-screen or sized by content, .infinity is fine.
-                content.frame(maxWidth: .infinity, maxHeight: .infinity)
+                // iPhone: Better width utilization for text content
+                content.frame(width: 380, height: 600)
             }
             #endif
         }
@@ -1403,7 +2085,13 @@ struct BibleReaderView: View {
 // Extension for better text styling
 extension Text {
     func lineHeight(_ lineHeight: CGFloat) -> some View {
-        self.lineSpacing(lineHeight * 14 - 14) // Approximate line height calculation
+        #if os(iOS)
+        let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+        let baseFontSize: CGFloat = isPhone ? 14 : 16 // Match the actual font size used
+        #else
+        let baseFontSize: CGFloat = 16
+        #endif
+        return self.lineSpacing(lineHeight * baseFontSize - baseFontSize)
     }
 }
 

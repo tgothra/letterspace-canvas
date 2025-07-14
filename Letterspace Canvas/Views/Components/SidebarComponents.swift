@@ -240,7 +240,8 @@ struct SidebarButton: View {
                     document: $document,
                     sidebarMode: $sidebarMode,
                     isRightSidebarVisible: $isRightSidebarVisible,
-                onAddFolder: onAddFolder!
+                onAddFolder: onAddFolder!,
+                showHeader: true // Show header for popover
             )
         case "person.crop.circle.fill":
             // This will only be used for hovering - modal is handled separately

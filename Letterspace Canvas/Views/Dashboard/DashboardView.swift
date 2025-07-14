@@ -126,6 +126,15 @@ struct DashboardView: View {
         #endif
     }
     
+    // iPad detection helper
+    private var isIPadDevice: Bool {
+        #if os(iOS)
+        return UIDevice.current.userInterfaceIdiom == .pad
+        #else
+        return true // macOS always supports reorder
+        #endif
+    }
+    
     // Helper function to calculate flexible column widths for iPhone
     private func calculateFlexibleColumnWidths() -> (statusWidth: CGFloat, nameWidth: CGFloat, seriesWidth: CGFloat, locationWidth: CGFloat, dateWidth: CGFloat, createdDateWidth: CGFloat) {
         #if os(iOS)
@@ -627,6 +636,18 @@ struct DashboardView: View {
                 if let calendarArray = UserDefaults.standard.array(forKey: "CalendarDocuments") as? [String] {
                     calendarDocuments = Set(calendarArray)
                 }
+                
+                // iPhone-specific: Clear filters by default on app open for clean startup experience
+                #if os(iOS)
+                let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                if isPhone {
+                    // Always start with cleared filters on iPhone
+                    selectedTags.removeAll()
+                    selectedFilterColumn = nil
+                    selectedFilterCategory = "Filter"
+                    updateVisibleColumns() // Update UI to reflect cleared filters
+                }
+                #endif
                 
                 // Load visible columns
                 if let savedColumns = UserDefaults.standard.array(forKey: "VisibleColumns") as? [String] {
@@ -2488,12 +2509,16 @@ struct DashboardView: View {
             }
             .buttonStyle(.plain)
             .frame(width: UIDevice.current.userInterfaceIdiom == .pad ? 30 : columnWidths.statusWidth, alignment: UIDevice.current.userInterfaceIdiom == .pad ? .center : .leading)
+            .padding(.leading, UIDevice.current.userInterfaceIdiom == .phone ? 10 : 0) // Add breathing room from left edge on iPhone to match document rows
             
             // Add breathing room between status indicators and name column on iPad (to match row)
             #if os(iOS)
             let isIPad = UIDevice.current.userInterfaceIdiom == .pad
             if isIPad {
                 Spacer().frame(width: 24)
+            } else if UIDevice.current.userInterfaceIdiom == .phone {
+                // iPhone: Reduce spacing between status icons and name column
+                Spacer().frame(width: 2)
             }
             #endif
             
@@ -2733,7 +2758,7 @@ struct DashboardView: View {
                     Color.clear
                         .contentShape(Rectangle())
                         .onTapGesture {
-                        if reorderMode {
+                        if reorderMode && isIPadDevice {
                             print("🔄 Exiting reorder mode via background tap")
                             withAnimation(.interactiveSpring(response: 0.3, dampingFraction: 0.8, blendDuration: 0)) {
                                 reorderMode = false
@@ -2937,8 +2962,14 @@ struct DashboardView: View {
                     }())
             }
             
-            // Reorder handle
+            // Reorder handle (iPad only)
+            #if os(iOS)
+            if UIDevice.current.userInterfaceIdiom == .pad {
+                reorderHandle(for: index, isCenter: isCenter)
+            }
+            #else
             reorderHandle(for: index, isCenter: isCenter)
+            #endif
         }
         .frame(width: adjustedCardWidth)  // Ensure card maintains its adjusted width
         .background(cardBackground)
@@ -2949,7 +2980,7 @@ struct DashboardView: View {
         .position(x: position.x, y: position.y)  // Use position instead of offset for more precise control
         .zIndex(isDragged ? 1000 : Double(index))
         .onTapGesture {
-            if reorderMode {
+            if reorderMode && isIPadDevice {
                 // In reorder mode, tapping a card exits reorder mode
                 print("🔄 Exiting reorder mode via card tap")
                     withAnimation(.interactiveSpring(response: 0.3, dampingFraction: 0.8, blendDuration: 0)) {
@@ -2965,9 +2996,9 @@ struct DashboardView: View {
                 saveCarouselPosition()
             }
         }
-        // Add drag gesture to the entire card when in reorder mode
+        // Add drag gesture to the entire card when in reorder mode (iPad only)
         .simultaneousGesture(
-            reorderMode ? 
+            (reorderMode && isIPadDevice) ? 
             DragGesture(minimumDistance: 5)
                 .onChanged { gesture in
                     // Only drag if this card is already selected
@@ -3043,7 +3074,7 @@ struct DashboardView: View {
     @ViewBuilder
     private func reorderHandle(for index: Int, isCenter: Bool) -> some View {
         Button(action: {
-            if reorderMode {
+            if reorderMode && isIPadDevice {
                 // Exit reorder mode when tapping handle in reorder mode
                 print("🔄 Exiting reorder mode via handle tap")
                 withAnimation(.interactiveSpring(response: 0.3, dampingFraction: 0.8, blendDuration: 0)) {
@@ -3068,7 +3099,8 @@ struct DashboardView: View {
         .scaleEffect(reorderMode ? 1.3 : (isCenter ? 1.0 : 0.9)) // Larger scale in reorder mode
         .offset(x: -12, y: 12)
         .simultaneousGesture(
-            // Long press to enter reorder mode
+            // Long press to enter reorder mode (iPad only)
+            isIPadDevice ? 
             LongPressGesture(minimumDuration: 0.5)
                 .onEnded { _ in
                     print("🔄 Long press detected for index \(index)")
@@ -3084,6 +3116,7 @@ struct DashboardView: View {
                         HapticFeedback.impact(.medium)
                     }
                 }
+            : nil
         )
     }
     

@@ -321,6 +321,7 @@ struct MainLayout: View {
                             isPresented: $showUserProfileModal,
                             gradientManager: gradientManager
                         )
+                        .fixedSize()  // Prevent expansion beyond intended size
                 .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 10)
                     .transition(.asymmetric(
                         insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .center)),
@@ -343,6 +344,7 @@ struct MainLayout: View {
                     }
                 
                 RecentlyDeletedView(isPresented: $showRecentlyDeletedModal)
+                    .fixedSize()  // Prevent expansion beyond intended size
                     .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 10)
                     .transition(.asymmetric(
                         insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .center)),
@@ -371,6 +373,7 @@ struct MainLayout: View {
                     }
                 })
                 }
+                .fixedSize()  // Prevent expansion beyond intended size
                 .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 10)
                 .transition(.asymmetric(
                     insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .center)),
@@ -392,13 +395,12 @@ struct MainLayout: View {
                         }
                     }
                 
-                                    LazyModalContainer {
                                     BibleReaderView(onDismiss: {
                     withAnimation(.easeInOut(duration: 0.2)) {
                                         showBibleReaderModal = false
                     }
                 })
-                    }
+                .fixedSize()  // Prevent expansion beyond intended size
                 .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 10)
                 .transition(.asymmetric(
                     insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .center)),
@@ -425,6 +427,7 @@ struct MainLayout: View {
                                     showFoldersModal = false
                     }
                 })
+                .fixedSize()  // Prevent expansion beyond intended size
                 .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 10)
                 .transition(.asymmetric(
                     insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .center)),
@@ -518,6 +521,20 @@ struct MainLayout: View {
             }
         }
         .preferredColorScheme(isDarkMode ? .dark : .light)
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("DarkModeToggled"))) { notification in
+            // Handle dark mode toggle from user profile modal
+            if let newValue = notification.object as? Bool {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    transitionOpacity = 0
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+                        isDarkMode = newValue
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            transitionOpacity = 1
+                        }
+                    }
+                }
+            }
+        }
     }
     
     // Extracted Left Sidebar Content
@@ -1060,7 +1077,8 @@ struct MainLayout: View {
                             document: $document,
                             sidebarMode: $sidebarMode,
                             isRightSidebarVisible: $isRightSidebarVisible,
-                            onAddFolder: addFolder
+                            onAddFolder: addFolder,
+                            showHeader: true // Show header for iPad popover
                         )
                         .frame(width: 320, height: 420)
                         .background(theme.surface)
@@ -1589,10 +1607,10 @@ private func mainContentView(availableWidth: CGFloat) -> some View {
                 isRightSidebarVisible: $isRightSidebarVisible // Pass isRightSidebarVisible binding
                                     )
                                     .transition(.asymmetric(
-                                        insertion: .move(edge: .leading).combined(with: .opacity),
-                                        removal: .move(edge: .trailing).combined(with: .opacity)
+                                        insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .center)),
+                                        removal: .opacity.combined(with: .scale(scale: 1.05, anchor: .center))
                                     ))
-                                    .animation(.easeInOut(duration: 0.3), value: sidebarMode)
+                                    .animation(.spring(response: 1.8, dampingFraction: 0.85), value: sidebarMode)
             // .frame(maxWidth: .infinity) // Already applied by parent ZStack
             // .frame(maxHeight: dashboardGeo.size.height) // Use available height
                             } else {
@@ -1612,18 +1630,20 @@ private func mainContentView(availableWidth: CGFloat) -> some View {
                                     isSearchActive: $isSearchActive,
                                     shouldPauseHover: isSearchActive,
                                     onNavigateBack: {
-                                        // Navigate back to dashboard on swipe
-                                        sidebarMode = .allDocuments
-                                        isRightSidebarVisible = false
-                                        viewMode = .normal
+                                        // Navigate back to dashboard on swipe with smooth slide animation
+                                        withAnimation(.easeOut(duration: 0.3)) {
+                                            sidebarMode = .allDocuments
+                                            isRightSidebarVisible = false
+                                            viewMode = .normal
+                                        }
                                     }
                                 )
                                 .id(document.id)
                                 .transition(.asymmetric(
-                                    insertion: .move(edge: .trailing).combined(with: .opacity),
-                                    removal: .move(edge: .leading).combined(with: .opacity)
+                                    insertion: .opacity,
+                                    removal: .move(edge: .trailing)
                                 ))
-                                .animation(.easeInOut(duration: 0.3), value: sidebarMode)
+                                .animation(.easeOut(duration: 0.3), value: sidebarMode)
                             }
     }
     
@@ -2372,14 +2392,17 @@ private func mainContentView(availableWidth: CGFloat) -> some View {
                     onFolders: {
                         showFoldersModal = true
                     },
-                    onSettings: {
-                        showSettingsModal = true
-                    },
                     onBibleReader: {
                         showBibleReaderModal = true
                     },
-                    onExport: {
-                        showExportModal = true
+                    onSmartStudy: {
+                        showSmartStudyModal = true
+                    },
+                    onRecentlyDeleted: {
+                        showRecentlyDeletedModal = true
+                    },
+                    onSettings: {
+                        showUserProfileModal = true
                     }
                 )
             }
@@ -2752,7 +2775,8 @@ private func mainContentView(availableWidth: CGFloat) -> some View {
                         document: $document,
                         sidebarMode: $sidebarMode,
                         isRightSidebarVisible: $isRightSidebarVisible,
-                        onAddFolder: addFolder
+                        onAddFolder: addFolder,
+                        showHeader: true // Show header for iPad popover
                     )
                     .frame(width: 320, height: 420)
                     .background(theme.surface)

@@ -20,34 +20,17 @@ struct CircularMenuButton: View {
             }
         }) {
             ZStack {
-                // Background circle with glassmorphism
-                ZStack {
-                    // Base blur
-                    Circle()
-                        .fill(.ultraThinMaterial)
-                        .frame(width: 48, height: 48)
-                    
-                    // Gradient overlay
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                gradient: Gradient(colors: [
-                                    theme.background.opacity(0.3),
-                                    theme.background.opacity(0.1)
-                                ]),
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 48, height: 48)
-                }
+                // Solid green background circle
+                Circle()
+                    .fill(theme.accent)
+                    .frame(width: 48, height: 48)
                 .overlay(
                     Circle()
                         .stroke(
                             LinearGradient(
                                 gradient: Gradient(colors: [
-                                    Color.white.opacity(0.2),
-                                    Color.white.opacity(0.05)
+                                    Color.white.opacity(0.3),
+                                    Color.white.opacity(0.1)
                                 ]),
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
@@ -58,23 +41,23 @@ struct CircularMenuButton: View {
                 )
                 .clipShape(Circle())
                 
-                // Menu icon (hamburger or close)
+                // Menu icon (hamburger or close) - white on green background
                 VStack(spacing: 3) {
                     RoundedRectangle(cornerRadius: 1)
-                        .fill(theme.primary)
+                        .fill(Color.white)
                         .frame(width: 14, height: 2)
                         .rotationEffect(.degrees(isMenuOpen ? 45 : 0))
                         .offset(y: isMenuOpen ? 2.5 : 0)
                     
                     if !isMenuOpen {
                         RoundedRectangle(cornerRadius: 1)
-                            .fill(theme.primary)
+                            .fill(Color.white)
                             .frame(width: 14, height: 2)
                             .opacity(isMenuOpen ? 0 : 1)
                     }
                     
                     RoundedRectangle(cornerRadius: 1)
-                        .fill(theme.primary)
+                        .fill(Color.white)
                         .frame(width: 14, height: 2)
                         .rotationEffect(.degrees(isMenuOpen ? -45 : 0))
                         .offset(y: isMenuOpen ? -2.5 : 0)
@@ -108,9 +91,10 @@ struct CircularMenuOverlay: View {
     let onSearch: () -> Void
     let onNewDocument: () -> Void
     let onFolders: () -> Void
-    let onSettings: () -> Void
     let onBibleReader: () -> Void
-    let onExport: () -> Void
+    let onSmartStudy: () -> Void
+    let onRecentlyDeleted: () -> Void
+    let onSettings: () -> Void
     
     @State private var menuScale: CGFloat = 0.8
     @State private var menuOffset: CGFloat = 20
@@ -141,9 +125,10 @@ struct CircularMenuOverlay: View {
                             menuItem(icon: "magnifyingglass", title: "Search", action: onSearch)
                             menuItem(icon: "plus.square", title: "New Document", action: onNewDocument)
                             menuItem(icon: "folder", title: "Folders", action: onFolders)
-                            menuItem(icon: "book.fill", title: "Bible Reader", action: onBibleReader)
-                            menuItem(icon: "square.and.arrow.up", title: "Export", action: onExport)
-                            menuItem(icon: "gear", title: "Settings", action: onSettings)
+                            menuItem(icon: "book.closed", title: "Bible Reader", action: onBibleReader)
+                            menuItem(icon: "sparkles", title: "Smart Study", action: onSmartStudy)
+                            menuItem(icon: "trash", title: "Recently Deleted", action: onRecentlyDeleted)
+                            menuItem(icon: "person.crop.circle.fill", title: "Settings", action: onSettings, isUserProfile: true)
                         }
                         .frame(width: 250)
                         .background(
@@ -203,7 +188,7 @@ struct CircularMenuOverlay: View {
         .zIndex(isMenuOpen ? 1000 : -1)
     }
     
-    private func menuItem(icon: String, title: String, action: @escaping () -> Void) -> some View {
+    private func menuItem(icon: String, title: String, action: @escaping () -> Void, isUserProfile: Bool = false) -> some View {
         Button(action: {
             HapticFeedback.impact(.light)
             action()
@@ -228,6 +213,28 @@ struct CircularMenuOverlay: View {
                             .cornerRadius(0.5)
                     }
                     .frame(width: 20, height: 20)
+                } else if isUserProfile && icon == "person.crop.circle.fill" {
+                    // User profile image or initials
+                    if let profileImage = UserProfileManager.shared.getProfileImage() {
+                        PlatformImageView(platformImage: profileImage)
+                            .scaledToFill()
+                            .frame(width: 20, height: 20)
+                            .clipShape(Circle())
+                            .overlay(
+                                Circle()
+                                    .stroke(theme.primary.opacity(0.2), lineWidth: 1)
+                            )
+                    } else {
+                        // Fallback to initials
+                        Circle()
+                            .fill(theme.accent.opacity(0.2))
+                            .frame(width: 20, height: 20)
+                            .overlay(
+                                Text(UserProfileManager.shared.userProfile.initials)
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundColor(theme.accent)
+                            )
+                    }
                 } else {
                     Image(systemName: icon)
                         .font(.system(size: 16, weight: .medium))
@@ -286,9 +293,10 @@ struct CircularMenuOverlay: View {
             onSearch: {},
             onNewDocument: {},
             onFolders: {},
-            onSettings: {},
             onBibleReader: {},
-            onExport: {}
+            onSmartStudy: {},
+            onRecentlyDeleted: {},
+            onSettings: {}
         )
     }
     .frame(width: 400, height: 600)

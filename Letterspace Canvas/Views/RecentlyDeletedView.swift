@@ -301,7 +301,21 @@ struct RecentlyDeletedView: View {
                 }
             }
             .padding(24)
-            .frame(width: 500, height: 600)
+            .frame(width: {
+                #if os(iOS)
+                let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                return isPhone ? 340 : 500  // Smaller for iPhone, larger for iPad
+                #else
+                return 500 // macOS default
+                #endif
+            }(), height: {
+                #if os(iOS)
+                let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                return isPhone ? 600 : 700  // Constrain height for iPhone
+                #else
+                return 600 // macOS default
+                #endif
+            }())
             .background({
                 #if os(macOS)
                 colorScheme == .dark ? Color(.controlBackgroundColor) : Color.white

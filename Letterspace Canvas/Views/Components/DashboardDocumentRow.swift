@@ -204,10 +204,14 @@ struct DashboardDocumentRow: View {
                     }
                 }
                 .frame(width: isIPad ? 30 : (isPhone ? columnWidths.statusWidth : 80), alignment: isIPad ? .center : .leading)
+                .padding(.leading, isPhone ? 10 : 0) // Add breathing room from left edge on iPhone
                 
                 // Add breathing room between status indicators and name column on iPad
                 if isIPad {
                     Spacer().frame(width: 24)
+                } else if isPhone {
+                    // iPhone: Reduce spacing between status icons and name column
+                    Spacer().frame(width: 2)
                 }
                 
                 // Main content area with targeted selection background for iPad
@@ -408,12 +412,9 @@ struct DashboardDocumentRow: View {
         }
         .overlay(
             Group {
-                // Only show separator lines on non-iPad devices
-                if !isIPad {
-                    Rectangle()
-                        .frame(height: 0.5)
-                        .foregroundColor(Color(UIColor.separator).opacity(0.3))
-                }
+                // Remove separator lines for cleaner iPhone appearance
+                // iPad and other devices don't show separators
+                EmptyView()
             },
             alignment: .bottom
         )

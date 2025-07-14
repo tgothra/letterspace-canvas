@@ -241,6 +241,14 @@ struct DocumentArea: View {
     @State private var currentScrollOffset: CGFloat = 0.0
     @State private var headerCollapseProgress: CGFloat = 0.0 // 0.0 = fully expanded, 1.0 = fully collapsed
     @State private var smoothedHeaderProgress: CGFloat = 0.0 // Smoothed version for ultra-smooth slow scrolling
+    @State private var isKeyboardVisible: Bool = false // Track keyboard visibility for iOS
+    @State private var dragOffset: CGFloat = 0 // Track real-time drag offset for interactive swipe
+    
+    // Ultra-smooth easing function for buttery navigation
+    private func easeOutCubic(_ t: CGFloat) -> CGFloat {
+        let t1 = t - 1
+        return t1 * t1 * t1 + 1
+    }
     
     // Remove unused state variables
     private let sidebarWidth: CGFloat = 220
@@ -305,20 +313,51 @@ struct DocumentArea: View {
             // Main container for all document UI
             documentContainer(geo: geo)
         }
-        // Add swipe-right gesture for iPhone navigation (anywhere on screen)
+        // Add full-screen swipe gesture for iPhone navigation (preserves scrolling with smart detection)
         #if os(iOS)
-        .gesture(
-            UIDevice.current.userInterfaceIdiom == .phone ? 
-            DragGesture(minimumDistance: 30, coordinateSpace: .global)
+        .offset(x: dragOffset) // Apply real-time drag offset with ultra-smooth animation
+        .simultaneousGesture(
+            UIDevice.current.userInterfaceIdiom == .phone && !isKeyboardVisible ?
+            DragGesture(minimumDistance: 0, coordinateSpace: .global)
+                .onChanged { value in
+                    // Only track rightward swipes that are clearly horizontal
+                    let translation = value.translation
+                    let velocity = value.predictedEndTranslation
+                    
+                    // Smart gesture detection: horizontal movement must dominate
+                    if translation.width > 0 && abs(translation.width) > abs(translation.height) * 1.2 {
+                        // Ultra-smooth, direct tracking with no easing resistance
+                        let maxDrag = UIScreen.main.bounds.width * 0.9
+                        let rawOffset = translation.width
+                        
+                        // Apply smooth, responsive tracking
+                        dragOffset = min(rawOffset, maxDrag)
+                    }
+                }
                 .onEnded { value in
-                    // Only trigger on rightward swipe (swipe right to go back)
-                    if value.translation.width > 50 && abs(value.translation.height) < 80 {
+                    // Check if swipe was sufficient for navigation
+                    if value.translation.width > 100 && abs(value.translation.height) < 120 {
                         // Provide immediate feedback
                         HapticFeedback.impact(.medium)
                         
-                        // Navigate back to dashboard with slide transition
-                        withAnimation(.easeInOut(duration: 0.3)) {
+                        // Smooth completion animation
+                        withAnimation(.easeOut(duration: 0.3)) {
+                            dragOffset = UIScreen.main.bounds.width
+                        }
+                        
+                        // Navigate after brief delay to sync with animation
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                             onNavigateBack?()
+                        }
+                        
+                        // Reset offset after navigation completes
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                            dragOffset = 0
+                        }
+                    } else {
+                        // Smooth snap-back animation
+                        withAnimation(.easeOut(duration: 0.25)) {
+                            dragOffset = 0
                         }
                     }
                 } : nil
@@ -508,7 +547,7 @@ struct DocumentArea: View {
         .clipped(antialiased: false)
         .allowsHitTesting(false)
         .transition(.opacity)
-        .animation(.easeInOut(duration: 0.3))
+        .animation(.linear(duration: 0.02), value: dragOffset)
         .zIndex(9999)
     }
     
@@ -1084,6 +1123,29 @@ struct DocumentArea: View {
             // This is just to ensure the notification is registered in case it's sent before the container appears
             print("📱 DocumentArea received HeaderImageToggling notification")
         }
+        
+        #if os(iOS)
+        // Observe keyboard visibility for iPhone swipe gesture control
+        NotificationCenter.default.addObserver(
+            forName: UIResponder.keyboardWillShowNotification,
+            object: nil,
+            queue: .main
+        ) { _ in
+            withAnimation(.easeInOut(duration: 0.25)) {
+                isKeyboardVisible = true
+            }
+        }
+        
+        NotificationCenter.default.addObserver(
+            forName: UIResponder.keyboardWillHideNotification,
+            object: nil,
+            queue: .main
+        ) { _ in
+            withAnimation(.easeInOut(duration: 0.25)) {
+                isKeyboardVisible = false
+            }
+        }
+        #endif
     }
     
     // Handle text editing begin notification

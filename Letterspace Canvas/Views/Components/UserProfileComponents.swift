@@ -27,7 +27,8 @@ struct UserProfilePopupContent: View {
     var body: some View {
         ZStack {
             // Main profile content
-            VStack(alignment: .leading, spacing: 16) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
                 // Header
                 HStack {
                         Text("User Profile")
@@ -242,6 +243,50 @@ struct UserProfilePopupContent: View {
                     
                     Divider()
                         .padding(.vertical, 8)
+                    
+                    // Dark Mode Toggle (iPhone only)
+                    #if os(iOS)
+                    if UIDevice.current.userInterfaceIdiom == .phone {
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Image(systemName: colorScheme == .dark ? "sun.max.fill" : "moon.fill")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(colorScheme == .dark ? .yellow : .purple)
+                                    .frame(width: 20)
+                                
+                                Text("Dark Mode")
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundStyle(theme.primary)
+                                
+                                Spacer()
+                                
+                                Toggle("", isOn: Binding(
+                                    get: { UserDefaults.standard.bool(forKey: "prefersDarkMode") },
+                                    set: { newValue in
+                                        UserDefaults.standard.set(newValue, forKey: "prefersDarkMode")
+                                        UserDefaults.standard.synchronize()
+                                        
+                                        // Post notification to update the app's color scheme
+                                        NotificationCenter.default.post(
+                                            name: NSNotification.Name("DarkModeToggled"),
+                                            object: newValue
+                                        )
+                                    }
+                                ))
+                                .toggleStyle(SwitchToggleStyle())
+                            }
+                            
+                            Text("Toggle between light and dark appearance modes.")
+                                .font(.system(size: 12))
+                                .foregroundStyle(theme.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .padding(.vertical, 4)
+                        
+                        Divider()
+                            .padding(.vertical, 8)
+                    }
+                    #endif
                     
                     // Gradient Wallpaper Section
                     VStack(alignment: .leading, spacing: 12) {
@@ -507,27 +552,37 @@ struct UserProfilePopupContent: View {
                             .fixedSize(horizontal: false, vertical: true)
                             .multilineTextAlignment(.leading)
                     }
-                }
+                                }
                 .padding(.horizontal, 8)
+                }
+                .padding(.bottom, 20)  // Add bottom padding for scroll content
             }
             .frame(width: {
-                #if os(iOS)
-                return UIDevice.current.userInterfaceIdiom == .pad ? 500 : 400
-                #else
-                return 400 // macOS default
+            #if os(iOS)
+            let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+            return isPhone ? 340 : 500  // Smaller for iPhone, larger for iPad
+            #else
+            return 400 // macOS default
+            #endif
+        }(), height: {
+            #if os(iOS)
+            let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+            return isPhone ? 600 : 700  // Constrain height for iPhone
+            #else
+            return 700 // macOS default
+            #endif
+        }())  // Responsive size for different devices
+        .padding(20)  // Increased padding for modal
+        .background(
+            Group {
+                #if os(macOS)
+                Color(NSColor.windowBackgroundColor)
+                #elseif os(iOS)
+                Color(UIColor.systemBackground)
                 #endif
-            }())  // Responsive width for iPad
-            .padding(20)  // Increased padding for modal
-            .background(
-                Group {
-                    #if os(macOS)
-                    Color(NSColor.windowBackgroundColor)
-                    #elseif os(iOS)
-                    Color(UIColor.systemBackground)
-                    #endif
-                }
-            )
-            .cornerRadius(12)
+            }
+        )
+        .cornerRadius(12)
         }
         .overlay {
             // Image cropper overlay
