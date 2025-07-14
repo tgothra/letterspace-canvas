@@ -33,7 +33,7 @@ struct SearchHeaderView: View {
             return 12 // More padding for iPad
             #endif
         }())
-        .background(theme.surface)
+        .background(Color.white) // Force white background for search header
     }
 }
 
@@ -46,14 +46,18 @@ struct SearchContentView: View {
     @Binding var sidebarMode: RightSidebar.SidebarMode
     @Binding var activePopup: ActivePopup
     let performSearch: () async -> Void
+    var onDismiss: (() -> Void)? = nil
     @Environment(\.themeColors) var theme
     
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 20) {
             SearchFieldView(searchText: $searchText, searchTask: $searchTask, performSearch: performSearch)
             
             if searchText.isEmpty {
                 SearchEmptyStateView()
+                    .onAppear {
+                        print("🔍 Showing empty state view")
+                    }
             } else {
                 SearchResultsView(
                     searchText: searchText,
@@ -61,8 +65,12 @@ struct SearchContentView: View {
                     groupedResults: groupedResults,
                     document: $document,
                     sidebarMode: $sidebarMode,
-                    activePopup: $activePopup
+                    activePopup: $activePopup,
+                    onDismiss: onDismiss
                 )
+                .onAppear {
+                    print("🔍 Showing results view with \(searchResults.count) results for search: '\(searchText)'")
+                }
             }
         }
     }
@@ -83,9 +91,11 @@ struct SearchFieldView: View {
                 .textFieldStyle(.plain)
                 .font(.system(size: 14))
                 .onChange(of: searchText) { oldValue, newValue in
+                    print("🔍 SearchFieldView: Text changed from '\(oldValue)' to '\(newValue)'")
                     searchTask?.cancel()
                     searchTask = Task {
                         try? await Task.sleep(nanoseconds: 300_000_000)
+                        print("🔍 SearchFieldView: About to perform search for '\(newValue)'")
                         await performSearch()
                     }
                 }
@@ -94,7 +104,7 @@ struct SearchFieldView: View {
         .padding(.vertical, 6)
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill(theme.background)
+                .fill(Color(.sRGB, white: 0.95)) // Light gray background for visibility on white modal
         )
     }
 }
@@ -121,109 +131,685 @@ struct SearchResultsView: View {
     @Binding var document: Letterspace_CanvasDocument
     @Binding var sidebarMode: RightSidebar.SidebarMode
     @Binding var activePopup: ActivePopup
+    var onDismiss: (() -> Void)? = nil
     @Environment(\.themeColors) var theme
+    
+    // Get all content matches with multiple instances per document
+    private var allContentMatches: [(document: Letterspace_CanvasDocument, matches: [ContentMatch])] {
+        var documentMatches: [(document: Letterspace_CanvasDocument, matches: [ContentMatch])] = []
+        
+        for doc in searchResults {
+            var matches: [ContentMatch] = []
+            
+            // Find all instances of the search term in this document's textBlock elements
+            let textBlockElements = doc.elements.filter { $0.type == .textBlock }
+            
+            for element in textBlockElements {
+                let elementText: String
+                if let attributedContent = element.attributedContent {
+                    elementText = attributedContent.string
+                } else {
+                    elementText = element.content
+                }
+                
+                // Find all occurrences of the search term in this element
+                var searchStartIndex = elementText.startIndex
+                while searchStartIndex < elementText.endIndex {
+                    if let range = elementText.range(of: searchText, options: .caseInsensitive, range: searchStartIndex..<elementText.endIndex) {
+                        let match = ContentMatch(
+                            elementId: element.id,
+                            text: elementText,
+                            matchRange: range
+                        )
+                        matches.append(match)
+                        
+                        // Move search start to after this match
+                        searchStartIndex = range.upperBound
+                    } else {
+                        break
+                    }
+                }
+            }
+            
+            if !matches.isEmpty {
+                documentMatches.append((document: doc, matches: matches))
+            }
+        }
+        
+        return documentMatches
+    }
     
     var body: some View {
         ScrollView {
-            VStack(spacing: 16) {
+            VStack(spacing: 20) {
                 if searchResults.isEmpty {
                     Text("No results found")
                         .font(.custom("InterTight-Regular", size: 13))
                         .foregroundColor(theme.secondary)
                         .padding(.vertical, 8)
                 } else {
-                    ForEach(groupedResults, id: \.0) { group in
-                        SearchResultGroupView(
-                            group: group,
+                    // Section 1: Documents with thumbnails/icons
+                    DocumentsSection(
+                        searchText: searchText,
+                        documents: searchResults,
+                        document: $document,
+                        sidebarMode: $sidebarMode,
+                        activePopup: $activePopup,
+                        onDismiss: onDismiss
+                    )
+                    
+                    // Separator line between sections
+                    if !allContentMatches.isEmpty {
+                        Divider()
+                            .background(theme.secondary.opacity(0.3))
+                            .padding(.horizontal, 8)
+                    }
+                    
+                    // Section 2: Content matches with larger snippets
+                    if !allContentMatches.isEmpty {
+                        ContentMatchesSection(
                             searchText: searchText,
-                            groupedResults: groupedResults,
+                            contentMatches: allContentMatches,
                             document: $document,
                             sidebarMode: $sidebarMode,
-                            activePopup: $activePopup
+                            activePopup: $activePopup,
+                            onDismiss: onDismiss
                         )
                     }
                 }
             }
+            .padding(.bottom, 16)
         }
     }
 }
 
-struct SearchResultGroupView: View {
-    let group: (String, [Letterspace_CanvasDocument])
+// Structure to represent a content match
+struct ContentMatch {
+    let elementId: UUID
+    let text: String
+    let matchRange: Range<String.Index>
+}
+
+// Documents section with thumbnails
+struct DocumentsSection: View {
     let searchText: String
-    let groupedResults: [(String, [Letterspace_CanvasDocument])]
+    let documents: [Letterspace_CanvasDocument]
     @Binding var document: Letterspace_CanvasDocument
     @Binding var sidebarMode: RightSidebar.SidebarMode
     @Binding var activePopup: ActivePopup
+    var onDismiss: (() -> Void)? = nil
     @Environment(\.themeColors) var theme
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // Category header
-            Text(group.0)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(theme.secondary)
-                .padding(.horizontal, 8)
-            
-            // Results in this category
-            ForEach(group.1) { doc in
-                SearchResultRowView(
-                    doc: doc,
-                    group: group,
-                    searchText: searchText,
-                    document: $document,
-                    sidebarMode: $sidebarMode,
-                    activePopup: $activePopup
-                )
+        VStack(alignment: .leading, spacing: 12) {
+            // Section header
+            HStack {
+                Text("Documents")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(theme.primary)
                 
-                if doc.id != group.1.last?.id {
-                    Divider()
-                }
+                Text("(\(documents.count))")
+                    .font(.system(size: 14))
+                    .foregroundStyle(theme.secondary)
+                
+                Spacer()
             }
+            .padding(.horizontal, 8)
             
-            if group.0 != groupedResults.last?.0 {
-                Divider()
-                    .padding(.vertical, 8)
+            // Document list
+            VStack(spacing: 8) {
+                ForEach(documents) { doc in
+                    DocumentThumbnailRow(
+                        doc: doc,
+                        searchText: searchText,
+                        document: $document,
+                        sidebarMode: $sidebarMode,
+                        activePopup: $activePopup,
+                        onDismiss: onDismiss
+                    )
+                }
             }
         }
     }
 }
 
-struct SearchResultRowView: View {
+// Content matches section with larger snippets
+struct ContentMatchesSection: View {
+    let searchText: String
+    let contentMatches: [(document: Letterspace_CanvasDocument, matches: [ContentMatch])]
+    @Binding var document: Letterspace_CanvasDocument
+    @Binding var sidebarMode: RightSidebar.SidebarMode
+    @Binding var activePopup: ActivePopup
+    var onDismiss: (() -> Void)? = nil
+    @Environment(\.themeColors) var theme
+    
+    private var totalMatches: Int {
+        contentMatches.reduce(0) { $0 + $1.matches.count }
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Section header
+            HStack {
+                Text("Content")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(theme.primary)
+                
+                Text("(\(totalMatches) matches)")
+                    .font(.system(size: 14))
+                    .foregroundStyle(theme.secondary)
+                
+                Spacer()
+            }
+            .padding(.horizontal, 8)
+            
+            // Content matches
+            VStack(spacing: 16) {
+                ForEach(contentMatches, id: \.document.id) { docWithMatches in
+                    ContentMatchGroup(
+                        document: docWithMatches.document,
+                        matches: docWithMatches.matches,
+                        searchText: searchText,
+                        boundDocument: $document,
+                        sidebarMode: $sidebarMode,
+                        activePopup: $activePopup,
+                        onDismiss: onDismiss
+                    )
+                }
+            }
+        }
+    }
+}
+
+// Document row with thumbnail/icon
+struct DocumentThumbnailRow: View {
     let doc: Letterspace_CanvasDocument
-    let group: (String, [Letterspace_CanvasDocument])
     let searchText: String
     @Binding var document: Letterspace_CanvasDocument
     @Binding var sidebarMode: RightSidebar.SidebarMode
     @Binding var activePopup: ActivePopup
+    var onDismiss: (() -> Void)? = nil
     @Environment(\.themeColors) var theme
+    
+    #if os(macOS)
+    @State private var headerImage: NSImage?
+    #elseif os(iOS)
+    @State private var headerImage: UIImage?
+    #endif
     
     var body: some View {
         Button(action: {
             document = doc
             sidebarMode = .details
             activePopup = .none
+            onDismiss?()
         }) {
-            VStack(alignment: .leading, spacing: 4) {
-                // Document title
-                Text(doc.title.isEmpty ? "Untitled" : doc.title)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(theme.primary)
-                
-                // Show subtitle for non-content matches
-                if !doc.subtitle.isEmpty {
-                    Text(doc.subtitle)
-                        .font(.system(size: 11))
-                        .foregroundStyle(theme.secondary)
-                        .lineLimit(1)
+            HStack(spacing: 12) {
+                // Thumbnail or document icon
+                Group {
+                    if let headerImage = headerImage {
+                        #if os(macOS)
+                        Image(nsImage: headerImage)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: 40, height: 40)
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                        #elseif os(iOS)
+                        Image(uiImage: headerImage)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: 40, height: 40)
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                        #endif
+                    } else {
+                        Image(systemName: "doc.text")
+                            .font(.system(size: 16))
+                            .foregroundStyle(theme.secondary)
+                            .frame(width: 40, height: 40)
+                            .background(theme.surface)
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                    }
                 }
+                
+                // Document title and subtitle with highlighting
+                VStack(alignment: .leading, spacing: 2) {
+                    let title = doc.title.isEmpty ? "Untitled" : doc.title
+                    let titleMatches = title.localizedCaseInsensitiveContains(searchText)
+                    
+                    if titleMatches {
+                        let titleContext = getMatchContext(content: title, searchText: searchText)
+                        HighlightedText(
+                            text: titleContext.0,
+                            highlightRange: titleContext.1,
+                            font: .system(size: 14, weight: .medium),
+                            textColor: theme.primary,
+                            highlightColor: Color.yellow.opacity(0.4)
+                        )
+                        .lineLimit(1)
+                    } else {
+                        Text(title)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(theme.primary)
+                            .lineLimit(1)
+                    }
+                    
+                    if !doc.subtitle.isEmpty {
+                        let subtitleMatches = doc.subtitle.localizedCaseInsensitiveContains(searchText)
+                        
+                        if subtitleMatches {
+                            let subtitleContext = getMatchContext(content: doc.subtitle, searchText: searchText)
+                            HighlightedText(
+                                text: subtitleContext.0,
+                                highlightRange: subtitleContext.1,
+                                font: .system(size: 12),
+                                textColor: theme.secondary,
+                                highlightColor: Color.yellow.opacity(0.3)
+                            )
+                            .lineLimit(1)
+                        } else {
+                            Text(doc.subtitle)
+                                .font(.system(size: 12))
+                                .foregroundStyle(theme.secondary)
+                                .lineLimit(1)
+                        }
+                    }
+                }
+                
+                Spacer()
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.vertical, 8)
             .padding(.horizontal, 8)
+            .padding(.vertical, 8)
+            .background(Color.clear)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .onAppear {
+            loadHeaderImage()
+        }
+    }
+    
+    private func loadHeaderImage() {
+        guard let headerElement = doc.elements.first(where: { $0.type == .headerImage }),
+              !headerElement.content.isEmpty,
+              let appDirectory = Letterspace_CanvasDocument.getAppDocumentsDirectory() else {
+            return
+        }
+        
+        let documentPath = appDirectory.appendingPathComponent("\(doc.id)")
+        let imagesPath = documentPath.appendingPathComponent("Images")
+        let imageUrl = imagesPath.appendingPathComponent(headerElement.content)
+        
+        #if os(macOS)
+        if let image = NSImage(contentsOf: imageUrl) {
+            headerImage = image
+        }
+        #elseif os(iOS)
+        if let image = UIImage(contentsOfFile: imageUrl.path) {
+            headerImage = image
+        }
+        #endif
+    }
+    
+    private func getMatchContext(content: String, searchText: String) -> (String, Range<String.Index>?) {
+        guard let range = content.range(of: searchText, options: .caseInsensitive) else {
+            return (content, nil)
+        }
+        return (content, range)
+    }
+}
+
+// Content match group for a specific document
+struct ContentMatchGroup: View {
+    let document: Letterspace_CanvasDocument
+    let matches: [ContentMatch]
+    let searchText: String
+    @Binding var boundDocument: Letterspace_CanvasDocument
+    @Binding var sidebarMode: RightSidebar.SidebarMode
+    @Binding var activePopup: ActivePopup
+    var onDismiss: (() -> Void)? = nil
+    @Environment(\.themeColors) var theme
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Document header
+            HStack(spacing: 8) {
+                Image(systemName: "doc.text")
+                    .font(.system(size: 12))
+                    .foregroundStyle(theme.secondary)
+                
+                Text(document.title.isEmpty ? "Untitled" : document.title)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(theme.primary)
+                    .lineLimit(1)
+                
+                if !document.subtitle.isEmpty {
+                    Text("•")
+                        .font(.system(size: 13))
+                        .foregroundStyle(theme.secondary)
+                    
+                    Text(document.subtitle)
+                        .font(.system(size: 13))
+                        .foregroundStyle(theme.secondary)
+                        .lineLimit(1)
+                }
+                
+                Spacer()
+                
+                Text("\(matches.count) match\(matches.count == 1 ? "" : "es")")
+                    .font(.system(size: 11))
+                    .foregroundStyle(theme.secondary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(theme.surface)
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
+            }
+            .padding(.horizontal, 8)
+            
+            // Individual matches
+            VStack(spacing: 6) {
+                ForEach(Array(matches.enumerated()), id: \.offset) { index, match in
+                    ContentMatchRow(
+                        match: match,
+                        matchIndex: index,
+                        totalMatches: matches.count,
+                        document: document,
+                        searchText: searchText,
+                        boundDocument: $boundDocument,
+                        sidebarMode: $sidebarMode,
+                        activePopup: $activePopup,
+                        onDismiss: onDismiss
+                    )
+                }
+            }
+        }
+        .padding(.vertical, 8)
+        .background(theme.surface.opacity(0.3))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+// Individual content match row with larger snippet
+struct ContentMatchRow: View {
+    let match: ContentMatch
+    let matchIndex: Int
+    let totalMatches: Int
+    let document: Letterspace_CanvasDocument
+    let searchText: String
+    @Binding var boundDocument: Letterspace_CanvasDocument
+    @Binding var sidebarMode: RightSidebar.SidebarMode
+    @Binding var activePopup: ActivePopup
+    var onDismiss: (() -> Void)? = nil
+    @Environment(\.themeColors) var theme
+    
+    private var expandedContext: (preview: String, highlightRange: Range<String.Index>?) {
+        let content = match.text
+        let matchRange = match.matchRange
+        
+        // Create a mapping between original content positions and cleaned content positions
+        var originalToCleanedMapping: [String.Index: String.Index] = [:]
+        var cleanedContent = ""
+        var cleanedIndex = cleanedContent.startIndex
+        
+        // Build cleaned content while maintaining position mapping
+        var i = content.startIndex
+        while i < content.endIndex {
+            let char = content[i]
+            originalToCleanedMapping[i] = cleanedContent.endIndex
+            
+            if char == "\n" {
+                // Replace newline with space
+                cleanedContent += " "
+            } else if char.isWhitespace {
+                // Handle multiple whitespace - only add space if last char wasn't space
+                if cleanedContent.isEmpty || !cleanedContent.last!.isWhitespace {
+                    cleanedContent += " "
+                }
+            } else {
+                cleanedContent += String(char)
+            }
+            
+            i = content.index(after: i)
+        }
+        
+        // Map the end index too
+        originalToCleanedMapping[content.endIndex] = cleanedContent.endIndex
+        
+        // Trim whitespace and adjust mapping
+        cleanedContent = cleanedContent.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // Find the cleaned positions for our match
+        guard let cleanedMatchStart = originalToCleanedMapping[matchRange.lowerBound],
+              let cleanedMatchEnd = originalToCleanedMapping[matchRange.upperBound],
+              cleanedMatchStart < cleanedContent.endIndex else {
+            print("❌ Could not map match range to cleaned content")
+            return (cleanedContent, nil)
+        }
+        
+        // Ensure we don't go beyond cleaned content bounds
+        let matchStart = min(cleanedMatchStart, cleanedContent.endIndex)
+        let matchEnd = min(cleanedMatchEnd, cleanedContent.endIndex)
+        
+        let originalMatchText = String(content[matchRange])
+        print("🔍 Original match text: '\(originalMatchText)'")
+        print("🔍 Match position in cleaned content: \(cleanedContent.distance(from: cleanedContent.startIndex, to: matchStart))")
+        
+        // Create snippet around THIS specific match position
+        let contextChars = 60
+        
+        // Calculate snippet start (60 chars before match, or beginning of content)
+        let snippetStart: String.Index
+        if let index = cleanedContent.index(matchStart, offsetBy: -contextChars, limitedBy: cleanedContent.startIndex) {
+            snippetStart = index
+        } else {
+            snippetStart = cleanedContent.startIndex
+        }
+        
+        // Calculate snippet end (60 chars after match, or end of content)  
+        let snippetEnd: String.Index
+        if let index = cleanedContent.index(matchEnd, offsetBy: contextChars, limitedBy: cleanedContent.endIndex) {
+            snippetEnd = index
+        } else {
+            snippetEnd = cleanedContent.endIndex
+        }
+        
+        // Extract the snippet
+        let snippet = String(cleanedContent[snippetStart..<snippetEnd])
+        
+        // Add ellipsis if we're not at the boundaries
+        let prefix = snippetStart > cleanedContent.startIndex ? "..." : ""
+        let suffix = snippetEnd < cleanedContent.endIndex ? "..." : ""
+        let fullSnippet = prefix + snippet + suffix
+        
+        // Calculate highlight range within the snippet
+        let prefixLength = prefix.count
+        let matchStartInSnippet = cleanedContent.distance(from: snippetStart, to: matchStart) + prefixLength
+        let matchEndInSnippet = matchStartInSnippet + originalMatchText.count
+        
+        guard matchStartInSnippet < fullSnippet.count && matchEndInSnippet <= fullSnippet.count else {
+            print("❌ Highlight range out of bounds")
+            return (fullSnippet, nil)
+        }
+        
+        let snippetHighlightRange = fullSnippet.index(fullSnippet.startIndex, offsetBy: matchStartInSnippet)..<fullSnippet.index(fullSnippet.startIndex, offsetBy: matchEndInSnippet)
+        
+        print("🔍 Final snippet: '\(fullSnippet)'")
+        print("🔍 Highlight range: \(matchStartInSnippet)-\(matchEndInSnippet)")
+        
+        return (fullSnippet, snippetHighlightRange)
+    }
+    
+    var body: some View {
+        Button(action: {
+            boundDocument = document
+            sidebarMode = .details
+            activePopup = .none
+            onDismiss?()
+            
+            // Navigate to specific match
+            highlightSpecificMatch()
+        }) {
+            VStack(alignment: .leading, spacing: 4) {
+                // Match number for all matches when there are multiple
+                if totalMatches > 1 {
+                    HStack {
+                        Text("Match \(matchIndex + 1)")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(theme.secondary)
+                        Spacer()
+                    }
+                }
+                
+                // Larger content snippet with highlighting
+                let context = expandedContext
+                HighlightedText(
+                    text: context.preview,
+                    highlightRange: context.highlightRange,
+                    font: .system(size: 12),
+                    textColor: theme.primary,
+                    highlightColor: Color.yellow.opacity(0.4)
+                )
+                .lineLimit(3)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background(Color.clear)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+    
+    private func highlightSpecificMatch() {
+        print("🔍 Highlighting specific match in document")
+        
+        // Build the complete document text to find exact position
+        let textBlockElements = document.elements.filter { $0.type == .textBlock }
+        var completeText = ""
+        var elementPositions: [(elementId: UUID, startPos: Int, endPos: Int)] = []
+        
+        for element in textBlockElements {
+            let startPos = completeText.count
+            
+            let elementText: String
+            if let attributedContent = element.attributedContent {
+                elementText = attributedContent.string
+            } else {
+                elementText = element.content
+            }
+            
+            completeText += elementText
+            let endPos = completeText.count
+            
+            elementPositions.append((elementId: element.id, startPos: startPos, endPos: endPos))
+        }
+        
+        // Find our specific match in the complete text
+        guard let matchElementPos = elementPositions.first(where: { $0.elementId == match.elementId }) else {
+            print("❌ Could not find element position for match")
+            return
+        }
+        
+        // Calculate the absolute position of our match
+        let elementStartInDocument = matchElementPos.startPos
+        let matchStartInElement = match.text.distance(from: match.text.startIndex, to: match.matchRange.lowerBound)
+        let absolutePosition = elementStartInDocument + matchStartInElement
+        let matchLength = match.text.distance(from: match.matchRange.lowerBound, to: match.matchRange.upperBound)
+        
+        print("🔍 Found match at absolute position \(absolutePosition), length \(matchLength)")
+        
+        // Navigate to the match with a delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            #if os(macOS)
+            // On macOS, collapse header first
+            NotificationCenter.default.post(
+                name: NSNotification.Name("CollapseHeaderOnly"),
+                object: nil
+            )
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                NotificationCenter.default.post(
+                    name: NSNotification.Name("SearchHighlight"),
+                    object: nil,
+                    userInfo: [
+                        "charPosition": absolutePosition,
+                        "charLength": matchLength,
+                        "searchTerm": searchText
+                    ]
+                )
+            }
+            #else
+            // On iOS
+            NotificationCenter.default.post(
+                name: NSNotification.Name("SearchHighlight"),
+                object: nil,
+                userInfo: [
+                    "charPosition": absolutePosition,
+                    "charLength": matchLength,
+                    "searchTerm": searchText
+                ]
+            )
+            #endif
+        }
+    }
+}
+
+// Component for displaying text with highlighted ranges
+struct HighlightedText: View {
+    let text: String
+    let highlightRange: Range<String.Index>?
+    let font: Font
+    let textColor: Color
+    let highlightColor: Color
+    
+    var body: some View {
+        if let range = highlightRange {
+            // Use AttributedString for proper text flow and highlighting
+            let beforeHighlight = String(text[..<range.lowerBound])
+            let highlighted = String(text[range])
+            let afterHighlight = String(text[range.upperBound...])
+            
+            // Create the full attributed string
+            let fullAttributedString = createAttributedString(
+                beforeText: beforeHighlight,
+                highlightedText: highlighted,
+                afterText: afterHighlight,
+                font: font,
+                textColor: textColor,
+                highlightColor: highlightColor
+            )
+            
+            Text(fullAttributedString)
+        } else {
+            Text(text)
+                .font(font)
+                .foregroundColor(textColor)
+        }
+    }
+    
+    private func createAttributedString(
+        beforeText: String,
+        highlightedText: String,
+        afterText: String,
+        font: Font,
+        textColor: Color,
+        highlightColor: Color
+    ) -> AttributedString {
+        var attributedString = AttributedString(beforeText)
+        
+        var highlightedPart = AttributedString(highlightedText)
+        highlightedPart.backgroundColor = highlightColor
+        
+        var afterPart = AttributedString(afterText)
+        
+        attributedString.append(highlightedPart)
+        attributedString.append(afterPart)
+        
+        // Set the font and color for the entire string
+        attributedString.font = font
+        attributedString.foregroundColor = textColor
+        
+        return attributedString
     }
 }
 
@@ -236,6 +822,7 @@ struct SearchPopupContent: View {
     @Binding var document: Letterspace_CanvasDocument
     @Binding var sidebarMode: RightSidebar.SidebarMode
     @Binding var isRightSidebarVisible: Bool
+    var onDismiss: (() -> Void)? = nil
     @Environment(\.themeColors) var theme
     
     private func getMatchContext(content: String, searchText: String) -> (String, Range<String.Index>?) {
@@ -256,7 +843,7 @@ struct SearchPopupContent: View {
     }
     
     private func performSearch() async {
-        print("🔍 Starting search with text: '\(searchText)'")
+        print("🔍 SearchPopupContent.performSearch() called with text: '\(searchText)'")
         
         guard !searchText.isEmpty else {
             print("❌ Search text is empty, clearing results")
@@ -266,21 +853,21 @@ struct SearchPopupContent: View {
             return
         }
         
-        guard let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+        guard let appDirectory = Letterspace_CanvasDocument.getAppDocumentsDirectory() else {
             print("❌ Could not access documents directory")
             return
         }
-        
-        let appDirectory = documentsPath.appendingPathComponent("Letterspace Canvas")
-        print("📂 Documents path: \(appDirectory)")
+        print("📂 Documents path: \(appDirectory.path)")
+        print("📂 Documents directory exists: \(FileManager.default.fileExists(atPath: appDirectory.path))")
         
         do {
             try FileManager.default.createDirectory(at: appDirectory, withIntermediateDirectories: true, attributes: nil)
             
-            let fileURLs = try FileManager.default.contentsOfDirectory(at: appDirectory, includingPropertiesForKeys: nil)
-                .filter { $0.pathExtension == "canvas" }
+            let allFiles = try FileManager.default.contentsOfDirectory(at: appDirectory, includingPropertiesForKeys: nil)
+            print("📁 All files in directory: \(allFiles.map { $0.lastPathComponent })")
             
-            print("📄 Found \(fileURLs.count) canvas files")
+            let fileURLs = allFiles.filter { $0.pathExtension == "canvas" }
+            print("📄 Found \(fileURLs.count) canvas files: \(fileURLs.map { $0.lastPathComponent })")
             
             var results: [Letterspace_CanvasDocument] = []
             
@@ -288,7 +875,7 @@ struct SearchPopupContent: View {
                 guard !Task.isCancelled else { return }
                 
                 let fileName = url.lastPathComponent
-                print("🔎 Processing file: \(fileName)")
+                print("📄 Processing file: \(fileName)")
                 
                 do {
                     let data = try Data(contentsOf: url)
@@ -320,6 +907,7 @@ struct SearchPopupContent: View {
             
             await MainActor.run {
                 searchResults = results
+                print("✅ Updated UI with \(results.count) search results")
             }
         } catch {
             print("❌ Error searching documents: \(error)")
@@ -380,7 +968,8 @@ struct SearchPopupContent: View {
                 document: $document,
                 sidebarMode: $sidebarMode,
                 activePopup: $activePopup,
-                performSearch: performSearch
+                performSearch: performSearch,
+                onDismiss: onDismiss
             )
             .padding({
                 #if os(macOS)

@@ -321,7 +321,9 @@ struct FoldersPopupContent: View {
                 .background(theme.surface)
             }
             .navigationTitle("Add Documents")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
         }
     }
     

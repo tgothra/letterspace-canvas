@@ -902,6 +902,51 @@ struct DocumentArea: View {
             }
         }
         
+        // Add observer to check scroll position after document loads
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("DocumentDidLoad"),
+            object: nil,
+            queue: .main
+        ) { notification in
+            // Check if document has header image and is expanded
+            if self.headerImage != nil && self.isHeaderExpanded {
+                #if os(macOS)
+                // Delay to allow document to fully load and establish scroll position
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    // Find the DocumentTextView and check its scroll position
+                    func findDocumentTextView(in view: NSView) -> NSScrollView? {
+                        if let scrollView = view as? NSScrollView,
+                           let textView = scrollView.documentView as? NSTextView,
+                           textView.className.contains("DocumentTextView") {
+                            return scrollView
+                        }
+                        for subview in view.subviews {
+                            if let found = findDocumentTextView(in: subview) {
+                                return found
+                            }
+                        }
+                        return nil
+                    }
+                    
+                    if let window = NSApp.keyWindow,
+                       let documentScrollView = findDocumentTextView(in: window.contentView!) {
+                        let scrollPosition = documentScrollView.contentView.bounds.origin.y
+                        print("📄 Document loaded, text view scroll position: \(scrollPosition)")
+                        
+                        // If document is not at the top (scrolled down more than 50pt), auto-collapse header
+                        if scrollPosition > 50 {
+                            print("📄 Auto-collapsing header because document is not at top (scroll: \(scrollPosition))")
+                            withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                                self.isImageExpanded = false
+                                print("🔍 Header auto-collapsed for non-top scroll position")
+                            }
+                        }
+                    }
+                }
+                #endif
+            }
+        }
+        
         // Trigger document fade-in animation with a better spring animation
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             withAnimation(.easeInOut(duration: 0.4)) {

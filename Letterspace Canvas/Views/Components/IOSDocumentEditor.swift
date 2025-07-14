@@ -145,6 +145,9 @@ struct SimpleIOSTextView: UIViewRepresentable {
         // Setup attributed content notification
         context.coordinator.setupAttributedContentNotification()
         
+        // Setup search highlighting notification
+        context.coordinator.setupSearchHighlightNotification()
+        
         return scrollView
     }
     
@@ -177,6 +180,7 @@ struct SimpleIOSTextView: UIViewRepresentable {
         @Binding var document: Letterspace_CanvasDocument
 
         private var applyAttributedContentObserver: NSObjectProtocol?
+        private var searchHighlightObserver: NSObjectProtocol?
         private var attributedTextSaveTimer: Timer?
         
         init(text: Binding<String>, document: Binding<Letterspace_CanvasDocument>) {
@@ -202,6 +206,9 @@ struct SimpleIOSTextView: UIViewRepresentable {
         
         deinit {
             if let observer = applyAttributedContentObserver {
+                NotificationCenter.default.removeObserver(observer)
+            }
+            if let observer = searchHighlightObserver {
                 NotificationCenter.default.removeObserver(observer)
             }
             attributedTextSaveTimer?.invalidate()
@@ -341,6 +348,16 @@ struct SimpleIOSTextView: UIViewRepresentable {
             }
         }
         
+        func setupSearchHighlightNotification() {
+            searchHighlightObserver = NotificationCenter.default.addObserver(
+                forName: NSNotification.Name("SearchHighlight"),
+                object: nil,
+                queue: .main
+            ) { [weak self] notification in
+                self?.processSearchHighlight(notification)
+            }
+        }
+        
         private func applyAttributedContent(_ notification: Notification) {
             guard let textView = textView,
                   let attributedContent = notification.userInfo?["attributedContent"] as? NSAttributedString else {
@@ -351,6 +368,130 @@ struct SimpleIOSTextView: UIViewRepresentable {
             textView.attributedText = NSAttributedString(attributedString: attributedContent)
             text = attributedContent.string
             textView.selectedRange = currentSelection
+        }
+        
+        private func processSearchHighlight(_ notification: Notification) {
+            print("🔍 iOS processSearchHighlight called")
+            
+            guard let textView = textView,
+                  let scrollView = scrollView,
+                  let userInfo = notification.userInfo,
+                  let charPosition = userInfo["charPosition"] as? Int,
+                  let charLength = userInfo["charLength"] as? Int else {
+                print("🔍 iOS: Missing textView, scrollView, or notification data")
+                return
+            }
+            
+            print("🔍 iOS: Search highlight at position \(charPosition), length \(charLength)")
+            
+            // Safety check
+            let textLength = textView.text.count
+            guard charPosition >= 0 && charPosition < textLength else {
+                print("⚠️ iOS: Invalid character position: \(charPosition), text has \(textLength) characters")
+                return
+            }
+            
+            // Create range for the search result
+            let searchRange = NSRange(location: charPosition, length: min(charLength, textLength - charPosition))
+            
+            // Scroll to the search result position
+            DispatchQueue.main.async {
+                // Calculate the rect for the character range
+                let startPosition = textView.position(from: textView.beginningOfDocument, offset: charPosition) ?? textView.beginningOfDocument
+                let endPosition = textView.position(from: startPosition, offset: charLength) ?? startPosition
+                let textRange = textView.textRange(from: startPosition, to: endPosition)
+                
+                if let range = textRange {
+                    let rect = textView.firstRect(for: range)
+                    print("🔍 iOS: Calculated rect for search text: \(rect)")
+                    
+                    // Convert to scroll view coordinates
+                    let convertedRect = textView.convert(rect, to: scrollView)
+                    
+                    // Position the search result about 20% from the top of the visible area
+                    let visibleHeight = scrollView.bounds.height
+                    let targetY = max(0, convertedRect.origin.y - (visibleHeight * 0.2))
+                    
+                    let scrollPoint = CGPoint(x: 0, y: targetY)
+                    print("🔍 iOS: Scrolling to point: \(scrollPoint)")
+                    
+                    scrollView.setContentOffset(scrollPoint, animated: true)
+                }
+                
+                // Apply yellow highlighting
+                self.applySearchHighlight(to: textView, range: searchRange)
+            }
+        }
+        
+        private func applySearchHighlight(to textView: UITextView, range: NSRange) {
+            print("🔍 iOS: Applying yellow highlight to range \(range)")
+            
+            // Create mutable attributed string from current text
+            let mutableAttributedString = NSMutableAttributedString(attributedString: textView.attributedText)
+            
+            // Store original attributes for later restoration
+            let originalAttributes = mutableAttributedString.attributes(at: range.location, effectiveRange: nil)
+            
+            // Apply yellow highlight
+            let highlightColor = UIColor.systemYellow.withAlphaComponent(0.4)
+            mutableAttributedString.addAttribute(.backgroundColor, value: highlightColor, range: range)
+            
+            // Update the text view
+            textView.attributedText = mutableAttributedString
+            
+            // Set cursor position at the start of the search result
+            textView.selectedRange = NSRange(location: range.location, length: 0)
+            
+            // Schedule removal of highlight after delay
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+                self?.removeSearchHighlight(from: textView, range: range, originalAttributes: originalAttributes)
+            }
+        }
+        
+        private func removeSearchHighlight(from textView: UITextView, range: NSRange, originalAttributes: [NSAttributedString.Key: Any]) {
+            print("🔍 iOS: Removing search highlight")
+            
+            // Create mutable attributed string
+            let mutableAttributedString = NSMutableAttributedString(attributedString: textView.attributedText)
+            
+            // Animate the highlight removal with multiple steps
+            self.animateSearchHighlightRemoval(textView: textView, range: range, originalAttributes: originalAttributes, step: 0)
+        }
+        
+        private func animateSearchHighlightRemoval(textView: UITextView, range: NSRange, originalAttributes: [NSAttributedString.Key: Any], step: Int) {
+            let totalSteps = 6
+            let stepDuration = 0.1
+            
+            if step >= totalSteps {
+                // Final step: restore original attributes
+                let mutableAttributedString = NSMutableAttributedString(attributedString: textView.attributedText)
+                
+                // Remove highlight and restore original attributes
+                mutableAttributedString.removeAttribute(.backgroundColor, range: range)
+                for (key, value) in originalAttributes {
+                    if key != .backgroundColor { // Don't restore background if it was clear originally
+                        mutableAttributedString.addAttribute(key, value: value, range: range)
+                    }
+                }
+                
+                textView.attributedText = mutableAttributedString
+                self.text = textView.text // Update binding
+                return
+            }
+            
+            // Calculate fading alpha
+            let alpha = 0.4 * (1.0 - (Double(step) / Double(totalSteps)))
+            let fadeColor = UIColor.systemYellow.withAlphaComponent(CGFloat(alpha))
+            
+            // Apply fading highlight
+            let mutableAttributedString = NSMutableAttributedString(attributedString: textView.attributedText)
+            mutableAttributedString.addAttribute(.backgroundColor, value: fadeColor, range: range)
+            textView.attributedText = mutableAttributedString
+            
+            // Schedule next step
+            DispatchQueue.main.asyncAfter(deadline: .now() + stepDuration) {
+                self.animateSearchHighlightRemoval(textView: textView, range: range, originalAttributes: originalAttributes, step: step + 1)
+            }
         }
         
         // MARK: - UITextViewDelegate

@@ -11,6 +11,7 @@ private struct BookmarkNavigationKeys {
     static let bookmarkMaintenanceTimerKey = "bookmarkMaintenanceTimerKey"
     static let bookmarkScrollObserverKey = "bookmarkScrollObserverKey"
     static let scrollToTopObserverKey = "scrollToTopObserverKey"
+    static let searchHighlightObserverKey = "searchHighlightObserverKey"
     static let maintenanceChecksCountKey = "maintenanceChecksCountKey"
 }
 
@@ -77,6 +78,15 @@ extension DocumentTextView {
         }
         set {
             objc_setAssociatedObject(self, BookmarkNavigationKeys.scrollToTopObserverKey, newValue, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+        }
+    }
+
+    var searchHighlightObserver: NSObjectProtocol? {
+        get {
+            return objc_getAssociatedObject(self, BookmarkNavigationKeys.searchHighlightObserverKey) as? NSObjectProtocol
+        }
+        set {
+            objc_setAssociatedObject(self, BookmarkNavigationKeys.searchHighlightObserverKey, newValue, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
         }
     }
 
@@ -429,16 +439,21 @@ extension DocumentTextView {
         maintenanceChecksCount = 0
     }
 
-    internal func registerForBookmarkNavigation() {
+        internal func registerForBookmarkNavigation() {
         // Remove any existing observers
         if let observer = bookmarkScrollObserver {
             NotificationCenter.default.removeObserver(observer)
             bookmarkScrollObserver = nil
         }
-        
+
         if let observer = scrollToTopObserver {
             NotificationCenter.default.removeObserver(observer)
             scrollToTopObserver = nil
+        }
+
+        if let observer = searchHighlightObserver {
+            NotificationCenter.default.removeObserver(observer)
+            searchHighlightObserver = nil
         }
         
         // Create bookmark navigation observer
@@ -467,16 +482,9 @@ extension DocumentTextView {
                 let isAtTop = self.enclosingScrollView?.contentView.bounds.origin.y ?? 0 <= 0
                 
                 // Only use a delay if the header is expanded and we're at the top
-                if headerIsExpanded && isAtTop {
-                    print("📝 Header is expanded and visible - using delay for navigation")
-                    // Allow time for header animation to complete before scrolling to bookmark
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-                        guard let self = self else { return }
-                        self.processBookmarkNavigation(notification: notification)
-            }
-                        } else {
-                    print("📝 Header is not expanded or not visible - navigating immediately")
-                    // Navigate immediately if header doesn't need to collapse
+                let delay = (headerIsExpanded && isAtTop) ? 0.2 : 0.0
+                
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
                     self.processBookmarkNavigation(notification: notification)
                 }
             }
@@ -485,10 +493,17 @@ extension DocumentTextView {
         scrollToTopObserver = NotificationCenter.default.addObserver(
             forName: NSNotification.Name("ScrollToTop"),
             object: nil,
+            queue: .main) { [weak self] _ in
+                self?.scrollToDocumentTop()
+            }
+        
+        // Add search highlight observer
+        searchHighlightObserver = NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("SearchHighlight"),
+            object: nil,
             queue: .main) { [weak self] notification in
                 guard let self = self else { return }
-                print("🔝 Received ScrollToTop notification")
-                self.scrollToDocumentTop()
+                self.processSearchHighlight(notification: notification)
             }
     }
 
@@ -715,6 +730,10 @@ extension DocumentTextView {
             NotificationCenter.default.removeObserver(observer)
             scrollToTopObserver = nil
         }
+        if let observer = searchHighlightObserver {
+            NotificationCenter.default.removeObserver(observer)
+            searchHighlightObserver = nil
+        }
     }
 
     // Helper method to animate the highlight removal
@@ -740,6 +759,154 @@ extension DocumentTextView {
                 if i < steps - 1 {
                     // Use a fading blue
                     let fadeColor = NSColor.systemBlue.withAlphaComponent(CGFloat(alpha))
+                    textStorage.addAttribute(.backgroundColor, value: fadeColor, range: range)
+                } else {
+                    // For the last step, restore all original attributes
+                    // First remove all attributes to avoid any conflicts
+                    textStorage.setAttributes([:], range: range)
+                    
+                    // Then apply the original attributes
+                    for (key, value) in originalAttributes {
+                        textStorage.addAttribute(key, value: value, range: range)
+                    }
+                }
+                
+                // End editing to update the view
+                textStorage.endEditing()
+            }
+        }
+    }
+
+    // MARK: - Search Highlighting
+    internal func processSearchHighlight(notification: Notification) {
+        print("🔍 processSearchHighlight called")
+        
+        if let userInfo = notification.userInfo {
+            if let charPosition = userInfo["charPosition"] as? Int,
+               let charLength = userInfo["charLength"] as? Int {
+                print("🔍 Search highlight at position \(charPosition), length \(charLength)")
+                self.scrollToCharacterPositionWithSearchHighlight(charPosition, length: charLength)
+            }
+        }
+    }
+    
+    internal func scrollToCharacterPositionWithSearchHighlight(_ position: Int, length: Int) {
+        print("🔍 DocumentTextView: Scrolling to search result at position \(position), length: \(length)")
+        
+        // Cancel any existing maintenance timer
+        bookmarkMaintenanceTimer?.invalidate()
+        bookmarkMaintenanceTimer = nil
+        
+        // Safety check - ensure the position is valid
+        let text = self.string
+        guard position >= 0 && position < text.count else {
+            print("⚠️ Invalid character position: \(position), document has \(text.count) characters")
+            return
+        }
+        
+        // Create range for the search result
+        let searchRange = NSRange(location: position, length: min(length, text.count - position))
+        
+        // Force layout calculation before scrolling
+        self.layoutManager?.ensureLayout(forCharacterRange: NSRange(location: 0, length: text.count))
+                
+        // Scroll to position the search result near the top of the visible area
+        if let layoutManager = self.layoutManager,
+           let textContainer = self.textContainer,
+           let enclosingScrollView = self.enclosingScrollView,
+           let documentView = enclosingScrollView.documentView {
+
+            // Get the rect for the target text
+            let glyphRange = layoutManager.glyphRange(forCharacterRange: searchRange, actualCharacterRange: nil)
+            var targetRect = layoutManager.boundingRect(forGlyphRange: glyphRange, in: textContainer)
+            targetRect = targetRect.offsetBy(dx: self.textContainerOrigin.x, dy: self.textContainerOrigin.y)
+            
+            print("📐 Search target rect: \(targetRect)")
+            
+            // Get the current visible rect
+            let visibleRect = enclosingScrollView.contentView.bounds
+            
+            // Calculate scroll position to position text about 20% from the top
+            let topMargin = visibleRect.height * 0.2 // 20% from the top
+            var scrollPointY = targetRect.minY - topMargin
+            
+            // Ensure we don't scroll beyond document bounds
+            let maxY = max(0, documentView.frame.height - visibleRect.height)
+            scrollPointY = max(0, min(scrollPointY, maxY))
+            
+            print("📏 Search scroll point: \(scrollPointY)")
+            
+            // Scroll to the position
+            let scrollPoint = NSPoint(x: visibleRect.origin.x, y: scrollPointY)
+            enclosingScrollView.contentView.scroll(to: scrollPoint)
+            enclosingScrollView.reflectScrolledClipView(enclosingScrollView.contentView)
+            
+            // Then animate slightly to provide visual feedback
+            DispatchQueue.main.async {
+                NSAnimationContext.runAnimationGroup({ context in
+                    context.duration = 0.2
+                    enclosingScrollView.contentView.animator().setBoundsOrigin(scrollPoint)
+                    enclosingScrollView.reflectScrolledClipView(enclosingScrollView.contentView)
+                })
+            }
+        }
+        
+        // Ensure the view has focus
+        if let window = self.window {
+            window.makeFirstResponder(self)
+        }
+        
+        // Apply a temporary YELLOW highlight to the search result (different from bookmark blue)
+        if let textStorage = self.textStorage {
+            // Store original attributes for later restoration
+            let originalAttributes = textStorage.attributes(at: searchRange.location, effectiveRange: nil)
+            
+            // Start editing
+            textStorage.beginEditing()
+            
+            // Apply YELLOW highlight color for search results
+            let highlightColor = NSColor.systemYellow.withAlphaComponent(0.4)
+            textStorage.addAttribute(.backgroundColor, value: highlightColor, range: searchRange)
+            
+            // End editing to update the view
+            textStorage.endEditing()
+            
+            // Schedule removal of highlight after a longer delay for search results
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+                guard let self = self, let _ = self.textStorage else { return }
+                
+                // Start the fade-out effect with yellow color
+                self.animateSearchHighlightRemoval(range: searchRange, originalAttributes: originalAttributes)
+            }
+        }
+        
+        // Set cursor position at the start of the search result
+        self.setSelectedRange(NSRange(location: searchRange.location, length: 0))
+    }
+    
+    // Helper method to animate the yellow search highlight removal
+    internal func animateSearchHighlightRemoval(range: NSRange, originalAttributes: [NSAttributedString.Key: Any]) {
+        guard self.textStorage != nil else { return }
+
+        // Create a sequence of fading yellow colors to simulate an animation
+        let steps = 6
+        let duration = 0.6 // slightly longer animation for search results
+        let stepDuration = duration / Double(steps)
+
+        for i in 0..<steps {
+            let delay = stepDuration * Double(i)
+            let alpha = 0.4 * (1.0 - (Double(i) / Double(steps))) // Start with 0.4 alpha
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                guard let self = self, let textStorage = self.textStorage else { return }
+                
+                // Start editing
+                textStorage.beginEditing()
+                
+                // Either fade out the yellow background color or restore original attributes
+                if i < steps - 1 {
+                    // Use a fading yellow
+                    let fadeColor = NSColor.systemYellow.withAlphaComponent(CGFloat(alpha))
                     textStorage.addAttribute(.backgroundColor, value: fadeColor, range: range)
                 } else {
                     // For the last step, restore all original attributes

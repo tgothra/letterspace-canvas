@@ -157,6 +157,7 @@ struct MainLayout: View {
     @State private var showTemplateBrowser = false // New state variable for template browser modal
     @State private var showExportModal = false // New state variable for Export modal
     @State private var showSettingsModal = false // New state variable for Settings modal
+    @State private var showSearchModal = false // New state variable for Search modal on iPhone
     
     // Floating sidebar states for iPad/iPhone
     @State private var showFloatingSidebar = {
@@ -508,6 +509,52 @@ struct MainLayout: View {
                     }
                     .padding(30)
                     .background(colorScheme == .dark ? Color(.sRGB, white: 0.12) : Color.white)
+                    .cornerRadius(12)
+                    .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 10)
+                    .transition(.asymmetric(
+                        insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .center)),
+                        removal: .opacity.combined(with: .scale(scale: 0.95, anchor: .center))
+                    ))
+                }
+            }
+        }
+        .overlay {
+            if showSearchModal {
+                ZStack {
+                    // Dismiss layer
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .ignoresSafeArea()
+                        .onTapGesture {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                showSearchModal = false
+                            }
+                        }
+                    
+                    // Search modal content
+                    SearchPopupContent(
+                        activePopup: $activePopup,
+                        document: $document,
+                        sidebarMode: $sidebarMode,
+                        isRightSidebarVisible: $isRightSidebarVisible,
+                        onDismiss: {
+                            showSearchModal = false
+                        }
+                    )
+                    .frame(width: {
+                        #if os(iOS)
+                        return min(UIScreen.main.bounds.width - 40, 400)
+                        #else
+                        return 400
+                        #endif
+                    }(), height: {
+                        #if os(iOS)
+                        return min(UIScreen.main.bounds.height - 100, 600)
+                        #else
+                        return 600
+                        #endif
+                    }())
+                    .background(Color.white) // Force white background for search modal
                     .cornerRadius(12)
                     .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 10)
                     .transition(.asymmetric(
@@ -927,7 +974,10 @@ struct MainLayout: View {
                             activePopup: $activePopup,
                             document: $document,
                             sidebarMode: $sidebarMode,
-                            isRightSidebarVisible: $isRightSidebarVisible
+                            isRightSidebarVisible: $isRightSidebarVisible,
+                            onDismiss: {
+                                activePopup = .none
+                            }
                         )
                         .frame(width: 350, height: 500)
                         .background(theme.surface)
@@ -1457,7 +1507,7 @@ private var bottomNavigationItems: [(icon: String, title: String, action: () -> 
         ),
         (
             icon: "magnifyingglass", 
-            title: "Search",
+            title: "Document Search",
             action: {
                 searchFieldFocused = true
             }
@@ -2186,9 +2236,9 @@ private func mainContentView(availableWidth: CGFloat) -> some View {
             #endif
             }
             // Apply blur to main content area when any modal is shown
-            .blur(radius: showUserProfileModal || showRecentlyDeletedModal || showSmartStudyModal || showBibleReaderModal || showFoldersModal || showExportModal || showSettingsModal || isCircularMenuOpen ? 6 : 0)
-            .opacity(showUserProfileModal || showRecentlyDeletedModal || showSmartStudyModal || showBibleReaderModal || showFoldersModal || showExportModal || showSettingsModal || isCircularMenuOpen ? 0.7 : 1.0)
-            .animation(.easeInOut(duration: 0.2), value: showUserProfileModal || showRecentlyDeletedModal || showSmartStudyModal || showBibleReaderModal || showFoldersModal || showExportModal || showSettingsModal || isCircularMenuOpen)
+            .blur(radius: showUserProfileModal || showRecentlyDeletedModal || showSmartStudyModal || showBibleReaderModal || showFoldersModal || showExportModal || showSettingsModal || showSearchModal || isCircularMenuOpen ? 6 : 0)
+            .opacity(showUserProfileModal || showRecentlyDeletedModal || showSmartStudyModal || showBibleReaderModal || showFoldersModal || showExportModal || showSettingsModal || showSearchModal || isCircularMenuOpen ? 0.7 : 1.0)
+            .animation(.easeInOut(duration: 0.2), value: showUserProfileModal || showRecentlyDeletedModal || showSmartStudyModal || showBibleReaderModal || showFoldersModal || showExportModal || showSettingsModal || showSearchModal || isCircularMenuOpen)
             
             // Floating Action Buttons (iPhone only)
             #if os(iOS)
@@ -2366,7 +2416,15 @@ private func mainContentView(availableWidth: CGFloat) -> some View {
                         viewMode = .normal
                     },
                     onSearch: {
+                        #if os(iOS)
+                        if UIDevice.current.userInterfaceIdiom == .phone {
+                            showSearchModal = true
+                        } else {
+                            searchFieldFocused = true
+                        }
+                        #else
                         searchFieldFocused = true
+                        #endif
                     },
                     onNewDocument: {
                         // Create new document directly for iPhone (same logic as floating sidebar)
@@ -2638,7 +2696,10 @@ private func mainContentView(availableWidth: CGFloat) -> some View {
                         activePopup: $activePopup,
                         document: $document,
                         sidebarMode: $sidebarMode,
-                        isRightSidebarVisible: $isRightSidebarVisible
+                        isRightSidebarVisible: $isRightSidebarVisible,
+                        onDismiss: {
+                            activePopup = .none
+                        }
                     )
                     .frame(width: 350, height: 500)
                     .background(theme.surface)
