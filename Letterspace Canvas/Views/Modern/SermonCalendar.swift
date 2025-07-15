@@ -26,6 +26,7 @@ internal struct SermonCalendar: View {
     var onShowExpandModal: (() -> Void)? = nil  // Callback for showing expand modal on iPad
     var hideHeader: Bool = false // New parameter to hide header in modals
     var showMonthSelectorOnly: Bool = false // New parameter for modal view
+    var allDocumentsPosition: DashboardView.AllDocumentsPosition = .default // For iPhone dynamic heights
     @Environment(\.themeColors) var theme
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.carouselHeaderFont) var carouselHeaderFont
@@ -78,7 +79,7 @@ internal struct SermonCalendar: View {
         #endif
     }
     
-    init(documents: [Letterspace_CanvasDocument], calendarDocuments: Set<String>, isExpanded: Binding<Bool>, onShowModal: @escaping (ModalDisplayData?) -> Void, isCarouselMode: Bool = false, showExpandButtons: Bool = false, onShowExpandModal: (() -> Void)? = nil, hideHeader: Bool = false, showMonthSelectorOnly: Bool = false) {
+    init(documents: [Letterspace_CanvasDocument], calendarDocuments: Set<String>, isExpanded: Binding<Bool>, onShowModal: @escaping (ModalDisplayData?) -> Void, isCarouselMode: Bool = false, showExpandButtons: Bool = false, onShowExpandModal: (() -> Void)? = nil, hideHeader: Bool = false, showMonthSelectorOnly: Bool = false, allDocumentsPosition: DashboardView.AllDocumentsPosition = .default) {
         self.documents = documents
         self.calendarDocuments = calendarDocuments
         _isExpanded = isExpanded
@@ -88,6 +89,7 @@ internal struct SermonCalendar: View {
         self.onShowExpandModal = onShowExpandModal
         self.hideHeader = hideHeader
         self.showMonthSelectorOnly = showMonthSelectorOnly
+        self.allDocumentsPosition = allDocumentsPosition
         let calendar = Calendar.current
         let date = Date()
         _selectedYear = State(initialValue: calendar.component(.year, from: date))
@@ -500,7 +502,18 @@ internal struct SermonCalendar: View {
             // Apply dynamic height only to the ScrollView/ScrollViewReader
             .frame(height: isExpanded ? 450 : {
                 if isCarouselMode {
-                    return 141 // iPad landscape carousel (keep existing)
+                    #if os(iOS)
+                    let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                    if isPhone {
+                        // iPhone: Use dynamic height based on All Documents position
+                        // Subtract header and month selector space (~65pt) to maximize ScrollView height
+                        return max(180, allDocumentsPosition.carouselHeight - 65)
+                    } else {
+                        return 141 // iPad landscape carousel (keep existing)
+                    }
+                    #else
+                    return 141 // Other platforms
+                    #endif
                 } else if isIPad && !isCarouselMode && !hideHeader {
                     // iPad portrait cards need more height to fill the 380pt container
                     // Container: 380pt, Header: ~50pt, Month selector: ~40pt, Padding: ~20pt = ~270pt available

@@ -99,6 +99,41 @@ struct DashboardView: View {
     @State private var selectedAllDocuments: Set<String> = []
     @State private var justLongPressed: Bool = false
     
+    // NEW: State for All Documents sheet behavior (iPhone only)
+    @State private var allDocumentsOffset: CGFloat = 0
+    @State private var isDraggingAllDocuments: Bool = false
+    @State private var allDocumentsPosition: AllDocumentsPosition = .default
+    
+    // Sheet position states
+    enum AllDocumentsPosition {
+        case collapsed  // Minimum height, carousel expanded
+        case `default`  // Current default position
+        case expanded   // Full screen like iOS sheet
+        
+        var offset: CGFloat {
+            switch self {
+            case .collapsed:
+                // No offset - All Documents section stays at same position as default
+                return 0  // No spacing change from carousel buttons
+            case .default:
+                return 0    // No offset
+            case .expanded:
+                return -200 // Pull up by 200 points
+            }
+        }
+        
+        var carouselHeight: CGFloat {
+            switch self {
+            case .collapsed:
+                return 420  // Much taller expanded carousel height (increased from 350)
+            case .default:
+                return 200  // Default carousel height
+            case .expanded:
+                return 140  // Minimized carousel height
+            }
+        }
+    }
+    
     // Computed property to determine if navigation padding should be added
     private var shouldAddNavigationPadding: Bool {
         #if os(iOS)
@@ -224,7 +259,8 @@ struct DashboardView: View {
             showExpandButtons: shouldShowExpandButtons, // separate parameter for expand buttons
             onShowModal: {
                 showPinnedModal = true
-            }
+            },
+            allDocumentsPosition: allDocumentsPosition // Pass the position for iPhone dynamic heights
         )
         .modifier(CarouselHeaderStyling())
     }
@@ -241,7 +277,8 @@ struct DashboardView: View {
             showExpandButtons: shouldShowExpandButtons, // separate parameter for expand buttons
             onShowModal: {
                 showWIPModal = true
-            }
+            },
+            allDocumentsPosition: allDocumentsPosition // Pass the position for iPhone dynamic heights
         )
         .modifier(CarouselHeaderStyling())
     }
@@ -258,7 +295,8 @@ struct DashboardView: View {
             showExpandButtons: shouldShowExpandButtons, // separate parameter for expand buttons
             onShowExpandModal: {
                 showSchedulerModal = true
-            }
+            },
+            allDocumentsPosition: allDocumentsPosition // Pass the position for iPhone dynamic heights
         )
         .modifier(CarouselHeaderStyling())
     }
@@ -1606,35 +1644,53 @@ struct DashboardView: View {
     
     // iPhone-specific header with stacked rows
     private var iPhoneDocumentHeader: some View {
-        VStack(spacing: 10) { // Increased spacing for better breathing room
-            // Title row - matching carousel header style
-            HStack(spacing: 8) {
-                Image(systemName: "doc.text.fill")
-                    .font(.system(size: 12)) // Match carousel icon size
-                    .foregroundStyle(theme.primary)
-                Text("All Documents")
-                    .font(.custom("InterTight-Medium", size: 16)) // Match carousel header font size
-                    .foregroundStyle(theme.primary)
-                Text("(\(filteredDocuments.count))")
-                    .font(.custom("InterTight-Regular", size: 14)) // Proportionally smaller
-                    .foregroundStyle(theme.secondary)
-                Spacer()
-                
-                // Clear all filters button
-                if !selectedTags.isEmpty || selectedFilterColumn != nil {
-                    Button("Clear") {
-                        selectedTags.removeAll()
-                        selectedFilterColumn = nil
-                        updateVisibleColumns()
-                        tableRefreshID = UUID()
-                        
-                        // Haptic feedback
-                        HapticFeedback.impact(.light)
+        VStack(spacing: 0) {
+            // Grab bar for swipe gestures
+            GrabBar()
+                .frame(maxWidth: .infinity)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    // Toggle between default and expanded on tap
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                        if allDocumentsPosition == .expanded {
+                            allDocumentsPosition = .default
+                        } else {
+                            allDocumentsPosition = .expanded
+                        }
                     }
-                    .font(.custom("InterTight-Medium", size: 11)) // Smaller clear button
-                    .foregroundStyle(theme.accent)
+                    // Add haptic feedback
+                    HapticFeedback.impact(.light)
                 }
-            }
+            
+            VStack(spacing: 10) { // Increased spacing for better breathing room
+                // Title row - matching carousel header style
+                HStack(spacing: 8) {
+                    Image(systemName: "doc.text.fill")
+                        .font(.system(size: 12)) // Match carousel icon size
+                        .foregroundStyle(theme.primary)
+                    Text("All Documents")
+                        .font(.custom("InterTight-Medium", size: 16)) // Match carousel header font size
+                        .foregroundStyle(theme.primary)
+                    Text("(\(filteredDocuments.count))")
+                        .font(.custom("InterTight-Regular", size: 14)) // Proportionally smaller
+                        .foregroundStyle(theme.secondary)
+                    Spacer()
+                    
+                    // Clear all filters button
+                    if !selectedTags.isEmpty || selectedFilterColumn != nil {
+                        Button("Clear") {
+                            selectedTags.removeAll()
+                            selectedFilterColumn = nil
+                            updateVisibleColumns()
+                            tableRefreshID = UUID()
+                            
+                            // Haptic feedback
+                            HapticFeedback.impact(.light)
+                        }
+                        .font(.custom("InterTight-Medium", size: 11)) // Smaller clear button
+                        .foregroundStyle(theme.accent)
+                    }
+                }
             
             // Filter selection row - Segmented control on left, filter options on right
             HStack(spacing: 12) {
@@ -1769,7 +1825,8 @@ struct DashboardView: View {
             }
             .padding(.top, 4) // Add breathing room above
             .padding(.bottom, 6) // Add breathing room below
-        }
+            } // Close inner VStack(spacing: 10)
+        } // Close outer VStack(spacing: 0)
         .padding(.horizontal, 12) // Reduced from 16 to match carousel padding
         .padding(.top, 12) // Reduced from 16 to match carousel padding
         .padding(.bottom, 12) // Reduced from 20 to match carousel padding
@@ -2356,8 +2413,10 @@ struct DashboardView: View {
     private var allDocumentsSectionView: some View {
         #if os(iOS)
         let isIPad = UIDevice.current.userInterfaceIdiom == .pad
+        let isPhone = UIDevice.current.userInterfaceIdiom == .phone
         #else
         let isIPad = false
+        let isPhone = false
         #endif
         
         return VStack(spacing: 0) {
@@ -2479,6 +2538,55 @@ struct DashboardView: View {
                 }
             }
         }
+        // iPhone-specific sheet behavior
+        .offset(y: isPhone ? allDocumentsPosition.offset + allDocumentsOffset : 0)
+        .gesture(
+            isPhone ? DragGesture()
+                .onChanged { value in
+                    // Allow dragging
+                    allDocumentsOffset = value.translation.height
+                    isDraggingAllDocuments = true
+                }
+                .onEnded { value in
+                    let velocity = value.predictedEndTranslation.height
+                    let dragThreshold: CGFloat = 100
+                    
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                        let previousPosition = allDocumentsPosition
+                        
+                        // Determine final position based on drag distance and velocity
+                        if allDocumentsPosition == .default {
+                            if value.translation.height < -dragThreshold || velocity < -200 {
+                                // Swipe up from default -> expanded
+                                allDocumentsPosition = .expanded
+                            } else if value.translation.height > dragThreshold || velocity > 200 {
+                                // Swipe down from default -> collapsed
+                                allDocumentsPosition = .collapsed
+                            }
+                        } else if allDocumentsPosition == .expanded {
+                            if value.translation.height > dragThreshold || velocity > 200 {
+                                // Swipe down from expanded -> default
+                                allDocumentsPosition = .default
+                            }
+                        } else if allDocumentsPosition == .collapsed {
+                            if value.translation.height < -dragThreshold || velocity < -200 {
+                                // Swipe up from collapsed -> default
+                                allDocumentsPosition = .default
+                            }
+                        }
+                        
+                        // Add haptic feedback if position changed
+                        if previousPosition != allDocumentsPosition {
+                            HapticFeedback.impact(.medium)
+                        }
+                        
+                        // Reset offset
+                        allDocumentsOffset = 0
+                        isDraggingAllDocuments = false
+                    }
+                } : nil
+        )
+        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: allDocumentsPosition)
     }
 
     // iOS Column Header Row
@@ -2789,7 +2897,12 @@ struct DashboardView: View {
         .frame(height: {
             #if os(iOS)
             let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-            return isPhone ? 200 : 380 // Reduced iPhone height to better fit content
+            if isPhone {
+                // Use dynamic height based on All Documents position
+                return allDocumentsPosition.carouselHeight
+            } else {
+                return 380 // iPad keeps fixed height
+            }
             #else
             return 380
             #endif
@@ -2852,7 +2965,12 @@ struct DashboardView: View {
                     y: {
                         #if os(iOS)
                         let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-                        return isPhone ? 100 + draggedCardOffset.height * 0.2 : 190 + draggedCardOffset.height * 0.2 // Half the card height
+                        if isPhone {
+                            // Use half of dynamic height
+                            return (allDocumentsPosition.carouselHeight / 2) + draggedCardOffset.height * 0.2
+                        } else {
+                            return 190 + draggedCardOffset.height * 0.2 // iPad keeps fixed position
+                        }
                         #else
                         return 190 + draggedCardOffset.height * 0.2
                         #endif
@@ -2867,7 +2985,12 @@ struct DashboardView: View {
                     y: {
                         #if os(iOS)
                         let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-                        return isPhone ? 100 : 190 // Half the card height
+                        if isPhone {
+                            // Use half of dynamic height
+                            return allDocumentsPosition.carouselHeight / 2
+                        } else {
+                            return 190 // iPad keeps fixed position
+                        }
                         #else
                         return 190
                         #endif
@@ -2914,7 +3037,12 @@ struct DashboardView: View {
                 y: {
                     #if os(iOS)
                     let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-                    return isPhone ? 100 : 190 // Half the card height
+                    if isPhone {
+                        // Use half of dynamic height
+                        return allDocumentsPosition.carouselHeight / 2
+                    } else {
+                        return 190 // iPad keeps fixed position
+                    }
                     #else
                     return 190
                     #endif
@@ -2941,7 +3069,12 @@ struct DashboardView: View {
                 .frame(width: adjustedCardWidth, height: {
                     #if os(iOS)
                     let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-                    return isPhone ? 200 : 380 // Match carousel container height
+                    if isPhone {
+                        // Use dynamic height based on All Documents position
+                        return allDocumentsPosition.carouselHeight
+                    } else {
+                        return 380 // iPad keeps fixed height
+                    }
                     #else
                     return 380
                     #endif
@@ -2955,7 +3088,12 @@ struct DashboardView: View {
                     .frame(width: adjustedCardWidth, height: {
                         #if os(iOS)
                         let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-                        return isPhone ? 200 : 380 // Match carousel container height
+                        if isPhone {
+                            // Use dynamic height based on All Documents position
+                            return allDocumentsPosition.carouselHeight
+                        } else {
+                            return 380 // iPad keeps fixed height
+                        }
                         #else
                         return 380
                         #endif

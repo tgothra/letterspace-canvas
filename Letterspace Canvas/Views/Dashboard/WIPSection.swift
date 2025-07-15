@@ -10,6 +10,7 @@ struct WIPSection: View {
     var showExpandButtons: Bool = false // New parameter to control expand button visibility
     var onShowModal: (() -> Void)? = nil  // Callback for showing modal on iPad
     var hideHeader: Bool = false // New parameter to hide header in modals
+    var allDocumentsPosition: DashboardView.AllDocumentsPosition = .default // For iPhone dynamic heights
     @Environment(\.themeColors) var theme
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.carouselHeaderFont) var carouselHeaderFont
@@ -154,7 +155,18 @@ struct WIPSection: View {
             // Make the ScrollView expand/collapse rather than the entire section
             .frame(height: isExpanded ? 350 : {
                 if isCarouselMode {
-                    return 180 // iPad landscape carousel
+                    #if os(iOS)
+                    let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                    if isPhone {
+                        // iPhone: Use dynamic height based on All Documents position
+                        // Subtract minimal header space (~55pt) to maximize ScrollView height
+                        return max(220, allDocumentsPosition.carouselHeight - 55)
+                    } else {
+                        return 180 // iPad landscape carousel
+                    }
+                    #else
+                    return 180 // Other platforms
+                    #endif
                 } else if isIPad && !isCarouselMode && !hideHeader {
                     // iPad portrait cards need more height to fill the 380pt container
                     // Container: 380pt, Header: ~50pt, Padding: ~20pt = ~310pt available for scroll content
