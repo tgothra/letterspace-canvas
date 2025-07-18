@@ -1,5 +1,26 @@
 import SwiftUI
 
+#if os(iOS)
+import UIKit
+
+// Extension to find text fields in view hierarchy for aggressive keyboard focusing
+extension UIView {
+    func findFirstTextField() -> UITextField? {
+        if let textField = self as? UITextField {
+            return textField
+        }
+        
+        for subview in subviews {
+            if let textField = subview.findFirstTextField() {
+                return textField
+            }
+        }
+        
+        return nil
+    }
+}
+#endif
+
 // Extension for batching arrays to improve search performance
 extension Array {
     func chunked(into size: Int) -> [[Element]] {
@@ -131,7 +152,19 @@ struct SearchFieldView: View {
         .onAppear {
             // Auto-focus search field on iPhone for immediate keyboard
             if UIDevice.current.userInterfaceIdiom == .phone {
+                print("🔍 SearchFieldView onAppear - attempting immediate focus")
+                // Try immediate focus first
+                isSearchFieldFocused = true
+                
+                // Backup with slight delay in case immediate doesn't work
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    print("🔍 SearchFieldView - backup focus attempt")
+                    isSearchFieldFocused = true
+                }
+                
+                // Final fallback
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    print("🔍 SearchFieldView - final focus attempt")
                     isSearchFieldFocused = true
                 }
             }
@@ -1040,6 +1073,11 @@ struct SearchView: View {
     // Track if view has been initialized to avoid multiple onAppear calls
     @State private var hasInitialized = false
     
+    // Add focus state at SearchView level for more direct control
+    #if os(iOS)
+    @FocusState private var isSearchFocused: Bool
+    #endif
+    
     var body: some View {
         #if os(iOS)
         let isPhone = UIDevice.current.userInterfaceIdiom == .phone
@@ -1090,8 +1128,30 @@ struct SearchView: View {
             
             #if os(iOS)
             if UIDevice.current.userInterfaceIdiom == .phone {
-                print("🔍 SearchView appeared on iPhone - preparing for immediate keyboard focus")
-                // The SearchFieldView will handle auto-focus
+                print("🔍 SearchView appeared on iPhone - forcing immediate keyboard focus")
+                
+                // Multiple aggressive attempts to focus immediately
+                isSearchFocused = true
+                
+                // Force keyboard appearance at UIKit level
+                DispatchQueue.main.async {
+                    // Find and focus the first text field in the hierarchy
+                    if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                       let window = windowScene.windows.first {
+                        window.subviews.first?.findFirstTextField()?.becomeFirstResponder()
+                    }
+                    print("🔍 SearchView - UIKit focus attempt")
+                }
+                
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
+                    isSearchFocused = true
+                    print("🔍 SearchView - 10ms focus attempt")
+                }
+                
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) {
+                    isSearchFocused = true
+                    print("🔍 SearchView - 20ms focus attempt")
+                }
             }
             #endif
         }

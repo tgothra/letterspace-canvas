@@ -6,6 +6,23 @@ import UniformTypeIdentifiers
 import AppKit
 #elseif os(iOS)
 import UIKit // Needed for UIImage for profile picture and haptic feedback
+
+// Extension for aggressive keyboard focusing on iPhone
+extension UIView {
+    func findFirstTextField() -> UITextField? {
+        if let textField = self as? UITextField {
+            return textField
+        }
+        
+        for subview in subviews {
+            if let textField = subview.findFirstTextField() {
+                return textField
+            }
+        }
+        
+        return nil
+    }
+}
 #endif
 
 // MARK: - Responsive Sizing Helper
@@ -269,6 +286,24 @@ struct MainLayout: View {
                     showSearchModal = false
                 })
                 .presentationBackground(.ultraThinMaterial)
+                #if os(iOS)
+                .onAppear {
+                    if UIDevice.current.userInterfaceIdiom == .phone {
+                        // Force keyboard to appear immediately when sheet opens
+                        DispatchQueue.main.async {
+                            print("🔍 MainLayout - Search sheet appeared, forcing keyboard")
+                            // Trigger keyboard appearance
+                            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                               let window = windowScene.windows.first {
+                                // Search for text field and make it first responder
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                    window.subviews.first?.findFirstTextField()?.becomeFirstResponder()
+                                }
+                            }
+                        }
+                    }
+                }
+                #endif
             }
             .sheet(isPresented: $showSmartStudyModal) {
                 SmartStudyView(onDismiss: {
