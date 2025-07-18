@@ -1458,17 +1458,8 @@ struct DashboardView: View {
                     .padding(.bottom, 24)
                 }
             }
-            // Pre-initialize All Documents list offscreen to warm up SwiftUI and eliminate first-time lag
-            allDocumentsSectionView
-                .frame(width: 1, height: 1)
-                .opacity(0.01)
-                .allowsHitTesting(false)
-            
-            // Pre-initialize carousel cards at expanded height to eliminate collapse lag
-            iPadSectionCarousel
-                .frame(width: 1, height: 1)
-                .opacity(0.01)
-                .allowsHitTesting(false)
+            // Remove pre-initialization views that were causing ghosting effects
+            // These were creating faint duplicates visible in the background on iPhone
         }
     }
 
