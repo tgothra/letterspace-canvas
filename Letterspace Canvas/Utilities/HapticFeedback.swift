@@ -56,7 +56,7 @@ struct HapticFeedback {
             let semaphore = DispatchSemaphore(value: 0)
             var completed = false
             
-            DispatchQueue.global(qos: .utility).async {
+            DispatchQueue.global(qos: .userInteractive).async {
                 generator.impactOccurred()
                 if !completed {
                     completed = true
@@ -84,7 +84,7 @@ struct HapticFeedback {
         DispatchQueue.global(qos: .utility).async {
             do {
                 // Try to prepare each generator with timeout protection
-                let preparationQueue = DispatchQueue.global(qos: .utility)
+                let preparationQueue = DispatchQueue.global(qos: .userInitiated)
                 let timeout: DispatchTime = .now() + 2.0 // 2 second timeout
                 
                 let group = DispatchGroup()
