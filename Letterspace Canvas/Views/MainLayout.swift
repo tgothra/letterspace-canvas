@@ -253,73 +253,68 @@ struct MainLayout: View {
     var body: some View {
         content
             .sheet(isPresented: $showBibleReaderModal) {
-                BibleReaderView(onDismiss: {
-                    showBibleReaderModal = false
-                })
-                .presentationBackground(.ultraThinMaterial)
                 #if os(iOS)
-                .presentationDetents([
-                    UIDevice.current.userInterfaceIdiom == .pad ? .fraction(0.75) : .large,
-                    .large
-                ])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(16)
+                if UIDevice.current.userInterfaceIdiom == .phone {
+                    BibleReaderView(onDismiss: {
+                        showBibleReaderModal = false
+                    })
+                    .presentationBackground(.ultraThinMaterial)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+                    .presentationCornerRadius(16)
+                }
                 #endif
             }
             .sheet(isPresented: $showFoldersModal) {
-                FoldersView(onDismiss: {
-                    showFoldersModal = false
-                })
-                .presentationBackground(.ultraThinMaterial)
                 #if os(iOS)
-                .presentationDetents([
-                    UIDevice.current.userInterfaceIdiom == .pad ? .fraction(0.7) : .large,
-                    .large
-                ])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(16)
+                if UIDevice.current.userInterfaceIdiom == .phone {
+                    FoldersView(onDismiss: {
+                        showFoldersModal = false
+                    })
+                    .presentationBackground(.ultraThinMaterial)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+                    .presentationCornerRadius(16)
+                }
                 #endif
             }
             .sheet(isPresented: $showSearchModal) {
-                SearchView(onDismiss: {
-                    showSearchModal = false
-                })
-                .presentationBackground(.ultraThinMaterial)
                 #if os(iOS)
-                .presentationDetents([
-                    UIDevice.current.userInterfaceIdiom == .pad ? .fraction(0.7) : .large,
-                    .large
-                ])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(16)
+                if UIDevice.current.userInterfaceIdiom == .phone {
+                    SearchView(onDismiss: {
+                        showSearchModal = false
+                    })
+                    .presentationBackground(.ultraThinMaterial)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+                    .presentationCornerRadius(16)
+                }
                 #endif
             }
             .sheet(isPresented: $showSmartStudyModal) {
-                SmartStudyView(onDismiss: {
-                    showSmartStudyModal = false
-                })
-                .presentationBackground(.ultraThinMaterial)
                 #if os(iOS)
-                .presentationDetents([
-                    UIDevice.current.userInterfaceIdiom == .pad ? .fraction(0.8) : .large,
-                    .large
-                ])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(16)
+                if UIDevice.current.userInterfaceIdiom == .phone {
+                    SmartStudyView(onDismiss: {
+                        showSmartStudyModal = false
+                    })
+                    .presentationBackground(.ultraThinMaterial)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+                    .presentationCornerRadius(16)
+                }
                 #endif
             }
 
             .sheet(isPresented: $showRecentlyDeletedModal) {
-                RecentlyDeletedView(isPresented: $showRecentlyDeletedModal)
-                    .presentationBackground(.ultraThinMaterial)
-                    #if os(iOS)
-                    .presentationDetents([
-                        UIDevice.current.userInterfaceIdiom == .pad ? .fraction(0.6) : .large,
-                        .large
-                    ])
-                    .presentationDragIndicator(.visible)
-                    .presentationCornerRadius(16)
-                    #endif
+                #if os(iOS)
+                if UIDevice.current.userInterfaceIdiom == .phone {
+                    RecentlyDeletedView(isPresented: $showRecentlyDeletedModal)
+                        .presentationBackground(.ultraThinMaterial)
+                        .presentationDetents([.large])
+                        .presentationDragIndicator(.visible)
+                        .presentationCornerRadius(16)
+                }
+                #endif
             }
             .overlay {
                 #if os(macOS)
@@ -347,6 +342,195 @@ struct MainLayout: View {
                             insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .center)),
                             removal: .opacity.combined(with: .scale(scale: 0.95, anchor: .center))
                         ))
+                    }
+                }
+                #endif
+            }
+            .overlay {
+                #if os(iOS)
+                if UIDevice.current.userInterfaceIdiom == .pad {
+                    if showSmartStudyModal {
+                        ZStack {
+                            Color.clear
+                                .contentShape(Rectangle())
+                                .ignoresSafeArea()
+                                .onTapGesture {
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        showSmartStudyModal = false
+                                    }
+                                }
+                            LazyModalContainer {
+                                SmartStudyView(onDismiss: {
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        showSmartStudyModal = false
+                                    }
+                                })
+                            }
+                            .frame(width: 700, height: 650)
+                            .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 10)
+                            .transition(.asymmetric(
+                                insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .center)),
+                                removal: .opacity.combined(with: .scale(scale: 0.95, anchor: .center))
+                            ))
+                        }
+                    }
+                }
+                #else
+                if showSmartStudyModal {
+                    ZStack {
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .ignoresSafeArea()
+                            .onTapGesture {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    showSmartStudyModal = false
+                                }
+                            }
+                        LazyModalContainer {
+                            SmartStudyView(onDismiss: {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    showSmartStudyModal = false
+                                }
+                            })
+                        }
+                        .fixedSize()
+                        .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 10)
+                        .transition(.asymmetric(
+                            insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .center)),
+                            removal: .opacity.combined(with: .scale(scale: 0.95, anchor: .center))
+                        ))
+                    }
+                }
+                #endif
+            }
+            .overlay {
+                #if os(iOS)
+                if UIDevice.current.userInterfaceIdiom == .pad {
+                    if showBibleReaderModal {
+                        ZStack {
+                            Color.clear
+                                .contentShape(Rectangle())
+                                .ignoresSafeArea()
+                                .onTapGesture {
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        showBibleReaderModal = false
+                                    }
+                                }
+                            BibleReaderView(onDismiss: {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    showBibleReaderModal = false
+                                }
+                            })
+                            .frame(width: 750, height: 700)
+                            .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 10)
+                            .transition(.asymmetric(
+                                insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .center)),
+                                removal: .opacity.combined(with: .scale(scale: 0.95, anchor: .center))
+                            ))
+                        }
+                    }
+                }
+                #endif
+            }
+            .overlay {
+                #if os(iOS)
+                if UIDevice.current.userInterfaceIdiom == .pad {
+                    if showRecentlyDeletedModal {
+                        ZStack {
+                            Color.clear
+                                .contentShape(Rectangle())
+                                .ignoresSafeArea()
+                                .onTapGesture {
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        showRecentlyDeletedModal = false
+                                    }
+                                }
+                            RecentlyDeletedView(isPresented: $showRecentlyDeletedModal)
+                                .frame(width: 650, height: 550)
+                                .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 10)
+                                .transition(.asymmetric(
+                                    insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .center)),
+                                    removal: .opacity.combined(with: .scale(scale: 0.95, anchor: .center))
+                                ))
+                        }
+                    }
+                }
+                #else
+                if showRecentlyDeletedModal {
+                    ZStack {
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .ignoresSafeArea()
+                            .onTapGesture {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    showRecentlyDeletedModal = false
+                                }
+                            }
+                        RecentlyDeletedView(isPresented: $showRecentlyDeletedModal)
+                            .fixedSize()
+                            .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 10)
+                            .transition(.asymmetric(
+                                insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .center)),
+                                removal: .opacity.combined(with: .scale(scale: 0.95, anchor: .center))
+                            ))
+                    }
+                }
+                #endif
+            }
+            .overlay {
+                #if os(iOS)
+                if UIDevice.current.userInterfaceIdiom == .pad {
+                    if showFoldersModal {
+                        ZStack {
+                            Color.clear
+                                .contentShape(Rectangle())
+                                .ignoresSafeArea()
+                                .onTapGesture {
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        showFoldersModal = false
+                                    }
+                                }
+                            FoldersView(onDismiss: {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    showFoldersModal = false
+                                }
+                            })
+                            .frame(width: 650, height: 600)
+                            .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 10)
+                            .transition(.asymmetric(
+                                insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .center)),
+                                removal: .opacity.combined(with: .scale(scale: 0.95, anchor: .center))
+                            ))
+                        }
+                    }
+                }
+                #endif
+            }
+            .overlay {
+                #if os(iOS)
+                if UIDevice.current.userInterfaceIdiom == .pad {
+                    if showSearchModal {
+                        ZStack {
+                            Color.clear
+                                .contentShape(Rectangle())
+                                .ignoresSafeArea()
+                                .onTapGesture {
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        showSearchModal = false
+                                    }
+                                }
+                            SearchView(onDismiss: {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    showSearchModal = false
+                                }
+                            })
+                            .frame(width: 650, height: 600)
+                            .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 10)
+                            .transition(.asymmetric(
+                                insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .center)),
+                                removal: .opacity.combined(with: .scale(scale: 0.95, anchor: .center))
+                            ))
+                        }
                     }
                 }
                 #endif
