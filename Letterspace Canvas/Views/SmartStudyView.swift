@@ -1374,7 +1374,6 @@ struct SmartStudyView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 // Show real content when ready
-                // ... existing content ...
                 VStack(spacing: 0) {
                     // Top row with title and close button
                     HStack {
@@ -1395,6 +1394,7 @@ struct SmartStudyView: View {
                             .padding(.trailing, 12)
                         }
                         #endif
+                        
                         Text("Smart Study")
                             .font(.system(size: {
                                 #if os(iOS)
@@ -1404,14 +1404,39 @@ struct SmartStudyView: View {
                                 return 24
                                 #endif
                             }(), weight: .semibold))
+                        
                         Spacer()
+                        
                         closeButton
                     }
-                    // ... rest of mainContentBody ...
+                    .padding(.horizontal, 20)
+                    .padding(.top, 10)
+                    .padding(.bottom, 15)
+                    
+                    Divider()
+                    
+                    // Main content area with sidebar and input
+                    HStack(spacing: 0) {
+                        // Left Sidebar (Conditional)
+                        #if os(iOS)
+                        if UIDevice.current.userInterfaceIdiom != .phone && showSavedQuestionsSidebar {
+                            leftSidebarView
+                            Divider()
+                        }
+                        #else
+                        if showSavedQuestionsSidebar {
+                            leftSidebarView
+                            Divider()
+                        }
+                        #endif
+                        
+                        // Main Content Area (Right side)
+                        rightContentArea
+                    }
                 }
             }
             #else
-            // macOS: Use the existing GeminiFocusedTextField
+            // macOS: Use regular VStack
             VStack(spacing: 0) {
                 // Top row with title and close button
                 HStack {
@@ -1420,7 +1445,21 @@ struct SmartStudyView: View {
                     Spacer()
                     closeButton
                 }
-                // ... rest of mainContentBody ...
+                .padding(.horizontal, 20)
+                .padding(.top, 10)
+                .padding(.bottom, 15)
+                
+                Divider()
+                
+                // Main content area with sidebar and input
+                HStack(spacing: 0) {
+                    if showSavedQuestionsSidebar {
+                        leftSidebarView
+                        Divider()
+                    }
+                    
+                    rightContentArea
+                }
             }
             #endif
         }
