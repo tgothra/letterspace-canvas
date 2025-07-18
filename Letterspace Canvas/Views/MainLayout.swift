@@ -259,10 +259,11 @@ struct MainLayout: View {
                 .presentationBackground(.ultraThinMaterial)
                 #if os(iOS)
                 .presentationDetents([
-                    UIDevice.current.userInterfaceIdiom == .pad ? .height(800) : .large,
+                    UIDevice.current.userInterfaceIdiom == .pad ? .fraction(0.75) : .large,
                     .large
                 ])
                 .presentationDragIndicator(.visible)
+                .presentationCornerRadius(16)
                 #endif
             }
             .sheet(isPresented: $showFoldersModal) {
@@ -272,10 +273,11 @@ struct MainLayout: View {
                 .presentationBackground(.ultraThinMaterial)
                 #if os(iOS)
                 .presentationDetents([
-                    UIDevice.current.userInterfaceIdiom == .pad ? .height(700) : .large,
+                    UIDevice.current.userInterfaceIdiom == .pad ? .fraction(0.7) : .large,
                     .large
                 ])
                 .presentationDragIndicator(.visible)
+                .presentationCornerRadius(16)
                 #endif
             }
             .sheet(isPresented: $showSearchModal) {
@@ -285,10 +287,11 @@ struct MainLayout: View {
                 .presentationBackground(.ultraThinMaterial)
                 #if os(iOS)
                 .presentationDetents([
-                    UIDevice.current.userInterfaceIdiom == .pad ? .height(700) : .large,
+                    UIDevice.current.userInterfaceIdiom == .pad ? .fraction(0.7) : .large,
                     .large
                 ])
                 .presentationDragIndicator(.visible)
+                .presentationCornerRadius(16)
                 #endif
             }
             .sheet(isPresented: $showSmartStudyModal) {
@@ -298,10 +301,11 @@ struct MainLayout: View {
                 .presentationBackground(.ultraThinMaterial)
                 #if os(iOS)
                 .presentationDetents([
-                    UIDevice.current.userInterfaceIdiom == .pad ? .height(800) : .large,
+                    UIDevice.current.userInterfaceIdiom == .pad ? .fraction(0.8) : .large,
                     .large
                 ])
                 .presentationDragIndicator(.visible)
+                .presentationCornerRadius(16)
                 #endif
             }
 
@@ -310,10 +314,11 @@ struct MainLayout: View {
                     .presentationBackground(.ultraThinMaterial)
                     #if os(iOS)
                     .presentationDetents([
-                        UIDevice.current.userInterfaceIdiom == .pad ? .height(600) : .large,
+                        UIDevice.current.userInterfaceIdiom == .pad ? .fraction(0.6) : .large,
                         .large
                     ])
                     .presentationDragIndicator(.visible)
+                    .presentationCornerRadius(16)
                     #endif
             }
             .overlay {
@@ -347,88 +352,28 @@ struct MainLayout: View {
                 #endif
             }
             .onAppear {
+                // Only load essential data synchronously
                 loadFolders()
                 
-                // Preload haptic feedback generators to eliminate first-tap delays
-                HapticFeedback.prepareAll()
-                
-                // Preload user profile asynchronously
+                // Move ALL heavy operations to background with delays to prevent hangs
                 Task.detached(priority: .background) {
-                    _ = UserProfileManager.shared.userProfile
-                }
-                
-                // UserLibraryService will be initialized lazily when needed
-                
-                // Preload Smart Study specifically for iPhone to eliminate keyboard delay
-                #if os(iOS)
-                if UIDevice.current.userInterfaceIdiom == .phone {
-                    Task.detached(priority: .background) {
-                        print("🔄 Additional Smart Study preloading...")
-                        
-                        // Force creation of key Smart Study objects
-                        let _ = UserLibraryService()
-                        let _ = TokenUsageService.shared
-                        
-                        // Preload UserDefaults access patterns
-                        _ = UserDefaults.standard.data(forKey: "savedSmartStudyQAs")
-                        _ = UserDefaults.standard.bool(forKey: "Letterspace_FirstClickHandled")
-                        
-                        print("✅ Additional Smart Study preloading complete")
-                    }
-                }
-                #endif
-                
-                // Preload folder data in background
-                Task.detached(priority: .background) {
-                    // Pre-load folder data from UserDefaults to warm up the cache
-                    if let _ = UserDefaults.standard.data(forKey: "SavedFolders") {
-                        // Just accessing it loads it into memory cache
+                    // Delay all preloading to avoid blocking UI
+                    try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 second delay
+                    
+                    // Minimal preloading only when needed
+                    HapticFeedback.prepareAll()
+                    
+                    // Only preload user profile if needed
+                    Task.detached(priority: .utility) {
+                        _ = UserProfileManager.shared.userProfile
                     }
                 }
                 
-                // Preload modal views to eliminate first-time delays on iPhone
-                #if os(iOS)
-                if UIDevice.current.userInterfaceIdiom == .phone {
-                    // Simplified iPhone sheet preloading - focus only on critical bottlenecks
-                    Task.detached(priority: .background) {
-                        print("🔄 Starting optimized iPhone sheet preloading...")
-                        
-                        // Delay preloading to avoid blocking initial app launch
-                        try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second delay
-                        
-                        // 1. Essential UserDefaults access only
-                        _ = UserDefaults.standard.data(forKey: "bible_reader_bookmarks")
-                        _ = UserDefaults.standard.data(forKey: "SavedFolders")
-                        _ = UserDefaults.standard.data(forKey: "savedSmartStudyQAs")
-                        
-                        // 2. Pre-warm only the most critical services
-                        let _ = DocumentCacheManager.shared
-                        
-                        // 3. Force initialization of essential data structures in background
-                        Task.detached(priority: .utility) {
-                            let _ = BibleReaderData()
-                            print("📖 Bible Reader data preloaded")
-                        }
-                        
-                        print("✅ Optimized iPhone sheet preloading complete")
-                    }
-                }
-                #endif
+                // Remove aggressive preloading that causes hangs
+                // UserLibraryService and TokenUsageService will be initialized only when sheets are opened
                 
-                // Global folder data preloading for all platforms
-                Task.detached(priority: .background) {
-                    // Pre-load folder data from UserDefaults to warm up the cache
-                    if let _ = UserDefaults.standard.data(forKey: "SavedFolders") {
-                        // Just accessing it loads it into memory cache
-                    }
-                }
-                
-                // Preload Smart Study after a short delay to avoid first-tap freeze
-                if !smartStudyPreloaded {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                        preloadSmartStudy()
-                    }
-                }
+                // Remove heavy preloading operations that cause hangs
+                // Smart Study and other services will initialize when actually needed
                 
                 // Debug logging for iOS navigation (both iPad and iPhone now use iPad interface)
                 #if os(iOS)
