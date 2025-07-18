@@ -375,6 +375,30 @@ struct MainLayout: View {
                         
                         print("✅ Additional Smart Study preloading complete")
                     }
+                    
+                    // Preload Search View specifically for iPhone to eliminate the 7-second delay
+                    Task.detached(priority: .background) {
+                        print("🔄 Additional Search View preloading...")
+                        
+                        // Force creation of key Search objects and components
+                        if let appDir = Letterspace_CanvasDocument.getAppDocumentsDirectory() {
+                            // Pre-access the directory to cache file system access
+                            _ = try? FileManager.default.contentsOfDirectory(at: appDir, includingPropertiesForKeys: [.fileSizeKey, .contentModificationDateKey, .contentAccessDateKey])
+                            
+                            // Pre-load one document to warm up the entire JSON decoding pipeline
+                            if let firstFile = (try? FileManager.default.contentsOfDirectory(at: appDir, includingPropertiesForKeys: nil))?.first(where: { $0.pathExtension == "canvas" }) {
+                                _ = try? Data(contentsOf: firstFile)
+                                if let data = try? Data(contentsOf: firstFile) {
+                                    _ = try? JSONDecoder().decode(Letterspace_CanvasDocument.self, from: data)
+                                }
+                            }
+                        }
+                        
+                        // Pre-warm search-related systems
+                        _ = UserDefaults.standard.bool(forKey: "searchSystemInitialized")
+                        
+                        print("✅ Additional Search View preloading complete")
+                    }
                 }
                 #endif
                 
@@ -417,8 +441,10 @@ struct MainLayout: View {
                             print("📁 Folders View preloaded")
                         }
                         
-                        // 3. Search View preloading
+                        // 3. Search View preloading - COMPREHENSIVE like Smart Study
                         Task.detached(priority: .utility) {
+                            print("🔄 Comprehensive Search View preloading...")
+                            
                             // Pre-warm document directory access and cache document list
                             if let appDir = Letterspace_CanvasDocument.getAppDocumentsDirectory() {
                                 let _ = try? FileManager.default.contentsOfDirectory(at: appDir, includingPropertiesForKeys: [.fileSizeKey, .contentModificationDateKey])
@@ -434,7 +460,25 @@ struct MainLayout: View {
                                 }
                             }
                             
-                            print("🔍 Search View preloaded with document cache warming")
+                            // Force creation of search-related view components to warm up SwiftUI
+                            await MainActor.run {
+                                // Pre-instantiate search view components to cache SwiftUI rendering
+                                let _ = VStack {
+                                    HStack {
+                                        Image(systemName: "magnifyingglass")
+                                        TextField("Search", text: .constant(""))
+                                    }
+                                    List {
+                                        Text("Search Result")
+                                        Text("Document")
+                                    }
+                                }.frame(width: 1, height: 1).opacity(0)
+                                
+                                // Pre-warm common UserDefaults patterns that search might use
+                                _ = UserDefaults.standard.bool(forKey: "searchPreferencesLoaded")
+                                
+                                print("🔍 Search View comprehensive preloading complete")
+                            }
                         }
                         
                         // 4. Recently Deleted preloading

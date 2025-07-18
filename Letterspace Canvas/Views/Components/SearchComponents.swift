@@ -1061,8 +1061,8 @@ struct SearchView: View {
     // Track if view has been initialized to avoid multiple onAppear calls
     @State private var hasInitialized = false
     
-    // Optimized loading: delay heavy content until after initial render
-    @State private var contentReady = false
+    // Optimized loading: delay heavy content until after initial render (disabled for now since we have preloading)
+    @State private var contentReady = true // Start with true since we're preloading everything
     
     // Add focus state at SearchView level for more direct control
     #if os(iOS)
@@ -1183,13 +1183,8 @@ struct SearchView: View {
                     print("🔍 SearchView - 20ms focus attempt")
                 }
                 
-                // Load heavy content after keyboard is focused and view is rendered
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    print("🔍 SearchView - loading full search content")
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        contentReady = true
-                    }
-                }
+                // Content is already ready due to preloading - no need for delayed loading
+                print("🔍 SearchView - content ready immediately due to preloading")
             }
             #endif
         }
