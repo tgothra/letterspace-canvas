@@ -384,13 +384,22 @@ struct MainLayout: View {
                         
                         // 3. Search View preloading
                         Task.detached(priority: .utility) {
-                            // Search doesn't seem to use persistent UserDefaults currently
-                            // Just pre-warm the document directory access pattern
+                            // Pre-warm document directory access and cache document list
                             if let appDir = Letterspace_CanvasDocument.getAppDocumentsDirectory() {
-                                _ = try? FileManager.default.contentsOfDirectory(at: appDir, includingPropertiesForKeys: nil)
+                                let _ = try? FileManager.default.contentsOfDirectory(at: appDir, includingPropertiesForKeys: [.fileSizeKey, .contentModificationDateKey])
+                                    .filter { $0.pathExtension == "canvas" }
+                                
+                                // Pre-cache a few recent documents to warm up JSON decoder
+                                let recentFiles = (try? FileManager.default.contentsOfDirectory(at: appDir, includingPropertiesForKeys: [.contentModificationDateKey]))?.filter { $0.pathExtension == "canvas" }.prefix(3)
+                                
+                                for file in recentFiles ?? [] {
+                                    guard let data = try? Data(contentsOf: file),
+                                          let _ = try? JSONDecoder().decode(Letterspace_CanvasDocument.self, from: data) else { continue }
+                                    // Just loading to warm up decoder pipeline
+                                }
                             }
                             
-                            print("🔍 Search View preloaded")
+                            print("🔍 Search View preloaded with document cache warming")
                         }
                         
                         // 4. Recently Deleted preloading

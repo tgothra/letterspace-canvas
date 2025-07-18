@@ -1,4 +1,13 @@
 import SwiftUI
+
+// Extension for batching arrays to improve search performance
+extension Array {
+    func chunked(into size: Int) -> [[Element]] {
+        return stride(from: 0, to: count, by: size).map {
+            Array(self[$0..<Swift.min($0 + size, count)])
+        }
+    }
+}
 import Foundation
 
 // Helper views for SearchPopupContent
@@ -82,6 +91,11 @@ struct SearchFieldView: View {
     let performSearch: () async -> Void
     @Environment(\.themeColors) var theme
     
+    // Add focus state for immediate keyboard appearance on iPhone
+    #if os(iOS)
+    @FocusState private var isSearchFieldFocused: Bool
+    #endif
+    
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
@@ -90,6 +104,9 @@ struct SearchFieldView: View {
             TextField("Search documents...", text: $searchText)
                 .textFieldStyle(.plain)
                 .font(.system(size: 14))
+                #if os(iOS)
+                .focused($isSearchFieldFocused)
+                #endif
                 .onChange(of: searchText) { oldValue, newValue in
                     print("🔍 SearchFieldView: Text changed from '\(oldValue)' to '\(newValue)'")
                     searchTask?.cancel()
@@ -110,6 +127,16 @@ struct SearchFieldView: View {
                         .stroke(theme.secondary.opacity(0.2), lineWidth: 1)
                 )
         )
+        #if os(iOS)
+        .onAppear {
+            // Auto-focus search field on iPhone for immediate keyboard
+            if UIDevice.current.userInterfaceIdiom == .phone {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    isSearchFieldFocused = true
+                }
+            }
+        }
+        #endif
     }
 }
 
@@ -857,67 +884,72 @@ struct SearchPopupContent: View {
             return
         }
         
-        guard let appDirectory = Letterspace_CanvasDocument.getAppDocumentsDirectory() else {
-            print("❌ Could not access documents directory")
-            return
-        }
-        print("📂 Documents path: \(appDirectory.path)")
-        print("📂 Documents directory exists: \(FileManager.default.fileExists(atPath: appDirectory.path))")
-        
-        do {
-            try FileManager.default.createDirectory(at: appDirectory, withIntermediateDirectories: true, attributes: nil)
+        // Perform search on background thread to avoid blocking UI
+        await Task.detached(priority: .userInitiated) {
+            guard let appDirectory = Letterspace_CanvasDocument.getAppDocumentsDirectory() else {
+                print("❌ Could not access documents directory")
+                return
+            }
             
-            let allFiles = try FileManager.default.contentsOfDirectory(at: appDirectory, includingPropertiesForKeys: nil)
-            print("📁 All files in directory: \(allFiles.map { $0.lastPathComponent })")
-            
-            let fileURLs = allFiles.filter { $0.pathExtension == "canvas" }
-            print("📄 Found \(fileURLs.count) canvas files: \(fileURLs.map { $0.lastPathComponent })")
-            
-            var results: [Letterspace_CanvasDocument] = []
-            
-            for url in fileURLs {
-                guard !Task.isCancelled else { return }
+            do {
+                try FileManager.default.createDirectory(at: appDirectory, withIntermediateDirectories: true, attributes: nil)
                 
-                let fileName = url.lastPathComponent
-                print("📄 Processing file: \(fileName)")
+                let allFiles = try FileManager.default.contentsOfDirectory(at: appDirectory, includingPropertiesForKeys: nil)
+                let fileURLs = allFiles.filter { $0.pathExtension == "canvas" }
+                print("📄 Found \(fileURLs.count) canvas files for search")
                 
-                do {
-                    let data = try Data(contentsOf: url)
-                    if let document = try? JSONDecoder().decode(Letterspace_CanvasDocument.self, from: data) {
-                        let titleMatch = document.title.localizedCaseInsensitiveContains(searchText)
-                        let subtitleMatch = document.subtitle.localizedCaseInsensitiveContains(searchText)
-                        let seriesMatch = document.series?.name.localizedCaseInsensitiveContains(searchText) ?? false
+                var results: [Letterspace_CanvasDocument] = []
+                
+                // Process files in batches to avoid blocking
+                let batchSize = 10
+                for batch in fileURLs.chunked(into: batchSize) {
+                    guard !Task.isCancelled else { return }
+                    
+                    for url in batch {
+                        guard !Task.isCancelled else { return }
                         
-                        // Improved content matching
-                        var contentMatch = false
-                        for element in document.elements {
-                            if element.content.localizedCaseInsensitiveContains(searchText) {
-                                contentMatch = true
-                                break
+                        do {
+                            let data = try Data(contentsOf: url)
+                            if let document = try? JSONDecoder().decode(Letterspace_CanvasDocument.self, from: data) {
+                                let titleMatch = document.title.localizedCaseInsensitiveContains(searchText)
+                                let subtitleMatch = document.subtitle.localizedCaseInsensitiveContains(searchText)
+                                let seriesMatch = document.series?.name.localizedCaseInsensitiveContains(searchText) ?? false
+                                
+                                // Fast content matching - stop at first match per document
+                                var contentMatch = false
+                                for element in document.elements {
+                                    if element.content.localizedCaseInsensitiveContains(searchText) {
+                                        contentMatch = true
+                                        break
+                                    }
+                                }
+                                
+                                if titleMatch || subtitleMatch || seriesMatch || contentMatch {
+                                    results.append(document)
+                                }
                             }
-                        }
-                        
-                        if titleMatch || subtitleMatch || seriesMatch || contentMatch {
-                            results.append(document)
+                        } catch {
+                            continue // Skip corrupted files silently
                         }
                     }
-                } catch {
-                    print("❌ Error reading document at \(fileName): \(error)")
-                    continue
+                    
+                    // Small yield to prevent UI blocking
+                    try? await Task.sleep(nanoseconds: 1_000_000) // 1ms
+                }
+                
+                print("🏁 Search complete. Found \(results.count) matches out of \(fileURLs.count) files")
+                
+                await MainActor.run {
+                    searchResults = results
+                    print("✅ Updated UI with \(results.count) search results")
+                }
+            } catch {
+                print("❌ Error searching documents: \(error)")
+                await MainActor.run {
+                    searchResults = []
                 }
             }
-            
-            print("🏁 Search complete. Found \(results.count) matches out of \(fileURLs.count) files")
-            
-            await MainActor.run {
-                searchResults = results
-                print("✅ Updated UI with \(results.count) search results")
-            }
-        } catch {
-            print("❌ Error searching documents: \(error)")
-            await MainActor.run {
-                searchResults = []
-            }
+        }.value
         }
     }
     
@@ -1006,6 +1038,9 @@ struct SearchView: View {
     @State private var sidebarMode: RightSidebar.SidebarMode = .allDocuments
     @State private var isRightSidebarVisible = false
     
+    // Track if view has been initialized to avoid multiple onAppear calls
+    @State private var hasInitialized = false
+    
     var body: some View {
         #if os(iOS)
         let isPhone = UIDevice.current.userInterfaceIdiom == .phone
@@ -1049,6 +1084,18 @@ struct SearchView: View {
             #endif
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onAppear {
+            // Ensure we only initialize once to avoid performance issues
+            guard !hasInitialized else { return }
+            hasInitialized = true
+            
+            #if os(iOS)
+            if UIDevice.current.userInterfaceIdiom == .phone {
+                print("🔍 SearchView appeared on iPhone - preparing for immediate keyboard focus")
+                // The SearchFieldView will handle auto-focus
+            }
+            #endif
+        }
     }
     
     private var searchViewBody: some View {
