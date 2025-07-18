@@ -1,26 +1,5 @@
 import SwiftUI
 
-#if os(iOS)
-import UIKit
-
-// Extension to find text fields in view hierarchy for aggressive keyboard focusing
-extension UIView {
-    func findFirstTextField() -> UITextField? {
-        if let textField = self as? UITextField {
-            return textField
-        }
-        
-        for subview in subviews {
-            if let textField = subview.findFirstTextField() {
-                return textField
-            }
-        }
-        
-        return nil
-    }
-}
-#endif
-
 // Extension for batching arrays to improve search performance
 extension Array {
     func chunked(into size: Int) -> [[Element]] {
