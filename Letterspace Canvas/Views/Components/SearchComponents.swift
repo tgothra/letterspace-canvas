@@ -1079,48 +1079,50 @@ struct SearchView: View {
             if isPhone {
                 // iPhone: Use NavigationView like Bible Reader search modal
                 NavigationView {
-                    if contentReady {
-                        SearchPopupContent(
-                            activePopup: $activePopup,
-                            document: $document,
-                            sidebarMode: $sidebarMode,
-                            isRightSidebarVisible: $isRightSidebarVisible,
-                            onDismiss: onDismiss
-                        )
-                    } else {
-                        // Minimal loading view with immediate search field
-                        VStack(spacing: 20) {
-                            // Immediate search field for instant keyboard focus
-                            HStack(spacing: 8) {
-                                Image(systemName: "magnifyingglass")
-                                    .font(.system(size: 14))
-                                    .foregroundColor(theme.secondary)
-                                TextField("Search documents...", text: .constant(""))
-                                    .textFieldStyle(.plain)
-                                    .font(.system(size: 14))
-                                    #if os(iOS)
-                                    .focused($isSearchFocused)
-                                    #endif
-                            }
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 6)
-                            .background(
-                                RoundedRectangle(cornerRadius: 6)
-                                    .fill(theme.surface)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 6)
-                                            .stroke(theme.secondary.opacity(0.2), lineWidth: 1)
-                                    )
+                    Group {
+                        if contentReady {
+                            SearchPopupContent(
+                                activePopup: $activePopup,
+                                document: $document,
+                                sidebarMode: $sidebarMode,
+                                isRightSidebarVisible: $isRightSidebarVisible,
+                                onDismiss: onDismiss
                             )
-                            
-                            Text("Loading search...")
-                                .font(.system(size: 12))
-                                .foregroundStyle(theme.secondary)
-                            
-                            Spacer()
+                        } else {
+                            // Minimal loading view with immediate search field
+                            VStack(spacing: 20) {
+                                // Immediate search field for instant keyboard focus
+                                HStack(spacing: 8) {
+                                    Image(systemName: "magnifyingglass")
+                                        .font(.system(size: 14))
+                                        .foregroundColor(theme.secondary)
+                                    TextField("Search documents...", text: .constant(""))
+                                        .textFieldStyle(.plain)
+                                        .font(.system(size: 14))
+                                        #if os(iOS)
+                                        .focused($isSearchFocused)
+                                        #endif
+                                }
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 6)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .fill(theme.surface)
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 6)
+                                                .stroke(theme.secondary.opacity(0.2), lineWidth: 1)
+                                        )
+                                )
+                                
+                                Text("Loading search...")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(theme.secondary)
+                                
+                                Spacer()
+                            }
+                            .padding(16)
+                            .background(theme.surface)
                         }
-                        .padding(16)
-                        .background(theme.surface)
                     }
                     .navigationTitle("Search Documents")
                     .navigationBarTitleDisplayMode(.inline)
