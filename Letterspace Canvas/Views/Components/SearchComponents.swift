@@ -950,7 +950,6 @@ struct SearchPopupContent: View {
                 }
             }
         }.value
-        }
     }
     
     var groupedResults: [(String, [Letterspace_CanvasDocument])] {
