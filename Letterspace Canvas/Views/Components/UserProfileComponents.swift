@@ -10,6 +10,7 @@ import UIKit
 struct UserProfilePopupContent: View {
     @Environment(\.themeColors) var theme
     @Environment(\.colorScheme) var colorScheme
+    @EnvironmentObject var appearanceController: AppearanceController
     @Binding var activePopup: ActivePopup // Keep if needed for other logic
     @Binding var isPresented: Bool
     @ObservedObject var gradientManager: GradientWallpaperManager  // Changed from let to @ObservedObject
@@ -249,31 +250,35 @@ struct UserProfilePopupContent: View {
                     if UIDevice.current.userInterfaceIdiom == .phone {
                         VStack(alignment: .leading, spacing: 8) {
                             HStack {
-                                Image(systemName: colorScheme == .dark ? "sun.max.fill" : "moon.fill")
+                                Image(systemName: appearanceController.selectedScheme.icon)
                                     .font(.system(size: 14))
-                                    .foregroundColor(colorScheme == .dark ? .yellow : .purple)
+                                    .foregroundColor(appearanceController.selectedScheme == .dark ? .yellow : 
+                                                   appearanceController.selectedScheme == .light ? .orange : .purple)
                                     .frame(width: 20)
                                 
-                                Text("Dark Mode")
+                                Text("Color Scheme")
                                     .font(.system(size: 14, weight: .medium))
                                     .foregroundStyle(theme.primary)
                                 
                                 Spacer()
                                 
-                                Toggle("", isOn: Binding(
-                                    get: { UserDefaults.standard.bool(forKey: "prefersDarkMode") },
-                                    set: { newValue in
-                                        UserDefaults.standard.set(newValue, forKey: "prefersDarkMode")
-                                        UserDefaults.standard.synchronize()
-                                        
-                                        // Post notification to update the app's color scheme
-                                        NotificationCenter.default.post(
-                                            name: NSNotification.Name("DarkModeToggled"),
-                                            object: newValue
-                                        )
+                                Button(action: {
+                                    // Cycle through the color scheme options
+                                    let allCases = AppColorScheme.allCases
+                                    if let currentIndex = allCases.firstIndex(of: appearanceController.selectedScheme) {
+                                        let nextIndex = (currentIndex + 1) % allCases.count
+                                        appearanceController.selectedScheme = allCases[nextIndex]
                                     }
-                                ))
-                                .toggleStyle(SwitchToggleStyle())
+                                }) {
+                                    Text(appearanceController.selectedScheme.rawValue)
+                                        .font(.system(size: 14, weight: .medium))
+                                        .foregroundStyle(theme.accent)
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 6)
+                                        .background(theme.accent.opacity(0.1))
+                                        .cornerRadius(6)
+                                }
+                                .buttonStyle(.plain)
                             }
                             
                             Text("Toggle between light and dark appearance modes.")

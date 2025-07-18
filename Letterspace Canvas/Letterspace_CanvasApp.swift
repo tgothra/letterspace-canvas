@@ -105,6 +105,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 @main
 struct Letterspace_CanvasApp: App {
     @State private var document = Letterspace_CanvasDocument()
+    @StateObject private var appearanceController = AppearanceController.shared
     
     #if os(macOS)
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
@@ -143,6 +144,13 @@ struct Letterspace_CanvasApp: App {
                 #endif
                 .withTheme()
                 .ignoresSafeArea() // .ignoresSafeArea() is generally fine for both
+                // Apply the color scheme preference
+                .preferredColorScheme(appearanceController.colorScheme)
+                .environmentObject(appearanceController)
+                .onAppear {
+                    // Set appearance when app first loads
+                    appearanceController.setAppearance()
+                }
         }
         // Conditional window styling for macOS
         #if os(macOS)

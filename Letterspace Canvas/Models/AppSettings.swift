@@ -1,5 +1,72 @@
 import SwiftUI
 
+// Color scheme options for the app
+enum AppColorScheme: String, CaseIterable {
+    case system = "System"
+    case light = "Light"
+    case dark = "Dark"
+    
+    var icon: String {
+        switch self {
+        case .system:
+            return "circle.lefthalf.filled"
+        case .light:
+            return "sun.max.fill"
+        case .dark:
+            return "moon.fill"
+        }
+    }
+}
+
+// Appearance Controller for managing app-wide color scheme
+class AppearanceController: ObservableObject {
+    static let shared = AppearanceController()
+    
+    @Published var selectedScheme: AppColorScheme {
+        didSet {
+            UserDefaults.standard.set(selectedScheme.rawValue, forKey: "preferredColorScheme")
+            UserDefaults.standard.synchronize()
+            setAppearance()
+        }
+    }
+    
+    init() {
+        // Load saved preference or default to system
+        let savedScheme = UserDefaults.standard.string(forKey: "preferredColorScheme") ?? AppColorScheme.system.rawValue
+        self.selectedScheme = AppColorScheme(rawValue: savedScheme) ?? .system
+    }
+    
+    var colorScheme: ColorScheme? {
+        switch selectedScheme {
+        case .system:
+            return nil // Let system decide
+        case .light:
+            return .light
+        case .dark:
+            return .dark
+        }
+    }
+    
+    func setAppearance() {
+        #if os(iOS)
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let window = windowScene.windows.first else { return }
+        
+        switch selectedScheme {
+        case .system:
+            window.overrideUserInterfaceStyle = .unspecified
+        case .light:
+            window.overrideUserInterfaceStyle = .light
+        case .dark:
+            window.overrideUserInterfaceStyle = .dark
+        }
+        #elseif os(macOS)
+        // For macOS, we'll use the preferredColorScheme modifier since overrideUserInterfaceStyle isn't available
+        // The main app will handle this through the colorScheme computed property
+        #endif
+    }
+}
+
 // Removed extension for ScriptureLayoutStyle from here
 
 class AppSettings: ObservableObject {

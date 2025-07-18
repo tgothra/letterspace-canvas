@@ -6,23 +6,6 @@ import UniformTypeIdentifiers
 import AppKit
 #elseif os(iOS)
 import UIKit // Needed for UIImage for profile picture and haptic feedback
-
-// Extension for aggressive keyboard focusing on iPhone
-extension UIView {
-    func findFirstTextField() -> UITextField? {
-        if let textField = self as? UITextField {
-            return textField
-        }
-        
-        for subview in subviews {
-            if let textField = subview.findFirstTextField() {
-                return textField
-            }
-        }
-        
-        return nil
-    }
-}
 #endif
 
 // MARK: - Responsive Sizing Helper
@@ -151,7 +134,7 @@ struct MainLayout: View {
     @Environment(\.themeColors) var theme
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.horizontalSizeClass) var horizontalSizeClass // For iPadOS adaptation
-    @State private var isDarkMode = UserDefaults.standard.bool(forKey: "prefersDarkMode")
+    @EnvironmentObject private var appearanceController: AppearanceController
     @State private var transitionOpacity = 1.0
     @State private var isScrolling = false
     @State private var scrollTimer: Timer?
@@ -286,24 +269,6 @@ struct MainLayout: View {
                     showSearchModal = false
                 })
                 .presentationBackground(.ultraThinMaterial)
-                #if os(iOS)
-                .onAppear {
-                    if UIDevice.current.userInterfaceIdiom == .phone {
-                        // Force keyboard to appear immediately when sheet opens
-                        DispatchQueue.main.async {
-                            print("🔍 MainLayout - Search sheet appeared, forcing keyboard")
-                            // Trigger keyboard appearance
-                            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                               let window = windowScene.windows.first {
-                                // Search for text field and make it first responder
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                    window.subviews.first?.findFirstTextField()?.becomeFirstResponder()
-                                }
-                            }
-                        }
-                    }
-                }
-                #endif
             }
             .sheet(isPresented: $showSmartStudyModal) {
                 SmartStudyView(onDismiss: {
@@ -349,8 +314,8 @@ struct MainLayout: View {
             .onAppear {
                 loadFolders()
                 
-                // DISABLED: Haptic feedback preloading causing 7-second freeze on search
-                // HapticFeedback.prepareAll()
+                // Preload haptic feedback generators to eliminate first-tap delays
+                HapticFeedback.prepareAll()
                 
                 // Preload user profile asynchronously
                 Task.detached(priority: .background) {
@@ -375,30 +340,6 @@ struct MainLayout: View {
                         
                         print("✅ Additional Smart Study preloading complete")
                     }
-                    
-                    // Preload Search View specifically for iPhone to eliminate the 7-second delay
-                    Task.detached(priority: .background) {
-                        print("🔄 Additional Search View preloading...")
-                        
-                        // Force creation of key Search objects and components
-                        if let appDir = Letterspace_CanvasDocument.getAppDocumentsDirectory() {
-                            // Pre-access the directory to cache file system access
-                            _ = try? FileManager.default.contentsOfDirectory(at: appDir, includingPropertiesForKeys: [.fileSizeKey, .contentModificationDateKey, .contentAccessDateKey])
-                            
-                            // Pre-load one document to warm up the entire JSON decoding pipeline
-                            if let firstFile = (try? FileManager.default.contentsOfDirectory(at: appDir, includingPropertiesForKeys: nil))?.first(where: { $0.pathExtension == "canvas" }) {
-                                _ = try? Data(contentsOf: firstFile)
-                                if let data = try? Data(contentsOf: firstFile) {
-                                    _ = try? JSONDecoder().decode(Letterspace_CanvasDocument.self, from: data)
-                                }
-                            }
-                        }
-                        
-                        // Pre-warm search-related systems
-                        _ = UserDefaults.standard.bool(forKey: "searchSystemInitialized")
-                        
-                        print("✅ Additional Search View preloading complete")
-                    }
                 }
                 #endif
                 
@@ -413,144 +354,28 @@ struct MainLayout: View {
                 // Preload modal views to eliminate first-time delays on iPhone
                 #if os(iOS)
                 if UIDevice.current.userInterfaceIdiom == .phone {
-                    // Comprehensive iPhone sheet preloading - eliminate ALL cold start delays
-                    Task.detached(priority: .utility) {
-                        print("🔄 Starting comprehensive iPhone sheet preloading...")
+                    // Simplified iPhone sheet preloading - focus only on critical bottlenecks
+                    Task.detached(priority: .background) {
+                        print("🔄 Starting optimized iPhone sheet preloading...")
                         
-                        // 1. Bible Reader preloading
+                        // Delay preloading to avoid blocking initial app launch
+                        try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second delay
+                        
+                        // 1. Essential UserDefaults access only
+                        _ = UserDefaults.standard.data(forKey: "bible_reader_bookmarks")
+                        _ = UserDefaults.standard.data(forKey: "SavedFolders")
+                        _ = UserDefaults.standard.data(forKey: "savedSmartStudyQAs")
+                        
+                        // 2. Pre-warm only the most critical services
+                        let _ = DocumentCacheManager.shared
+                        
+                        // 3. Force initialization of essential data structures in background
                         Task.detached(priority: .utility) {
-                            // Preload Bible reader UserDefaults with correct keys
-                            _ = UserDefaults.standard.data(forKey: "bible_reader_bookmarks")
-                            _ = UserDefaults.standard.dictionary(forKey: "bible_reader_last_read")
-                            
-                            // Force BibleReaderData creation to warm up the system
                             let _ = BibleReaderData()
-                            
-                            print("📖 Bible Reader preloaded")
+                            print("📖 Bible Reader data preloaded")
                         }
                         
-                        // 2. Folders View preloading  
-                        Task.detached(priority: .utility) {
-                            // Preload folder data structure with correct keys
-                            _ = UserDefaults.standard.data(forKey: "SavedFolders")
-                            _ = UserDefaults.standard.data(forKey: "FolderDocuments")
-                            
-                            // Pre-warm document cache patterns
-                            let _ = DocumentCacheManager.shared
-                            
-                            print("📁 Folders View preloaded")
-                        }
-                        
-                        // 3. Search View preloading - COMPREHENSIVE like Smart Study
-                        Task.detached(priority: .utility) {
-                            print("🔄 Comprehensive Search View preloading...")
-                            
-                            // Pre-warm document directory access and cache document list
-                            if let appDir = Letterspace_CanvasDocument.getAppDocumentsDirectory() {
-                                let _ = try? FileManager.default.contentsOfDirectory(at: appDir, includingPropertiesForKeys: [.fileSizeKey, .contentModificationDateKey])
-                                    .filter { $0.pathExtension == "canvas" }
-                                
-                                // Pre-cache a few recent documents to warm up JSON decoder
-                                let recentFiles = (try? FileManager.default.contentsOfDirectory(at: appDir, includingPropertiesForKeys: [.contentModificationDateKey]))?.filter { $0.pathExtension == "canvas" }.prefix(3)
-                                
-                                for file in recentFiles ?? [] {
-                                    guard let data = try? Data(contentsOf: file),
-                                          let _ = try? JSONDecoder().decode(Letterspace_CanvasDocument.self, from: data) else { continue }
-                                    // Just loading to warm up decoder pipeline
-                                }
-                            }
-                            
-                            // Force creation of search-related view components to warm up SwiftUI
-                            await MainActor.run {
-                                // Pre-instantiate search view components to cache SwiftUI rendering
-                                let _ = VStack {
-                                    HStack {
-                                        Image(systemName: "magnifyingglass")
-                                        TextField("Search", text: .constant(""))
-                                    }
-                                    List {
-                                        Text("Search Result")
-                                        Text("Document")
-                                    }
-                                }.frame(width: 1, height: 1).opacity(0)
-                                
-                                // Pre-warm common UserDefaults patterns that search might use
-                                _ = UserDefaults.standard.bool(forKey: "searchPreferencesLoaded")
-                                
-                                print("🔍 Search View comprehensive preloading complete")
-                            }
-                        }
-                        
-                        // 4. Recently Deleted preloading
-                        Task.detached(priority: .utility) {
-                            // Recently Deleted doesn't seem to use persistent storage currently
-                            // Pre-warm document directory and general UserDefaults patterns
-                            _ = UserDefaults.standard.array(forKey: "PinnedDocuments")
-                            _ = UserDefaults.standard.array(forKey: "WIPDocuments")
-                            _ = UserDefaults.standard.array(forKey: "CalendarDocuments")
-                            
-                            print("🗑️ Recently Deleted preloaded")
-                        }
-                        
-                        // 5. General sheet infrastructure preloading
-                        Task.detached(priority: .utility) {
-                            // Pre-warm UI components frequently used in sheets
-                            await MainActor.run {
-                                // Create minimal throwaway views to warm up SwiftUI's sheet system
-                                let _ = AnyView(Text(""))
-                                let _ = NavigationView { EmptyView() }
-                                let _ = VStack { EmptyView() }
-                                let _ = ScrollView { EmptyView() }
-                                let _ = HStack { EmptyView() }
-                            }
-                            
-                            // Pre-warm common UserDefaults access patterns
-                            _ = UserDefaults.standard.array(forKey: "VisibleColumns")
-                            _ = UserDefaults.standard.integer(forKey: "SelectedCarouselIndex")
-                            _ = UserDefaults.standard.data(forKey: "savedSmartStudyQAs")
-                            
-                            print("🏗️ Sheet infrastructure preloaded")
-                        }
-                        
-                        // 6. Aggressive view system preloading (iPhone-specific)
-                        Task.detached(priority: .utility) {
-                            // Delay this slightly to not conflict with initial app load
-                            try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
-                            
-                            await MainActor.run {
-                                // Pre-instantiate minimal versions of sheet views to warm up view system
-                                // This forces SwiftUI to cache view rendering pipelines
-                                
-                                // Bible Reader warm-up
-                                let _ = VStack {
-                                    Text("Genesis")
-                                    Text("Chapter 1")
-                                    ScrollView(.vertical) {
-                                        Text("In the beginning...")
-                                    }
-                                }.frame(width: 1, height: 1).opacity(0)
-                                
-                                // Folders warm-up
-                                let _ = NavigationView {
-                                    List {
-                                        Text("Sermons")
-                                        Text("Bible Studies")
-                                    }
-                                }.frame(width: 1, height: 1).opacity(0)
-                                
-                                // Search warm-up
-                                let _ = VStack {
-                                    TextField("Search", text: .constant(""))
-                                    List {
-                                        Text("Search Result")
-                                    }
-                                }.frame(width: 1, height: 1).opacity(0)
-                                
-                                print("📱 Aggressive iPhone view preloading complete")
-                            }
-                        }
-                        
-                        print("✅ Comprehensive iPhone sheet preloading complete")
+                        print("✅ Optimized iPhone sheet preloading complete")
                     }
                 }
                 #endif
@@ -863,22 +688,25 @@ struct MainLayout: View {
                 VStack(spacing: 16) { // Bottom buttons section
                                             Group {
                                                 SidebarButton(
-                                                    icon: isDarkMode ? "sun.max.fill" : "moon.fill",
+                                                    icon: appearanceController.selectedScheme.icon,
                                                     action: {
                                                         withAnimation(.easeInOut(duration: 0.2)) {
-                                    transitionOpacity = 0; 
+                                                            transitionOpacity = 0
                                                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
-                                        isDarkMode.toggle(); 
-                                        UserDefaults.standard.set(isDarkMode, forKey: "prefersDarkMode")
-                                        UserDefaults.standard.synchronize()
+                                                                // Cycle through the color scheme options
+                                                                let allCases = AppColorScheme.allCases
+                                                                if let currentIndex = allCases.firstIndex(of: appearanceController.selectedScheme) {
+                                                                    let nextIndex = (currentIndex + 1) % allCases.count
+                                                                    appearanceController.selectedScheme = allCases[nextIndex]
+                                                                }
                                                                 withAnimation(.easeInOut(duration: 0.2)) {
                                                                     transitionOpacity = 1
                                                                 }
                                                             }
-                                }; 
-                                if horizontalSizeClass == .compact { showLeftSidebarSheet = false }
-                            },
-                            tooltip: "Toggle Dark Mode", activePopup: $activePopup, document: $document,
+                                                        }
+                                                        if horizontalSizeClass == .compact { showLeftSidebarSheet = false }
+                                                    },
+                            tooltip: "Color Scheme: \(appearanceController.selectedScheme.rawValue)", activePopup: $activePopup, document: $document,
                             sidebarMode: $sidebarMode, isRightSidebarVisible: $isRightSidebarVisible,
                             folders: $folders, onAddFolder: addFolder
                         )
@@ -985,16 +813,19 @@ struct MainLayout: View {
 
             Section(header: Text("Settings").font(.caption).foregroundColor(.secondary)) {
                 NavigationLink(destination: EmptyView()) {
-                    Label("Toggle Dark Mode", systemImage: isDarkMode ? "sun.max.fill" : "moon.fill")
+                    Label("Color Scheme: \(appearanceController.selectedScheme.rawValue)", systemImage: appearanceController.selectedScheme.icon)
                         .font(.system(size: 16))
                 }
                 .simultaneousGesture(TapGesture().onEnded {
                     withAnimation(.easeInOut(duration: 0.2)) {
                         transitionOpacity = 0
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
-                            isDarkMode.toggle()
-                            UserDefaults.standard.set(isDarkMode, forKey: "prefersDarkMode")
-                            UserDefaults.standard.synchronize()
+                            // Cycle through the color scheme options
+                            let allCases = AppColorScheme.allCases
+                            if let currentIndex = allCases.firstIndex(of: appearanceController.selectedScheme) {
+                                let nextIndex = (currentIndex + 1) % allCases.count
+                                appearanceController.selectedScheme = allCases[nextIndex]
+                            }
                             withAnimation(.easeInOut(duration: 0.2)) {
                                 transitionOpacity = 1
                             }
@@ -1371,15 +1202,18 @@ struct MainLayout: View {
                 // Bottom buttons section
                 VStack(spacing: shouldUseExpandedNavigation ? 6 : 4) {  // Minimal spacing when expanded
                     FloatingSidebarButton(
-                        icon: isDarkMode ? "sun.max.fill" : "moon.fill",
-                        title: "Toggle Dark Mode",
+                        icon: appearanceController.selectedScheme.icon,
+                        title: "Color Scheme: \(appearanceController.selectedScheme.rawValue)",
                         action: {
                             withAnimation(.easeInOut(duration: 0.2)) {
                                 transitionOpacity = 0
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
-                                    isDarkMode.toggle()
-                                    UserDefaults.standard.set(isDarkMode, forKey: "prefersDarkMode")
-                                    UserDefaults.standard.synchronize()
+                                    // Cycle through the color scheme options
+                                    let allCases = AppColorScheme.allCases
+                                    if let currentIndex = allCases.firstIndex(of: appearanceController.selectedScheme) {
+                                        let nextIndex = (currentIndex + 1) % allCases.count
+                                        appearanceController.selectedScheme = allCases[nextIndex]
+                                    }
                                     withAnimation(.easeInOut(duration: 0.2)) {
                                         transitionOpacity = 1
                                     }
@@ -2429,8 +2263,36 @@ private func mainContentView(availableWidth: CGFloat) -> some View {
             #endif
             }
             // Apply blur to main content area when any modal is shown
-            .blur(radius: showUserProfileModal || showRecentlyDeletedModal || showSmartStudyModal || showBibleReaderModal || showFoldersModal || showExportModal || showSettingsModal || showSearchModal || isCircularMenuOpen ? 4 : 0)
-            .opacity(showUserProfileModal || showRecentlyDeletedModal || showSmartStudyModal || showFoldersModal || showExportModal || showSettingsModal || showSearchModal || isCircularMenuOpen ? 0.8 : 1.0)
+            // iPhone: Only apply blur for circular menu, not for modal sheets
+            // Other platforms: Apply blur for all modals
+            .blur(radius: {
+                #if os(iOS)
+                if UIDevice.current.userInterfaceIdiom == .phone {
+                    // iPhone: Only blur for circular menu navigation, not modal sheets
+                    return isCircularMenuOpen ? 4 : 0
+                } else {
+                    // iPad: Apply blur for all modals
+                    return showUserProfileModal || showRecentlyDeletedModal || showSmartStudyModal || showBibleReaderModal || showFoldersModal || showExportModal || showSettingsModal || showSearchModal || isCircularMenuOpen ? 4 : 0
+                }
+                #else
+                // macOS: Apply blur for all modals
+                return showUserProfileModal || showRecentlyDeletedModal || showSmartStudyModal || showBibleReaderModal || showFoldersModal || showExportModal || showSettingsModal || showSearchModal || isCircularMenuOpen ? 4 : 0
+                #endif
+            }())
+            .opacity({
+                #if os(iOS)
+                if UIDevice.current.userInterfaceIdiom == .phone {
+                    // iPhone: Only dim for circular menu navigation, not modal sheets
+                    return isCircularMenuOpen ? 0.8 : 1.0
+                } else {
+                    // iPad: Apply opacity change for all modals
+                    return showUserProfileModal || showRecentlyDeletedModal || showSmartStudyModal || showBibleReaderModal || showFoldersModal || showExportModal || showSettingsModal || showSearchModal || isCircularMenuOpen ? 0.8 : 1.0
+                }
+                #else
+                // macOS: Apply opacity change for all modals
+                return showUserProfileModal || showRecentlyDeletedModal || showSmartStudyModal || showBibleReaderModal || showFoldersModal || showExportModal || showSettingsModal || showSearchModal || isCircularMenuOpen ? 0.8 : 1.0
+                #endif
+            }())
             .animation(.easeInOut(duration: 0.15), value: showUserProfileModal || showRecentlyDeletedModal || showSmartStudyModal || showBibleReaderModal || showFoldersModal || showExportModal || showSettingsModal || showSearchModal || isCircularMenuOpen)
             
             // Floating Action Buttons (iPhone only)
@@ -3076,15 +2938,18 @@ private func mainContentView(availableWidth: CGFloat) -> some View {
             // Bottom section - Settings and profile buttons with tighter spacing
             VStack(spacing: 28) {  // Increased spacing from 20 to 28 for more space between bottom icons
                 FloatingSidebarButton(
-                    icon: isDarkMode ? "sun.max.fill" : "moon.fill",
-                    title: "Toggle Dark Mode",
+                    icon: appearanceController.selectedScheme.icon,
+                    title: "Color Scheme: \(appearanceController.selectedScheme.rawValue)",
                     action: {
                         withAnimation(.easeInOut(duration: 0.2)) {
                             transitionOpacity = 0
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
-                                isDarkMode.toggle()
-                                UserDefaults.standard.set(isDarkMode, forKey: "prefersDarkMode")
-                                UserDefaults.standard.synchronize()
+                                // Cycle through the color scheme options
+                                let allCases = AppColorScheme.allCases
+                                if let currentIndex = allCases.firstIndex(of: appearanceController.selectedScheme) {
+                                    let nextIndex = (currentIndex + 1) % allCases.count
+                                    appearanceController.selectedScheme = allCases[nextIndex]
+                                }
                                 withAnimation(.easeInOut(duration: 0.2)) {
                                     transitionOpacity = 1
                                 }
