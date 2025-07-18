@@ -11,21 +11,44 @@ struct HapticFeedback {
         case heavy
     }
     
+    #if os(iOS)
+    // Pre-initialized generators to avoid first-time delays
+    private static let lightGenerator = UIImpactFeedbackGenerator(style: .light)
+    private static let mediumGenerator = UIImpactFeedbackGenerator(style: .medium) 
+    private static let heavyGenerator = UIImpactFeedbackGenerator(style: .heavy)
+    
+    // Pre-warm generators on first access
+    private static let preparedGenerators: Void = {
+        lightGenerator.prepare()
+        mediumGenerator.prepare()
+        heavyGenerator.prepare()
+    }()
+    #endif
+    
     static func impact(_ style: Style) {
         #if os(iOS)
-        let feedbackStyle: UIImpactFeedbackGenerator.FeedbackStyle
+        // Ensure generators are prepared
+        _ = preparedGenerators
+        
+        let generator: UIImpactFeedbackGenerator
         switch style {
         case .light:
-            feedbackStyle = .light
+            generator = lightGenerator
         case .medium:
-            feedbackStyle = .medium
+            generator = mediumGenerator
         case .heavy:
-            feedbackStyle = .heavy
+            generator = heavyGenerator
         }
         
-        let impactFeedback = UIImpactFeedbackGenerator(style: feedbackStyle)
-        impactFeedback.impactOccurred()
+        generator.impactOccurred()
         #endif
         // On macOS, haptic feedback is not available, so we do nothing
+    }
+    
+    // Method to pre-warm all generators (call during app startup)
+    static func prepareAll() {
+        #if os(iOS)
+        _ = preparedGenerators
+        #endif
     }
 } 
