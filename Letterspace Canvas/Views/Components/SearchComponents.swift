@@ -1,19 +1,11 @@
 import SwiftUI
-
-// Extension for batching arrays to improve search performance
-extension Array {
-    func chunked(into size: Int) -> [[Element]] {
-        return stride(from: 0, to: count, by: size).map {
-            Array(self[$0..<Swift.min($0 + size, count)])
-        }
-    }
-}
 import Foundation
 
 // Helper views for SearchPopupContent
 struct SearchHeaderView: View {
     @Binding var activePopup: ActivePopup
     @Environment(\.themeColors) var theme
+    @Environment(\.colorScheme) var colorScheme
     
     var body: some View {
         HStack {
@@ -42,7 +34,7 @@ struct SearchHeaderView: View {
             return 12 // More padding for iPad
             #endif
         }())
-        .background(theme.surface) // Use theme surface color for search header
+        .background(theme.background) // Use theme-aware background
     }
 }
 
@@ -56,11 +48,17 @@ struct SearchContentView: View {
     @Binding var activePopup: ActivePopup
     let performSearch: () async -> Void
     var onDismiss: (() -> Void)? = nil
+    var triggerFocus: (() -> Void)? = nil // Add focus trigger
     @Environment(\.themeColors) var theme
     
     var body: some View {
         VStack(spacing: 20) {
-            SearchFieldView(searchText: $searchText, searchTask: $searchTask, performSearch: performSearch)
+            SearchFieldView(
+                searchText: $searchText, 
+                searchTask: $searchTask, 
+                performSearch: performSearch,
+                triggerFocus: triggerFocus
+            )
             
             if searchText.isEmpty {
                 SearchEmptyStateView()
@@ -89,24 +87,36 @@ struct SearchFieldView: View {
     @Binding var searchText: String
     @Binding var searchTask: Task<Void, Never>?
     let performSearch: () async -> Void
+    var triggerFocus: (() -> Void)? = nil // Add focus trigger parameter
     @Environment(\.themeColors) var theme
+    @Environment(\.colorScheme) var colorScheme
     
-    // Add focus state for immediate keyboard appearance on iPhone
-    #if os(iOS)
-    @FocusState private var isSearchFieldFocused: Bool
-    #endif
+    // Add focus state for immediate keyboard appearance
+    @FocusState private var isTextFieldFocused: Bool
     
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 14))
+                .font(.system(size: {
+                    #if os(iOS)
+                    let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                    return isPhone ? 16 : 14 // Larger icon for iPhone
+                    #else
+                    return 14
+                    #endif
+                }()))
                 .foregroundColor(theme.secondary)
             TextField("Search documents...", text: $searchText)
                 .textFieldStyle(.plain)
-                .font(.system(size: 14))
-                #if os(iOS)
-                .focused($isSearchFieldFocused)
-                #endif
+                .font(.system(size: {
+                    #if os(iOS)
+                    let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                    return isPhone ? 16 : 14 // Larger text for iPhone
+                    #else
+                    return 14
+                    #endif
+                }()))
+                .focused($isTextFieldFocused)
                 .onChange(of: searchText) { oldValue, newValue in
                     print("🔍 SearchFieldView: Text changed from '\(oldValue)' to '\(newValue)'")
                     searchTask?.cancel()
@@ -116,39 +126,51 @@ struct SearchFieldView: View {
                         await performSearch()
                     }
                 }
+                .onAppear {
+                    #if os(iOS)
+                    // Focus immediately on iPhone for instant keyboard appearance
+                    if UIDevice.current.userInterfaceIdiom == .phone {
+                        DispatchQueue.main.async {
+                            isTextFieldFocused = true
+                        }
+                    }
+                    #endif
+                    
+                    // Set up focus trigger callback
+                    triggerFocus?() // This would be called from parent, but we need a different approach
+                }
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
+        .padding(.horizontal, {
+            #if os(iOS)
+            let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+            return isPhone ? 12 : 8 // More padding for iPhone
+            #else
+            return 8
+            #endif
+        }())
+        .padding(.vertical, {
+            #if os(iOS)
+            let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+            return isPhone ? 12 : 6 // Better touch target for iPhone
+            #else
+            return 6
+            #endif
+        }())
         .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(theme.surface)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 6)
-                        .stroke(theme.secondary.opacity(0.2), lineWidth: 1)
-                )
+            RoundedRectangle(cornerRadius: {
+                #if os(iOS)
+                let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                return isPhone ? 8 : 6 // More rounded for iPhone
+                #else
+                return 6
+                #endif
+            }())
+                .fill(colorScheme == .dark ? theme.surface.opacity(0.8) : Color(.sRGB, white: 0.95))
         )
-        #if os(iOS)
-        .onAppear {
-            // Auto-focus search field on iPhone for immediate keyboard
-            if UIDevice.current.userInterfaceIdiom == .phone {
-                print("🔍 SearchFieldView onAppear - attempting immediate focus")
-                // Try immediate focus first
-                isSearchFieldFocused = true
-                
-                // Backup with slight delay in case immediate doesn't work
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                    print("🔍 SearchFieldView - backup focus attempt")
-                    isSearchFieldFocused = true
-                }
-                
-                // Final fallback
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    print("🔍 SearchFieldView - final focus attempt")
-                    isSearchFieldFocused = true
-                }
-            }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("FocusSearchField"))) { _ in
+            // Allow external focus trigger via notification
+            isTextFieldFocused = true
         }
-        #endif
     }
 }
 
@@ -387,28 +409,51 @@ struct DocumentThumbnailRow: View {
             activePopup = .none
             onDismiss?()
         }) {
-            HStack(spacing: 12) {
+            HStack(spacing: {
+                #if os(iOS)
+                let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                return isPhone ? 16 : 12 // More spacing for iPhone
+                #else
+                return 12
+                #endif
+            }()) {
                 // Thumbnail or document icon
                 Group {
+                    let iconSize: CGFloat = {
+                        #if os(iOS)
+                        let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                        return isPhone ? 48 : 40 // Larger for iPhone
+                        #else
+                        return 40
+                        #endif
+                    }()
+                    
                     if let headerImage = headerImage {
                         #if os(macOS)
                         Image(nsImage: headerImage)
                             .resizable()
                             .aspectRatio(contentMode: .fill)
-                            .frame(width: 40, height: 40)
+                            .frame(width: iconSize, height: iconSize)
                             .clipShape(RoundedRectangle(cornerRadius: 6))
                         #elseif os(iOS)
                         Image(uiImage: headerImage)
                             .resizable()
                             .aspectRatio(contentMode: .fill)
-                            .frame(width: 40, height: 40)
+                            .frame(width: iconSize, height: iconSize)
                             .clipShape(RoundedRectangle(cornerRadius: 6))
                         #endif
                     } else {
                         Image(systemName: "doc.text")
-                            .font(.system(size: 16))
+                            .font(.system(size: {
+                                #if os(iOS)
+                                let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                                return isPhone ? 18 : 16 // Larger icon for iPhone
+                                #else
+                                return 16
+                                #endif
+                            }()))
                             .foregroundStyle(theme.secondary)
-                            .frame(width: 40, height: 40)
+                            .frame(width: iconSize, height: iconSize)
                             .background(theme.surface)
                             .clipShape(RoundedRectangle(cornerRadius: 6))
                     }
@@ -424,14 +469,28 @@ struct DocumentThumbnailRow: View {
                         HighlightedText(
                             text: titleContext.0,
                             highlightRange: titleContext.1,
-                            font: .system(size: 14, weight: .medium),
+                            font: .system(size: {
+                                #if os(iOS)
+                                let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                                return isPhone ? 16 : 14 // Larger text for iPhone
+                                #else
+                                return 14
+                                #endif
+                            }(), weight: .medium),
                             textColor: theme.primary,
                             highlightColor: Color.yellow.opacity(0.4)
                         )
                         .lineLimit(1)
                     } else {
                         Text(title)
-                            .font(.system(size: 14, weight: .medium))
+                            .font(.system(size: {
+                                #if os(iOS)
+                                let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                                return isPhone ? 16 : 14 // Larger text for iPhone
+                                #else
+                                return 14
+                                #endif
+                            }(), weight: .medium))
                             .foregroundStyle(theme.primary)
                             .lineLimit(1)
                     }
@@ -444,14 +503,28 @@ struct DocumentThumbnailRow: View {
                             HighlightedText(
                                 text: subtitleContext.0,
                                 highlightRange: subtitleContext.1,
-                                font: .system(size: 12),
+                                font: .system(size: {
+                                    #if os(iOS)
+                                    let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                                    return isPhone ? 14 : 12 // Larger subtitle for iPhone
+                                    #else
+                                    return 12
+                                    #endif
+                                }()),
                                 textColor: theme.secondary,
                                 highlightColor: Color.yellow.opacity(0.3)
                             )
                             .lineLimit(1)
                         } else {
                             Text(doc.subtitle)
-                                .font(.system(size: 12))
+                                .font(.system(size: {
+                                    #if os(iOS)
+                                    let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                                    return isPhone ? 14 : 12 // Larger subtitle for iPhone
+                                    #else
+                                    return 12
+                                    #endif
+                                }()))
                                 .foregroundStyle(theme.secondary)
                                 .lineLimit(1)
                         }
@@ -460,8 +533,22 @@ struct DocumentThumbnailRow: View {
                 
                 Spacer()
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 8)
+            .padding(.horizontal, {
+                #if os(iOS)
+                let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                return isPhone ? 16 : 8 // More padding for iPhone touch targets
+                #else
+                return 8
+                #endif
+            }())
+            .padding(.vertical, {
+                #if os(iOS)
+                let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                return isPhone ? 12 : 8 // Better touch targets for iPhone
+                #else
+                return 8
+                #endif
+            }())
             .background(Color.clear)
             .contentShape(Rectangle())
         }
@@ -691,12 +778,26 @@ struct ContentMatchRow: View {
             // Navigate to specific match
             highlightSpecificMatch()
         }) {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: {
+                #if os(iOS)
+                let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                return isPhone ? 6 : 4 // More spacing for iPhone
+                #else
+                return 4
+                #endif
+            }()) {
                 // Match number for all matches when there are multiple
                 if totalMatches > 1 {
                     HStack {
                         Text("Match \(matchIndex + 1)")
-                            .font(.system(size: 10, weight: .medium))
+                            .font(.system(size: {
+                                #if os(iOS)
+                                let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                                return isPhone ? 11 : 10 // Larger for iPhone
+                                #else
+                                return 10
+                                #endif
+                            }(), weight: .medium))
                             .foregroundStyle(theme.secondary)
                         Spacer()
                     }
@@ -707,7 +808,14 @@ struct ContentMatchRow: View {
                 HighlightedText(
                     text: context.preview,
                     highlightRange: context.highlightRange,
-                    font: .system(size: 12),
+                    font: .system(size: {
+                        #if os(iOS)
+                        let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                        return isPhone ? 14 : 12 // Larger text for iPhone readability
+                        #else
+                        return 12
+                        #endif
+                    }()),
                     textColor: theme.primary,
                     highlightColor: Color.yellow.opacity(0.4)
                 )
@@ -715,8 +823,22 @@ struct ContentMatchRow: View {
                 .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
+            .padding(.horizontal, {
+                #if os(iOS)
+                let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                return isPhone ? 12 : 8 // More padding for iPhone touch targets
+                #else
+                return 8
+                #endif
+            }())
+            .padding(.vertical, {
+                #if os(iOS)
+                let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                return isPhone ? 10 : 6 // Better touch targets for iPhone
+                #else
+                return 6
+                #endif
+            }())
             .background(Color.clear)
             .contentShape(Rectangle())
         }
@@ -868,8 +990,8 @@ struct SearchPopupContent: View {
     var onDismiss: (() -> Void)? = nil
     @Environment(\.themeColors) var theme
     
-    // Lazy initialization flag to prevent heavy work on first load
-    @State private var isSearchSystemInitialized = false
+    // Add focus trigger state
+    @State private var focusTrigger: (() -> Void)?
     
     private func getMatchContext(content: String, searchText: String) -> (String, Range<String.Index>?) {
         guard let range = content.range(of: searchText, options: .caseInsensitive) else {
@@ -899,86 +1021,71 @@ struct SearchPopupContent: View {
             return
         }
         
-        // Initialize search system lazily only when first search is performed
-        if !isSearchSystemInitialized {
-            print("🔍 First search - initializing search system")
-            isSearchSystemInitialized = true
+        guard let appDirectory = Letterspace_CanvasDocument.getAppDocumentsDirectory() else {
+            print("❌ Could not access documents directory")
+            return
         }
+        print("📂 Documents path: \(appDirectory.path)")
+        print("📂 Documents directory exists: \(FileManager.default.fileExists(atPath: appDirectory.path))")
         
-        // Perform search on background thread to avoid blocking UI
-        await Task.detached(priority: .userInitiated) {
-            guard let appDirectory = Letterspace_CanvasDocument.getAppDocumentsDirectory() else {
-                print("❌ Could not access documents directory")
-                return
-            }
+        do {
+            try FileManager.default.createDirectory(at: appDirectory, withIntermediateDirectories: true, attributes: nil)
             
-            do {
-                try FileManager.default.createDirectory(at: appDirectory, withIntermediateDirectories: true, attributes: nil)
+            let allFiles = try FileManager.default.contentsOfDirectory(at: appDirectory, includingPropertiesForKeys: nil)
+            print("📁 All files in directory: \(allFiles.map { $0.lastPathComponent })")
+            
+            let fileURLs = allFiles.filter { $0.pathExtension == "canvas" }
+            print("📄 Found \(fileURLs.count) canvas files: \(fileURLs.map { $0.lastPathComponent })")
+            
+            var results: [Letterspace_CanvasDocument] = []
+            
+            for url in fileURLs {
+                guard !Task.isCancelled else { return }
                 
-                let allFiles = try FileManager.default.contentsOfDirectory(at: appDirectory, includingPropertiesForKeys: nil)
-                let fileURLs = allFiles.filter { $0.pathExtension == "canvas" }
-                print("📄 Found \(fileURLs.count) canvas files for search")
+                let fileName = url.lastPathComponent
+                print("📄 Processing file: \(fileName)")
                 
-                var results: [Letterspace_CanvasDocument] = []
-                
-                // Process files in batches to avoid blocking
-                let batchSize = 10
-                for batch in fileURLs.chunked(into: batchSize) {
-                    guard !Task.isCancelled else { return }
-                    
-                    for url in batch {
-                        guard !Task.isCancelled else { return }
+                do {
+                    let data = try Data(contentsOf: url)
+                    if let document = try? JSONDecoder().decode(Letterspace_CanvasDocument.self, from: data) {
+                        let titleMatch = document.title.localizedCaseInsensitiveContains(searchText)
+                        let subtitleMatch = document.subtitle.localizedCaseInsensitiveContains(searchText)
+                        let seriesMatch = document.series?.name.localizedCaseInsensitiveContains(searchText) ?? false
                         
-                        do {
-                            let data = try Data(contentsOf: url)
-                            if let document = try? JSONDecoder().decode(Letterspace_CanvasDocument.self, from: data) {
-                                let titleMatch = document.title.localizedCaseInsensitiveContains(searchText)
-                                let subtitleMatch = document.subtitle.localizedCaseInsensitiveContains(searchText)
-                                let seriesMatch = document.series?.name.localizedCaseInsensitiveContains(searchText) ?? false
-                                
-                                // Fast content matching - stop at first match per document
-                                var contentMatch = false
-                                for element in document.elements {
-                                    if element.content.localizedCaseInsensitiveContains(searchText) {
-                                        contentMatch = true
-                                        break
-                                    }
-                                }
-                                
-                                if titleMatch || subtitleMatch || seriesMatch || contentMatch {
-                                    results.append(document)
-                                }
+                        // Improved content matching
+                        var contentMatch = false
+                        for element in document.elements {
+                            if element.content.localizedCaseInsensitiveContains(searchText) {
+                                contentMatch = true
+                                break
                             }
-                        } catch {
-                            continue // Skip corrupted files silently
+                        }
+                        
+                        if titleMatch || subtitleMatch || seriesMatch || contentMatch {
+                            results.append(document)
                         }
                     }
-                    
-                    // Small yield to prevent UI blocking
-                    try? await Task.sleep(nanoseconds: 1_000_000) // 1ms
-                }
-                
-                print("🏁 Search complete. Found \(results.count) matches out of \(fileURLs.count) files")
-                
-                await MainActor.run {
-                    searchResults = results
-                    print("✅ Updated UI with \(results.count) search results")
-                }
-            } catch {
-                print("❌ Error searching documents: \(error)")
-                await MainActor.run {
-                    searchResults = []
+                } catch {
+                    print("❌ Error reading document at \(fileName): \(error)")
+                    continue
                 }
             }
-        }.value
+            
+            print("🏁 Search complete. Found \(results.count) matches out of \(fileURLs.count) files")
+            
+            await MainActor.run {
+                searchResults = results
+                print("✅ Updated UI with \(results.count) search results")
+            }
+        } catch {
+            print("❌ Error searching documents: \(error)")
+            await MainActor.run {
+                searchResults = []
+            }
+        }
     }
     
     var groupedResults: [(String, [Letterspace_CanvasDocument])] {
-        // Early exit to avoid heavy computation on first load
-        guard !searchText.isEmpty && !searchResults.isEmpty else {
-            return []
-        }
-        
         var groups: [(String, [Letterspace_CanvasDocument])] = []
         
         // Group by title/subtitle matches
@@ -1030,7 +1137,8 @@ struct SearchPopupContent: View {
                 sidebarMode: $sidebarMode,
                 activePopup: $activePopup,
                 performSearch: performSearch,
-                onDismiss: onDismiss
+                onDismiss: onDismiss,
+                triggerFocus: focusTrigger
             )
             .padding({
                 #if os(macOS)
@@ -1040,7 +1148,16 @@ struct SearchPopupContent: View {
                 #endif
             }())
         }
-        .background(theme.surface)
+        .onAppear {
+            #if os(iOS)
+            // Trigger focus immediately on iPhone
+            if UIDevice.current.userInterfaceIdiom == .phone {
+                DispatchQueue.main.async {
+                    NotificationCenter.default.post(name: NSNotification.Name("FocusSearchField"), object: nil)
+                }
+            }
+            #endif
+        }
     }
     
     private func findFirstMatchingElement(in document: Letterspace_CanvasDocument, searchText: String) -> (content: String, element: DocumentElement)? {
@@ -1059,24 +1176,9 @@ struct SearchView: View {
     @Environment(\.colorScheme) var colorScheme
     let onDismiss: () -> Void
     @State private var activePopup: ActivePopup = .search
-    @State private var document: Letterspace_CanvasDocument = {
-        // Lazy initialization to avoid blocking main thread
-        Letterspace_CanvasDocument(title: "", subtitle: "", elements: [], id: "", markers: [], series: nil, variations: [], isVariation: false, parentVariationId: nil, createdAt: Date(), modifiedAt: Date(), tags: nil, isHeaderExpanded: false, isSubtitleVisible: true, links: [])
-    }()
+    @State private var document = Letterspace_CanvasDocument(title: "", subtitle: "", elements: [], id: "", markers: [], series: nil, variations: [], isVariation: false, parentVariationId: nil, createdAt: Date(), modifiedAt: Date(), tags: nil, isHeaderExpanded: false, isSubtitleVisible: true, links: [])
     @State private var sidebarMode: RightSidebar.SidebarMode = .allDocuments
     @State private var isRightSidebarVisible = false
-    
-    // Track if view has been initialized to avoid multiple onAppear calls
-    @State private var hasInitialized = false
-    
-    // Optimized loading for iPhone - start with false and enable immediately for instant response
-    @State private var contentReady = false
-    @State private var viewReady = false
-    
-    // Add focus state at SearchView level for more direct control
-    #if os(iOS)
-    @FocusState private var isSearchFocused: Bool
-    #endif
     
     var body: some View {
         #if os(iOS)
@@ -1086,65 +1188,62 @@ struct SearchView: View {
         Group {
             #if os(iOS)
             if isPhone {
-                // iPhone: Use NavigationView like Bible Reader search modal
-                NavigationView {
-                    Group {
-                        if viewReady {
-                            SearchPopupContent(
-                                activePopup: $activePopup,
-                                document: $document,
-                                sidebarMode: $sidebarMode,
-                                isRightSidebarVisible: $isRightSidebarVisible,
-                                onDismiss: onDismiss
-                            )
-                        } else {
-                            // Minimal loading view with immediate search field - like SmartStudyView pattern
-                            VStack(spacing: 20) {
-                                // Immediate search field for instant keyboard focus
-                                HStack(spacing: 8) {
-                                    Image(systemName: "magnifyingglass")
-                                        .font(.system(size: 14))
-                                        .foregroundColor(theme.secondary)
-                                    TextField("Search documents...", text: .constant(""))
-                                        .textFieldStyle(.plain)
-                                        .font(.system(size: 14))
-                                        #if os(iOS)
-                                        .focused($isSearchFocused)
-                                        #endif
-                                }
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 6)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 6)
-                                        .fill(theme.surface)
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 6)
-                                                .stroke(theme.secondary.opacity(0.2), lineWidth: 1)
-                                        )
-                                )
-                                
-                                Text("Loading search...")
-                                    .font(.system(size: 12))
-                                    .foregroundStyle(theme.secondary)
-                                
-                                Spacer()
+                // iPhone: Use NavigationStack (iOS 16+) for better performance, fallback to VStack for older iOS
+                if #available(iOS 16.0, *) {
+                    NavigationStack {
+                        SearchPopupContent(
+                            activePopup: $activePopup,
+                            document: $document,
+                            sidebarMode: $sidebarMode,
+                            isRightSidebarVisible: $isRightSidebarVisible,
+                            onDismiss: onDismiss
+                        )
+                        .background(theme.background)
+                        .navigationTitle("Search Documents")
+                        #if os(iOS)
+                        .navigationBarTitleDisplayMode(.inline)
+                        #endif
+                        .toolbar {
+                            ToolbarItem(placement: {
+                                #if os(iOS)
+                                .navigationBarTrailing
+                                #else
+                                .automatic
+                                #endif
+                            }()) {
+                                Button("Done", action: onDismiss)
+                                    .foregroundColor(theme.accent)
                             }
-                            .padding(16)
-                            .background(theme.surface)
                         }
                     }
-                    .navigationTitle("Search Documents")
-                    .navigationBarTitleDisplayMode(.inline)
-                    .navigationBarItems(trailing: 
-                        Button("Done") {
-                            onDismiss()
+                } else {
+                    // Fallback for iOS 15 and below: Use simple VStack to avoid NavigationView delays
+                    VStack(spacing: 0) {
+                        // Simple header for older iOS
+                        HStack {
+                            Text("Search Documents")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundColor(.primary)
+                            Spacer()
+                            Button("Done", action: onDismiss)
+                                .foregroundColor(theme.accent)
                         }
-                        .foregroundColor(.blue)
-                    )
-                    .background(theme.surface)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                        .background(theme.surface)
+                        
+                        Divider()
+                        
+                        SearchPopupContent(
+                            activePopup: $activePopup,
+                            document: $document,
+                            sidebarMode: $sidebarMode,
+                            isRightSidebarVisible: $isRightSidebarVisible,
+                            onDismiss: onDismiss
+                        )
+                        .background(theme.background)
+                    }
                 }
-                .navigationViewStyle(StackNavigationViewStyle())
-                .background(theme.surface)
             } else {
                 // iPad: Use regular VStack
                 VStack(spacing: 0) {
@@ -1160,58 +1259,12 @@ struct SearchView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
-            // Ensure we only initialize once to avoid performance issues
-            guard !hasInitialized else { return }
-            hasInitialized = true
-            
             #if os(iOS)
+            // Trigger focus immediately on iPhone when search view appears
             if UIDevice.current.userInterfaceIdiom == .phone {
-                print("🔍 SearchView appeared on iPhone - applying exact Smart Study pattern")
-                
-                // Apply exact Smart Study pattern: DO NOT set viewReady immediately
-                // This prevents SearchPopupContent from loading until ready
-                
-                // Immediate keyboard focus attempts on minimal view
-                isSearchFocused = true
-                
-                // Force keyboard appearance at UIKit level - immediate
-                DispatchQueue.main.async {
-                    // Find and focus the first text field in the hierarchy
-                    if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                       let window = windowScene.windows.first {
-                        window.subviews.first?.findFirstTextField()?.becomeFirstResponder()
-                    }
-                    print("🔍 SearchView - UIKit focus attempt")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    NotificationCenter.default.post(name: NSNotification.Name("FocusSearchField"), object: nil)
                 }
-                
-                // Quick focus backups
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
-                    isSearchFocused = true
-                    print("🔍 SearchView - 10ms focus attempt")
-                }
-                
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) {
-                    isSearchFocused = true
-                    print("🔍 SearchView - 20ms focus attempt")
-                }
-                
-                // Load heavy SearchPopupContent in background like Smart Study does
-                Task.detached(priority: .utility) {
-                    // Simulate the background loading that Smart Study does
-                    try? await Task.sleep(nanoseconds: 100_000_000) // 100ms delay
-                    
-                    await MainActor.run {
-                        print("🔍 SearchView - loading heavy content like Smart Study")
-                        viewReady = true
-                        contentReady = true
-                    }
-                }
-                
-                print("🔍 SearchView - exact Smart Study pattern applied")
-            } else {
-                // iPad/macOS: Normal initialization
-                viewReady = true
-                contentReady = true
             }
             #endif
         }

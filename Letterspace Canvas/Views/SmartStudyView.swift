@@ -592,15 +592,17 @@ struct SmartStudyView: View {
                 hasLoaded = true
                 
                 #if os(iOS)
-                // iPhone: Skip all heavy operations in onAppear to avoid blocking keyboard
+                // iPhone: Defer all heavy operations to avoid blocking sheet presentation
                 if UIDevice.current.userInterfaceIdiom == .phone {
-                    // Do absolutely minimal work - just mark as ready and load data in background
+                    // Mark as ready immediately for UI responsiveness
                     viewReady = true
                     
-                    // Load data in background without blocking UI
-                    Task.detached(priority: .utility) {
-                        await MainActor.run {
-                loadSavedQAs()
+                    // Defer data loading to avoid blocking sheet presentation
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        Task.detached(priority: .utility) {
+                            await MainActor.run {
+                                loadSavedQAs()
+                            }
                         }
                     }
                     return
@@ -636,7 +638,70 @@ struct SmartStudyView: View {
             }
             .sheet(isPresented: $showingPastStudiesSheet) {
                 // Past Studies Sheet for iPhone
-                NavigationView {
+                if #available(iOS 16.0, *) {
+                    NavigationStack {
+                        VStack(alignment: .leading, spacing: 0) {
+                            // Past Studies Content
+                            if savedQAs.isEmpty {
+                                VStack {
+                                    Spacer()
+                                    Text("No saved questions yet")
+                                        .font(.system(size: 14))
+                                        .foregroundColor(.gray)
+                                    Text("Your saved Bible study questions will appear here")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(.gray.opacity(0.7))
+                                        .multilineTextAlignment(.center)
+                                        .padding(.top, 4)
+                                    Spacer()
+                                }
+                                .padding(.horizontal, 16)
+                            } else {
+                                ScrollView {
+                                    LazyVStack(spacing: 0) {
+                                        ForEach(savedQAs) { qa in
+                                            pastStudyListItem(qa: qa)
+                                            Divider()
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            Spacer()
+                        }
+                        .background(theme.surface)
+                        .navigationTitle("Past Studies")
+                        #if os(iOS)
+                        .navigationBarTitleDisplayMode(.inline)
+                        #endif
+                        .toolbar {
+                            ToolbarItem(placement: {
+                                #if os(iOS)
+                                .navigationBarTrailing
+                                #else
+                                .automatic
+                                #endif
+                            }()) {
+                                Button(action: {
+                                    showingPastStudiesSheet = false
+                                }) {
+                                    Image(systemName: "xmark")
+                                        .font(.system(size: 10, weight: .bold))
+                                        .foregroundColor(.white)
+                                        .frame(width: 22, height: 22)
+                                        .background(
+                                            Circle()
+                                                .fill(Color.gray.opacity(0.5))
+                                        )
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
+                } else {
+                    // Fallback for iOS 15 and below: Use simple VStack to avoid NavigationView delays
                     VStack(alignment: .leading, spacing: 0) {
                         // Header
                         HStack {
@@ -692,9 +757,9 @@ struct SmartStudyView: View {
                         Spacer()
                     }
                     .background(theme.surface)
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
                 }
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
             }
             .sheet(isPresented: $showingScripturePopup) {
                 ScripturePopupView(reference: selectedScriptureReference)

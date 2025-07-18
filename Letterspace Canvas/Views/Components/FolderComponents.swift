@@ -156,7 +156,22 @@ struct FoldersPopupContent: View {
         .frame(maxHeight: .infinity)
         .blur(radius: showFolderNamePopup ? 4 : 0) // Blur main content when popup is shown
         .animation(.easeInOut(duration: 0.2), value: showFolderNamePopup)
-        .onAppear(perform: loadDocuments)
+        .onAppear {
+            #if os(iOS)
+            if UIDevice.current.userInterfaceIdiom == .phone {
+                // iPhone: Defer heavy document loading to avoid blocking sheet presentation
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    loadDocuments()
+                }
+            } else {
+                // iPad: Load documents normally
+                loadDocuments()
+            }
+            #else
+            // macOS: Load documents normally
+            loadDocuments()
+            #endif
+        }
         .onChange(of: currentFolder) { _, _ in loadDocuments() }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("CurrentFolderDidUpdate"))) { notification in
             if let updatedFolder = notification.userInfo?["folder"] as? Folder {
@@ -1261,20 +1276,61 @@ struct FoldersView: View {
         Group {
             #if os(iOS)
             if isPhone {
-                // iPhone: Use NavigationView like Bible Reader search modal
-                NavigationView {
-                    FoldersPopupContent(
-                        activePopup: $activePopup,
-                        folders: $folders,
-                        document: $document,
-                        sidebarMode: $sidebarMode,
-                        isRightSidebarVisible: $isRightSidebarVisible,
-                        onAddFolder: addFolder,
-                        showHeader: false // Don't show header since we have navigation title
-                    )
-                    .navigationTitle("Folders")
-                    .navigationBarTitleDisplayMode(.inline)
-                    .navigationBarItems(trailing: Button("Done", action: onDismiss))
+                // iPhone: Use NavigationStack (iOS 16+) for better performance, fallback to VStack for older iOS
+                if #available(iOS 16.0, *) {
+                    NavigationStack {
+                        FoldersPopupContent(
+                            activePopup: $activePopup,
+                            folders: $folders,
+                            document: $document,
+                            sidebarMode: $sidebarMode,
+                            isRightSidebarVisible: $isRightSidebarVisible,
+                            onAddFolder: addFolder,
+                            showHeader: false // Don't show header since we have navigation title
+                        )
+                        .navigationTitle("Folders")
+                        #if os(iOS)
+                        .navigationBarTitleDisplayMode(.inline)
+                        #endif
+                        .toolbar {
+                            ToolbarItem(placement: {
+                                #if os(iOS)
+                                .navigationBarTrailing
+                                #else
+                                .automatic
+                                #endif
+                            }()) {
+                                Button("Done", action: onDismiss)
+                            }
+                        }
+                    }
+                } else {
+                    // Fallback for iOS 15 and below: Use simple VStack to avoid NavigationView delays
+                    VStack(spacing: 0) {
+                        // Simple header for older iOS
+                        HStack {
+                            Text("Folders")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundColor(.primary)
+                            Spacer()
+                            Button("Done", action: onDismiss)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                        .background(Color(UIColor.systemGroupedBackground))
+                        
+                        Divider()
+                        
+                        FoldersPopupContent(
+                            activePopup: $activePopup,
+                            folders: $folders,
+                            document: $document,
+                            sidebarMode: $sidebarMode,
+                            isRightSidebarVisible: $isRightSidebarVisible,
+                            onAddFolder: addFolder,
+                            showHeader: false
+                        )
+                    }
                 }
             } else {
                 // iPad: Use regular VStack
@@ -1291,7 +1347,20 @@ struct FoldersView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
+            #if os(iOS)
+            if UIDevice.current.userInterfaceIdiom == .phone {
+                // iPhone: Defer heavy folder loading to avoid blocking sheet presentation
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    loadFolders()
+                }
+            } else {
+                // iPad: Load folders normally  
+                loadFolders()
+            }
+            #else
+            // macOS: Load folders normally
             loadFolders()
+            #endif
         }
     }
     

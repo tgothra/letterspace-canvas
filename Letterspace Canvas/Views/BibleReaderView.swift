@@ -546,45 +546,48 @@ struct BibleReaderView: View {
         #endif
         .animation(.none) // Disable all layout animations
         .onAppear {
-            // Load last read position
+            // Load last read position - do this synchronously for immediate setup
             selectedBook = readerData.lastReadBook
             selectedChapter = readerData.lastReadChapter
             selectedTranslation = readerData.lastReadTranslation
             
-            // Update maxChapters based on book
+            // Update maxChapters based on book - cache lookup is fast
             if let bookChapters = allBooks.first(where: { $0.0 == selectedBook })?.1 {
                 maxChapters = bookChapters
             }
             
-            // Load the content in the background while showing splash page
-            // For iPhone, preload content immediately to prevent layout changes
+            // For iPhone, defer content loading to avoid blocking sheet presentation
             #if os(iOS)
             let isPhone = UIDevice.current.userInterfaceIdiom == .phone
             if isPhone {
-                // Preload content without showing loading state
-                Task {
-                    do {
-                        let result = try await BibleAPI.fetchChapter(
-                            book: selectedBook,
-                            chapter: selectedChapter,
-                            translation: selectedTranslation,
-                            focusedVerses: []
-                        )
-                        
-                        await MainActor.run {
-                            chapterData = result
-                            // Don't change isLoading state to prevent layout changes
-                        }
-                    } catch {
-                        await MainActor.run {
-                            errorMessage = error.localizedDescription
+                // Defer content loading to avoid blocking sheet presentation
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    Task {
+                        do {
+                            let result = try await BibleAPI.fetchChapter(
+                                book: selectedBook,
+                                chapter: selectedChapter,
+                                translation: selectedTranslation,
+                                focusedVerses: []
+                            )
+                            
+                            await MainActor.run {
+                                chapterData = result
+                                // Don't change isLoading state to prevent layout changes
+                            }
+                        } catch {
+                            await MainActor.run {
+                                errorMessage = error.localizedDescription
+                            }
                         }
                     }
                 }
             } else {
+                // iPad: Load content normally
                 loadCurrentChapter()
             }
             #else
+            // macOS: Load content normally
             loadCurrentChapter()
             #endif
         }
