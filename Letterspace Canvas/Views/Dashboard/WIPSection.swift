@@ -158,12 +158,12 @@ struct WIPSection: View {
                 if isCarouselMode {
                     #if os(iOS)
                     let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-                    if isPhone {
-                        // iPhone: Use dynamic height based on All Documents position
-                        // Subtract minimal header space (~55pt) to maximize ScrollView height
-                        return max(220, allDocumentsPosition.carouselHeight - 55)
+                    let isIPad = UIDevice.current.userInterfaceIdiom == .pad
+                    if isPhone || isIPad {
+                        // iPhone and iPad: Let content fill the card by using maxHeight: .infinity
+                        return nil // Remove explicit height
                     } else {
-                        return 180 // iPad landscape carousel
+                        return 180 // Fallback for other iOS devices
                     }
                     #else
                     return 180 // Other platforms
@@ -176,6 +176,13 @@ struct WIPSection: View {
                     return 130 // Default height for other cases
                 }
             }())
+            .frame(maxHeight: isCarouselMode && {
+                #if os(iOS)
+                return UIDevice.current.userInterfaceIdiom == .phone || UIDevice.current.userInterfaceIdiom == .pad
+                #else
+                return false
+                #endif
+            }() ? .infinity : nil)
         }
         .padding(isCarouselMode ? EdgeInsets() : EdgeInsets(top: 20, leading: 24, bottom: 20, trailing: 24))
         .background(
