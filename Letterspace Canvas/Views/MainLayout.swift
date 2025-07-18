@@ -264,12 +264,13 @@ struct MainLayout: View {
                 })
                 .presentationBackground(.ultraThinMaterial)
             }
-            .sheet(isPresented: $showSearchModal) {
-                SearchView(onDismiss: {
-                    showSearchModal = false
-                })
-                .presentationBackground(.ultraThinMaterial)
-            }
+            // TODO: Add proper SearchView implementation
+            // .sheet(isPresented: $showSearchModal) {
+            //     SearchView(onDismiss: {
+            //         showSearchModal = false
+            //     })
+            //     .presentationBackground(.ultraThinMaterial)
+            // }
             .sheet(isPresented: $showSmartStudyModal) {
                 SmartStudyView(onDismiss: {
                     showSmartStudyModal = false
@@ -322,8 +323,7 @@ struct MainLayout: View {
                     _ = UserProfileManager.shared.userProfile
                 }
                 
-                // Preload UserLibraryService for SmartStudy
-                UserLibraryService.preload()
+                // UserLibraryService will be initialized lazily when needed
                 
                 // Preload Smart Study specifically for iPhone to eliminate keyboard delay
                 #if os(iOS)

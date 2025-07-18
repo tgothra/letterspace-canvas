@@ -525,18 +525,7 @@ struct SmartStudyView: View {
     
     // View Models and Services
     @StateObject private var libraryService: UserLibraryService = {
-        #if os(iOS)
-        if UIDevice.current.userInterfaceIdiom == .phone {
-            // iPhone: Use lazy initialization to avoid blocking
-            return UserLibraryService()
-        } else {
-            // iPad: Use preloaded version
-            return UserLibraryService.getPreloadedInstance()
-        }
-        #else
-        // macOS: Use preloaded version
-        return UserLibraryService.getPreloadedInstance()
-        #endif
+        return UserLibraryService()
     }()
     @ObservedObject private var tokenService = TokenUsageService.shared
     
