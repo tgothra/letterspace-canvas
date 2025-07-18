@@ -606,10 +606,22 @@ struct SmartStudyView: View {
                         }
                     }
                     return
+                } else if UIDevice.current.userInterfaceIdiom == .pad {
+                    // iPad: Defer heavy operations to prevent modal hang
+                    viewReady = true
+                    
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                        Task.detached(priority: .utility) {
+                            await MainActor.run {
+                                loadSavedQAs()
+                            }
+                        }
+                    }
+                    return
                 }
                 #endif
                 
-                // iPad and macOS: Normal initialization
+                // macOS: Normal initialization
                 Task.detached(priority: .background) {
                     await MainActor.run {
                         loadSavedQAs()

@@ -599,11 +599,13 @@ struct MainLayout: View {
                                         showBibleReaderModal = false
                                     }
                                 }
-                            BibleReaderView(onDismiss: {
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    showBibleReaderModal = false
-                                }
-                            })
+                            LazyModalContainer {
+                                BibleReaderView(onDismiss: {
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        showBibleReaderModal = false
+                                    }
+                                })
+                            }
                             .fixedSize()
                             .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 10)
                             .transition(.asymmetric(

@@ -412,7 +412,15 @@ struct BibleReaderView: View {
             return cached
         }
         
-        let structure = [
+        // Use static method to initialize structure once
+        let structure = Self.initializeBibleStructure()
+        Self.cachedBibleStructure = structure
+        return structure
+    }
+    
+    // Static method to initialize Bible structure - called only once
+    private static func initializeBibleStructure() -> [BibleSection] {
+        return [
             BibleSection(testament: "OLD TESTAMENT", groups: [
                 BibleGroup(name: "LAW", books: [
                     ("Genesis", 50), ("Exodus", 40), ("Leviticus", 27), ("Numbers", 36), ("Deuteronomy", 34)
@@ -453,9 +461,6 @@ struct BibleReaderView: View {
                 ])
             ])
         ]
-        
-        Self.cachedBibleStructure = structure
-        return structure
     }
     
     // Flattened list for easy lookup with caching
@@ -559,6 +564,7 @@ struct BibleReaderView: View {
             // For iPhone, defer content loading to avoid blocking sheet presentation
             #if os(iOS)
             let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+            let isIPad = UIDevice.current.userInterfaceIdiom == .pad
             if isPhone {
                 // Defer content loading to avoid blocking sheet presentation
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
@@ -582,8 +588,13 @@ struct BibleReaderView: View {
                         }
                     }
                 }
+            } else if isIPad {
+                // iPad: Defer content loading to prevent modal hang
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    loadCurrentChapter()
+                }
             } else {
-                // iPad: Load content normally
+                // macOS: Load content normally
                 loadCurrentChapter()
             }
             #else
