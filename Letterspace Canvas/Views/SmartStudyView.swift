@@ -524,16 +524,29 @@ struct SmartStudyView: View {
     var onDismiss: () -> Void
     
     // View Models and Services
-    @StateObject private var libraryService = UserLibraryService()
+    @StateObject private var libraryService: UserLibraryService = {
+        #if os(iOS)
+        if UIDevice.current.userInterfaceIdiom == .phone {
+            // iPhone: Use lazy initialization to avoid blocking
+            return UserLibraryService()
+        } else {
+            // iPad: Use preloaded version
+            return UserLibraryService.getPreloadedInstance()
+        }
+        #else
+        // macOS: Use preloaded version
+        return UserLibraryService.getPreloadedInstance()
+        #endif
+    }()
     @ObservedObject private var tokenService = TokenUsageService.shared
     
-    // UI State
+    // UI State (Optimized initialization)
     @State private var userQuery = ""
     @State private var answer = ""
     @State private var isLoading = false
-    @State private var savedQAs: [SmartStudyEntry] = []
+    @State private var savedQAs: [SmartStudyEntry] = [] // Loaded async in onAppear
     @State private var errorMessage: String? = nil
-    @State private var hoverStates: [String: Bool] = [:]
+    @State private var hoverStates: [String: Bool] = [:] // Initialized as empty, populated as needed
     @State private var deleteButtonHover: String? = nil
     @State private var showUpgradeModal = false
     @State private var hoverCloseButton = false
@@ -542,6 +555,14 @@ struct SmartStudyView: View {
     @State private var showingPastStudiesSheet = false // For iPhone past studies modal
     @State private var hoverLibraryButton = false
     @State private var hoverSidebarButton = false
+    @State private var hasLoaded = false // Prevent multiple onAppear calls
+    
+    // Add focus state for iPhone text field
+    #if os(iOS)
+    @FocusState private var isTextFieldFocused: Bool
+    @State private var viewReady = false // Track when view is ready for interaction
+    @State private var isQuestionFieldCompact = false // Track compact state for iPhone
+    #endif
     
     // Add state for internet search
     @State private var useInternetSearch = true // Default to enabled
@@ -577,7 +598,32 @@ struct SmartStudyView: View {
     var body: some View {
         mainContentView
             .onAppear {
+                // Prevent multiple initialization calls
+                guard !hasLoaded else { return }
+                hasLoaded = true
+                
+                #if os(iOS)
+                // iPhone: Skip all heavy operations in onAppear to avoid blocking keyboard
+                if UIDevice.current.userInterfaceIdiom == .phone {
+                    // Do absolutely minimal work - just mark as ready and load data in background
+                    viewReady = true
+                    
+                    // Load data in background without blocking UI
+                    Task.detached(priority: .utility) {
+                        await MainActor.run {
                 loadSavedQAs()
+                        }
+                    }
+                    return
+                }
+                #endif
+                
+                // iPad and macOS: Normal initialization
+                Task.detached(priority: .background) {
+                    await MainActor.run {
+                        loadSavedQAs()
+                    }
+                }
                 
                 #if os(macOS)
                 // Force input field to be focusable
@@ -590,8 +636,6 @@ struct SmartStudyView: View {
                         window.makeFirstResponder(textField)
                     }
                 }
-                #elseif os(iOS)
-                // On iOS, focus is handled by GeminiFocusedTextField using @FocusState
                 #endif
             }
             .sheet(isPresented: $showUpgradeModal) {
@@ -665,6 +709,7 @@ struct SmartStudyView: View {
             }
             .sheet(isPresented: $showingScripturePopup) {
                 ScripturePopupView(reference: selectedScriptureReference)
+                    .presentationBackground(.ultraThinMaterial)
             }
             #if os(iOS)
             .sheet(isPresented: $showingPdfPreview) {
@@ -672,26 +717,39 @@ struct SmartStudyView: View {
                     PDFPreviewView(url: url)
                 }
             }
+            // iPhone chapter reference sheet
+            .sheet(isPresented: Binding(
+                get: { 
+                    if UIDevice.current.userInterfaceIdiom == .phone {
+                        return popoverChapterReference != nil
+                    } else {
+                        return false
+                    }
+                },
+                set: { isPresented in
+                    if !isPresented {
+                        popoverChapterReference = nil
+                        for key in chapterPopoverStates.keys {
+                            chapterPopoverStates[key] = false
+                        }
+                    }
+                }
+            )) {
+                if let chapterRef = popoverChapterReference {
+                    ChapterPopoverView(chapterReference: chapterRef)
+                        .presentationBackground(.ultraThinMaterial)
+                }
+            }
             #endif
     }
     
     // MARK: - Main Content View
     private var mainContentView: some View {
-        // New Parent VStack
+        Group {
         #if os(iOS)
-        let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-        #endif
-        
-        return Group {
-            #if os(iOS)
-            if isPhone {
-                // iPhone: Wrap in ScrollView for content that might overflow
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
-                        mainContentBody
-                    }
-                    .padding(.bottom, 20)  // Add bottom padding for scroll content
-                }
+            if UIDevice.current.userInterfaceIdiom == .phone {
+                // iPhone: Use sticky layout with header at top, content in middle, references at bottom
+                iPhoneStickyLayout
             } else {
                 // iPad: Use regular VStack
                 VStack(alignment: .leading, spacing: 0) {
@@ -707,10 +765,540 @@ struct SmartStudyView: View {
         }
         .modifier(SmartStudyFrameModifier()) // Apply the conditional frame modifier
         .background(theme.surface)
-        .cornerRadius(12)
+        .applyIf(!({
+            #if os(iOS)
+            UIDevice.current.userInterfaceIdiom == .phone
+            #else
+            false
+            #endif
+        }()), {
+            $0.cornerRadius(12)
         .shadow(color: Color.black.opacity(0.1), radius: 20, x: 0, y: 10)
         .shadow(color: Color.black.opacity(0.05), radius: 6, x: 0, y: 4)
+        })
     }
+    
+    // MARK: - iPhone Sticky Layout (Optimized)
+    #if os(iOS)
+    private var iPhoneStickyLayout: some View {
+        VStack(spacing: 0) {
+            // Sticky Header Section
+            stickyHeaderSection
+            
+            // Scrollable Content Section
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    mainContentScrollableBody
+                }
+                .padding(.horizontal, 20) // Match header horizontal padding
+                .padding(.bottom, 20)  // Add bottom padding for scroll content
+            }
+            
+            // Sticky References Section at Bottom
+            if !consolidatedChapterReferences.isEmpty {
+                stickyReferencesSection
+            }
+        }
+    }
+    #endif
+    
+    // MARK: - Sticky Header Section (iPhone only)
+    #if os(iOS)
+    private var stickyHeaderSection: some View {
+        VStack(spacing: 0) {
+            // Top row with title and close button
+            HStack {
+                Text("Smart Study")
+                    .font(.system(size: 16, weight: .semibold))
+                
+                Spacer() // Pushes close button to the right
+                
+                // No close button for iPhone - sheets have built-in dismiss gesture
+            }
+            .padding(.horizontal, 20) // Increased from 6 to 20 for better spacing
+            .padding(.top, 16) // Increased from 8 to 16 for more breathing room
+            .padding(.bottom, 12) // Increased from 8 to 12
+            
+            // Second row for iPhone controls
+            HStack {
+                // Search Scope Picker - compact size
+                Picker("Search In:", selection: $selectedScope) {
+                    ForEach(SearchScope.allCases) { scope in
+                        Text(scope.shortDisplayName)
+                            .font(.system(size: {
+                                #if os(iOS)
+                                let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                                return isPhone ? 14 : 8 // Bigger text for iPhone
+                                #else
+                                return 8 // Keep small for other platforms
+                                #endif
+                            }()))
+                            .tag(scope)
+                    }
+                }
+                .pickerStyle(.menu)
+                .font(.system(size: {
+                    #if os(iOS)
+                    let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                    return isPhone ? 14 : 8 // Bigger font for iPhone
+                    #else
+                    return 8 // Keep small for other platforms
+                    #endif
+                }()))
+                .scaleEffect({
+                    #if os(iOS)
+                    let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                    return isPhone ? 1.0 : 0.85 // Normal scale for iPhone
+                    #else
+                    return 0.85 // Keep scaled down for other platforms
+                    #endif
+                }())
+                .frame(width: {
+                    #if os(iOS)
+                    let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                    return isPhone ? 100 : 80 // Bigger width for iPhone
+                    #else
+                    return 80 // Keep smaller for other platforms
+                    #endif
+                }())
+                .frame(height: {
+                    #if os(iOS)
+                    let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                    return isPhone ? 44 : 30 // Standard touch target height for iPhone
+                    #else
+                    return 30 // Keep smaller for other platforms
+                    #endif
+                }())
+                .clipped() // Clip any overflow
+                .background(
+                    RoundedRectangle(cornerRadius: {
+                        #if os(iOS)
+                        let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                        return isPhone ? 8 : 6 // Slightly more rounded for iPhone
+                        #else
+                        return 6 // Keep smaller radius for other platforms
+                        #endif
+                    }())
+                        .fill(Color.gray.opacity(0.1))
+                )
+                .onChange(of: selectedScope) { newScope in
+                    // Update useInternetSearch based on scope
+                    if newScope == .internetOnly || newScope == .allSources {
+                        useInternetSearch = true
+                    } else {
+                        useInternetSearch = false
+                    }
+                }
+                
+                Spacer() // Even spacing
+                
+                // Library and Saved buttons grouped together
+                HStack(spacing: {
+                    #if os(iOS)
+                    let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                    return isPhone ? 12 : 8 // More spacing for iPhone
+                    #else
+                    return 8 // Keep smaller spacing for other platforms
+                    #endif
+                }()) {
+                    // Library Button - bigger for iPhone
+                    Button(action: {
+                        showLibrarySheet = true
+                    }) {
+                        HStack(spacing: {
+                            #if os(iOS)
+                            let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                            return isPhone ? 6 : 3 // More spacing for iPhone
+                            #else
+                            return 3 // Keep smaller spacing for other platforms
+                            #endif
+                        }()) {
+                            Image(systemName: "books.vertical")
+                                .font(.system(size: {
+                                    #if os(iOS)
+                                    let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                                    return isPhone ? 14 : 10 // Bigger icon for iPhone
+                                    #else
+                                    return 10 // Keep smaller for other platforms
+                                    #endif
+                                }()))
+                            Text("Library")
+                                .font(.system(size: {
+                                    #if os(iOS)
+                                    let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                                    return isPhone ? 14 : 11 // Bigger text for iPhone
+                                    #else
+                                    return 11 // Keep smaller for other platforms
+                                    #endif
+                                }()))
+                        }
+                        .padding(.horizontal, {
+                            #if os(iOS)
+                            let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                            return isPhone ? 12 : 8 // More padding for iPhone
+                            #else
+                            return 8 // Keep smaller for other platforms
+                            #endif
+                        }())
+                        .padding(.vertical, {
+                            #if os(iOS)
+                            let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                            return isPhone ? 12 : 8 // More padding for iPhone
+                            #else
+                            return 8 // Keep smaller for other platforms
+                            #endif
+                        }())
+                        .background(
+                            RoundedRectangle(cornerRadius: {
+                                #if os(iOS)
+                                let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                                return isPhone ? 8 : 6 // More rounded for iPhone
+                                #else
+                                return 6 // Keep smaller radius for other platforms
+                                #endif
+                            }())
+                                .fill(Color.gray.opacity(0.1))
+                        )
+                        .foregroundColor(.primary)
+                        .frame(width: {
+                            #if os(iOS)
+                            let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                            return isPhone ? 100 : 80 // Bigger width for iPhone
+                            #else
+                            return 80 // Keep smaller for other platforms
+                            #endif
+                        }(), height: {
+                            #if os(iOS)
+                            let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                            return isPhone ? 44 : 36 // Standard touch target height for iPhone
+                            #else
+                            return 36 // Keep smaller for other platforms
+                            #endif
+                        }())
+                    }
+                    .buttonStyle(.plain)
+                    
+                    // Saved Studies Button - bigger for iPhone
+                    Button(action: {
+                        showingPastStudiesSheet = true
+                    }) {
+                        HStack(spacing: {
+                            #if os(iOS)
+                            let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                            return isPhone ? 6 : 3 // More spacing for iPhone
+                            #else
+                            return 3 // Keep smaller spacing for other platforms
+                            #endif
+                        }()) {
+                            Image(systemName: "clock")
+                                .font(.system(size: {
+                                    #if os(iOS)
+                                    let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                                    return isPhone ? 14 : 10 // Bigger icon for iPhone
+                                    #else
+                                    return 10 // Keep smaller for other platforms
+                                    #endif
+                                }()))
+                            Text("Saved")
+                                .font(.system(size: {
+                                    #if os(iOS)
+                                    let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                                    return isPhone ? 14 : 11 // Bigger text for iPhone
+                                    #else
+                                    return 11 // Keep smaller for other platforms
+                                    #endif
+                                }()))
+                        }
+                        .padding(.horizontal, {
+                            #if os(iOS)
+                            let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                            return isPhone ? 12 : 8 // More padding for iPhone
+                            #else
+                            return 8 // Keep smaller for other platforms
+                            #endif
+                        }())
+                        .padding(.vertical, {
+                            #if os(iOS)
+                            let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                            return isPhone ? 12 : 8 // More padding for iPhone
+                            #else
+                            return 8 // Keep smaller for other platforms
+                            #endif
+                        }())
+                        .background(
+                            RoundedRectangle(cornerRadius: {
+                                #if os(iOS)
+                                let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                                return isPhone ? 8 : 6 // More rounded for iPhone
+                                #else
+                                return 6 // Keep smaller radius for other platforms
+                                #endif
+                            }())
+                                .fill(Color.gray.opacity(0.1))
+                        )
+                        .foregroundColor(.primary)
+                        .frame(width: {
+                            #if os(iOS)
+                            let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                            return isPhone ? 100 : 80 // Bigger width for iPhone
+                            #else
+                            return 80 // Keep smaller for other platforms
+                            #endif
+                        }(), height: {
+                            #if os(iOS)
+                            let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                            return isPhone ? 44 : 36 // Standard touch target height for iPhone
+                            #else
+                            return 36 // Keep smaller for other platforms
+                            #endif
+                        }())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 6)
+            .padding(.bottom, 10)
+            
+            Divider()
+            
+            // Question Input Area
+            VStack(alignment: .leading, spacing: 6) {
+                #if os(iOS)
+                if UIDevice.current.userInterfaceIdiom != .phone {
+                    // Only show header text on iPad, not iPhone
+                    Text("Ask a Bible Question")
+                        .font(.system(size: 14, weight: .medium))
+                        .padding(.horizontal, 8)
+                        .padding(.top, 12)
+                }
+                #else
+                // Always show on macOS
+                Text("Ask a Bible Question")
+                    .font(.system(size: 14, weight: .medium))
+                    .padding(.horizontal, 8)
+                    .padding(.top, 12)
+                #endif
+                
+                HStack(spacing: 8) {
+                    #if os(iOS)
+                    if UIDevice.current.userInterfaceIdiom == .phone {
+                        // iPhone: Compact/Expanded question field system
+                        VStack(spacing: 0) {
+                            if isQuestionFieldCompact && !answer.isEmpty {
+                                // Compact state: Small single-line field
+                                Button(action: {
+                                    withAnimation(.easeInOut(duration: 0.3)) {
+                                        isQuestionFieldCompact = false
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                            isTextFieldFocused = true
+                                        }
+                                    }
+                                }) {
+                                    HStack {
+                                        Text(userQuery.isEmpty ? "Ask another question..." : userQuery)
+                                            .font(.system(size: 14))
+                                            .foregroundColor(userQuery.isEmpty ? Color(.placeholderText) : .primary)
+                                            .lineLimit(1)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                        
+                                        Image(systemName: "plus.circle.fill")
+                                            .font(.system(size: 16))
+                                            .foregroundColor(.blue)
+                                    }
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 8)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .fill(Color(.systemGray6))
+                                            .stroke(Color(.systemGray4), lineWidth: 1)
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                            } else {
+                                // Expanded state: Full multiline TextEditor
+                                ZStack(alignment: .topLeading) {
+                                    TextEditor(text: $userQuery)
+                                        .focused($isTextFieldFocused)
+                                        .font(.system(size: 16))
+                                        .frame(minHeight: 44, maxHeight: 120) // Allow expansion up to 120pt
+                                        .padding(8)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .fill(Color(.systemGray6))
+                                                .stroke(Color(.systemGray4), lineWidth: 1)
+                                        )
+                                        .disabled(isLoading)
+                                        .onAppear {
+                                            // Force focus immediately when text field appears (only on first load)
+                                            if answer.isEmpty {
+                                                DispatchQueue.main.async {
+                                                    isTextFieldFocused = true
+                                                }
+                                            }
+                                        }
+                                        .onChange(of: isTextFieldFocused) { isFocused in
+                                            // If user dismisses keyboard and there's an answer, return to compact state
+                                            if !isFocused && !answer.isEmpty && !isLoading {
+                                                withAnimation(.easeInOut(duration: 0.3)) {
+                                                    isQuestionFieldCompact = true
+                                                }
+                                            }
+                                        }
+                                    
+                                    // Placeholder text overlay
+                                    if userQuery.isEmpty {
+                                        Text("Ask a question about the Bible...")
+                                            .font(.system(size: 16))
+                                            .foregroundColor(Color(.placeholderText))
+                                            .padding(.horizontal, 12)
+                                            .padding(.vertical, 16)
+                                            .allowsHitTesting(false) // Let touches pass through to TextEditor
+                                    }
+                                }
+                                
+                                // iPhone Ask button - bigger and full width
+                                Button(action: askQuestion) {
+                                    HStack {
+                                        Spacer()
+                                        Text("Ask")
+                                            .font(.system(size: 18, weight: .semibold))
+                                            .foregroundColor(.white)
+                                        Spacer()
+                                    }
+                                    .frame(height: 50)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .fill(userQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isLoading ? Color.gray : Color.blue)
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                                .disabled(userQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isLoading)
+                                .padding(.top, 8)
+                            }
+                        }
+                    } else {
+                        // iPad: Use the existing GeminiFocusedTextField with Ask button on the side
+                        GeminiFocusedTextField(
+                            text: $userQuery,
+                            placeholder: "Ask a question about the Bible...",
+                            onSubmit: askQuestion
+                        )
+                        .frame(height: 36)
+                        .disabled(isLoading) // Prevent interaction during loading
+                        
+                        Button(action: askQuestion) {
+                            Text("Ask")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .frame(height: 32)
+                                .background(Color.blue)
+                                .cornerRadius(6)
+                        }
+                        .buttonStyle(.plain)
+                        .frame(width: 60)
+                        .disabled(userQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isLoading)
+                    }
+                    #else
+                    // macOS: Use the existing GeminiFocusedTextField
+                    GeminiFocusedTextField(
+                        text: $userQuery,
+                        placeholder: "Ask a question about the Bible...",
+                        onSubmit: askQuestion
+                    )
+                    .frame(height: 36)
+                    .disabled(isLoading) // Prevent interaction during loading
+                    
+                    Button(action: askQuestion) {
+                        Text("Ask")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .frame(height: 32)
+                            .background(Color.blue)
+                            .cornerRadius(6)
+                    }
+                    .buttonStyle(.plain)
+                    .frame(width: 60)
+                    .disabled(userQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isLoading)
+                    #endif
+                }
+                .padding(.horizontal, 8)
+                .padding(.bottom, 12)
+            }
+            
+            Divider()
+        }
+        .background(theme.surface)
+    }
+    #endif
+    
+    // MARK: - Sticky References Section (iPhone only)
+    #if os(iOS)
+    private var stickyReferencesSection: some View {
+        VStack(spacing: 0) {
+            Divider()
+            
+            VStack(spacing: 8) {
+                Text("Scripture References")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(consolidatedChapterReferences) { chapterRef in
+                            chapterReferenceButton(chapterRef)
+                        }
+                    }
+                    .padding(.horizontal, 1) // Prevent clipping
+                }
+            }
+            .padding(.horizontal, 20) // Match header padding
+            .padding(.vertical, 10)
+        }
+        .background(theme.surface)
+    }
+    #endif
+    
+    // MARK: - Main Content Scrollable Body (iPhone only)
+    #if os(iOS)
+    private var mainContentScrollableBody: some View {
+        ZStack {
+            if isLoading {
+                VStack(spacing: 16) {
+                    Spacer().frame(height: 40)
+                    ProgressView()
+                        .scaleEffect(1.5)
+                    Text("Thinking...")
+                        .font(.system(size: 14))
+                        .foregroundColor(.gray)
+                        .padding(.top, 8)
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(.vertical, 20)
+            } else if !answer.isEmpty {
+                answerDisplayViewScrollable
+            } else if userQuery.isEmpty {
+                emptyStateViewScrollable
+            } else {
+                // Show message when query exists but no answer yet
+                VStack {
+                    Spacer()
+                    Text("Enter your question and tap Ask")
+                        .font(.system(size: 14))
+                        .foregroundColor(.secondary)
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .frame(maxWidth: .infinity, minHeight: 300) // Ensure minimum height for content
+    }
+    #endif
     
     // MARK: - Main Content Body
     private var mainContentBody: some View {
@@ -762,18 +1350,60 @@ struct SmartStudyView: View {
                         Picker("Search In:", selection: $selectedScope) {
                             ForEach(SearchScope.allCases) { scope in
                                 Text(scope.shortDisplayName)
-                                    .font(.system(size: 8)) // Much smaller text
+                                    .font(.system(size: {
+                                        #if os(iOS)
+                                        let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                                        return isPhone ? 14 : 8 // Bigger text for iPhone
+                                        #else
+                                        return 8 // Keep small for other platforms
+                                        #endif
+                                    }()))
                                     .tag(scope)
                             }
                         }
                         .pickerStyle(.menu)
-                        .font(.system(size: 8)) // Much smaller picker font
-                        .scaleEffect(0.85) // Scale down the entire picker
-                        .frame(width: 80) // Even smaller width
-                        .frame(height: 30) // Even smaller height
+                        .font(.system(size: {
+                            #if os(iOS)
+                            let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                            return isPhone ? 14 : 8 // Bigger font for iPhone
+                            #else
+                            return 8 // Keep small for other platforms
+                            #endif
+                        }()))
+                        .scaleEffect({
+                            #if os(iOS)
+                            let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                            return isPhone ? 1.0 : 0.85 // Normal scale for iPhone
+                            #else
+                            return 0.85 // Keep scaled down for other platforms
+                            #endif
+                        }())
+                        .frame(width: {
+                            #if os(iOS)
+                            let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                            return isPhone ? 100 : 80 // Bigger width for iPhone
+                            #else
+                            return 80 // Keep smaller for other platforms
+                            #endif
+                        }())
+                        .frame(height: {
+                            #if os(iOS)
+                            let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                            return isPhone ? 44 : 30 // Standard touch target height for iPhone
+                            #else
+                            return 30 // Keep smaller for other platforms
+                            #endif
+                        }())
                         .clipped() // Clip any overflow
                         .background(
-                            RoundedRectangle(cornerRadius: 6)
+                            RoundedRectangle(cornerRadius: {
+                                #if os(iOS)
+                                let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                                return isPhone ? 8 : 6 // Slightly more rounded for iPhone
+                                #else
+                                return 6 // Keep smaller radius for other platforms
+                                #endif
+                            }())
                                 .fill(Color.gray.opacity(0.1))
                         )
                         .onChange(of: selectedScope) { newScope in
@@ -788,46 +1418,165 @@ struct SmartStudyView: View {
                         Spacer() // Even spacing
                         
                         // Library and Saved buttons grouped together
-                        HStack(spacing: 8) {
-                            // Library Button - compact size
+                        HStack(spacing: {
+                            #if os(iOS)
+                            let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                            return isPhone ? 12 : 8 // More spacing for iPhone
+                            #else
+                            return 8 // Keep smaller spacing for other platforms
+                            #endif
+                        }()) {
+                            // Library Button - bigger for iPhone
                             Button(action: {
                                 showLibrarySheet = true
                             }) {
-                                HStack(spacing: 3) {
+                                HStack(spacing: {
+                                    #if os(iOS)
+                                    let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                                    return isPhone ? 6 : 3 // More spacing for iPhone
+                                    #else
+                                    return 3 // Keep smaller spacing for other platforms
+                                    #endif
+                                }()) {
                                     Image(systemName: "books.vertical")
-                                        .font(.system(size: 10))
+                                        .font(.system(size: {
+                                            #if os(iOS)
+                                            let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                                            return isPhone ? 14 : 10 // Bigger icon for iPhone
+                                            #else
+                                            return 10 // Keep smaller for other platforms
+                                            #endif
+                                        }()))
                                     Text("Library")
-                                        .font(.system(size: 11))
+                                        .font(.system(size: {
+                                            #if os(iOS)
+                                            let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                                            return isPhone ? 14 : 11 // Bigger text for iPhone
+                                            #else
+                                            return 11 // Keep smaller for other platforms
+                                            #endif
+                                        }()))
                                 }
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 8)
+                                .padding(.horizontal, {
+                                    #if os(iOS)
+                                    let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                                    return isPhone ? 12 : 8 // More padding for iPhone
+                                    #else
+                                    return 8 // Keep smaller for other platforms
+                                    #endif
+                                }())
+                                .padding(.vertical, {
+                                    #if os(iOS)
+                                    let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                                    return isPhone ? 12 : 8 // More padding for iPhone
+                                    #else
+                                    return 8 // Keep smaller for other platforms
+                                    #endif
+                                }())
                                 .background(
-                                    RoundedRectangle(cornerRadius: 6)
+                                    RoundedRectangle(cornerRadius: {
+                                        #if os(iOS)
+                                        let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                                        return isPhone ? 8 : 6 // More rounded for iPhone
+                                        #else
+                                        return 6 // Keep smaller radius for other platforms
+                                        #endif
+                                    }())
                                         .fill(Color.gray.opacity(0.1))
                                 )
                                 .foregroundColor(.primary)
-                                .frame(width: 80, height: 36) // Smaller to fit both buttons
+                                .frame(width: {
+                                    #if os(iOS)
+                                    let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                                    return isPhone ? 100 : 80 // Bigger width for iPhone
+                                    #else
+                                    return 80 // Keep smaller for other platforms
+                                    #endif
+                                }(), height: {
+                                    #if os(iOS)
+                                    let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                                    return isPhone ? 44 : 36 // Standard touch target height for iPhone
+                                    #else
+                                    return 36 // Keep smaller for other platforms
+                                    #endif
+                                }())
                             }
                             .buttonStyle(.plain)
                             
-                            // Saved Studies Button - compact size
+                            // Saved Studies Button - bigger for iPhone
                             Button(action: {
                                 showingPastStudiesSheet = true
                             }) {
-                                HStack(spacing: 3) {
+                                HStack(spacing: {
+                                    #if os(iOS)
+                                    let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                                    return isPhone ? 6 : 3 // More spacing for iPhone
+                                    #else
+                                    return 3 // Keep smaller spacing for other platforms
+                                    #endif
+                                }()) {
                                     Image(systemName: "clock")
-                                        .font(.system(size: 10))
+                                        .font(.system(size: {
+                                            #if os(iOS)
+                                            let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                                            return isPhone ? 14 : 10 // Bigger icon for iPhone
+                                            #else
+                                            return 10 // Keep smaller for other platforms
+                                            #endif
+                                        }()))
                                     Text("Saved")
-                                        .font(.system(size: 11))
+                                        .font(.system(size: {
+                                            #if os(iOS)
+                                            let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                                            return isPhone ? 14 : 11 // Bigger text for iPhone
+                                            #else
+                                            return 11 // Keep smaller for other platforms
+                                            #endif
+                                        }()))
                                 }
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 8)
+                                .padding(.horizontal, {
+                                    #if os(iOS)
+                                    let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                                    return isPhone ? 12 : 8 // More padding for iPhone
+                                    #else
+                                    return 8 // Keep smaller for other platforms
+                                    #endif
+                                }())
+                                .padding(.vertical, {
+                                    #if os(iOS)
+                                    let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                                    return isPhone ? 12 : 8 // More padding for iPhone
+                                    #else
+                                    return 8 // Keep smaller for other platforms
+                                    #endif
+                                }())
                                 .background(
-                                    RoundedRectangle(cornerRadius: 6)
+                                    RoundedRectangle(cornerRadius: {
+                                        #if os(iOS)
+                                        let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                                        return isPhone ? 8 : 6 // More rounded for iPhone
+                                        #else
+                                        return 6 // Keep smaller radius for other platforms
+                                        #endif
+                                    }())
                                         .fill(Color.gray.opacity(0.1))
                                 )
                                 .foregroundColor(.primary)
-                                .frame(width: 80, height: 36) // Smaller to fit both buttons
+                                .frame(width: {
+                                    #if os(iOS)
+                                    let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                                    return isPhone ? 100 : 80 // Bigger width for iPhone
+                                    #else
+                                    return 80 // Keep smaller for other platforms
+                                    #endif
+                                }(), height: {
+                                    #if os(iOS)
+                                    let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                                    return isPhone ? 44 : 36 // Standard touch target height for iPhone
+                                    #else
+                                    return 36 // Keep smaller for other platforms
+                                    #endif
+                                }())
                             }
                             .buttonStyle(.plain)
                         }
@@ -956,8 +1705,8 @@ struct SmartStudyView: View {
                 content.frame(idealWidth: 800, maxWidth: 900, idealHeight: 1000, maxHeight: 1150)
                 }
             } else { // For iPhone
-                // iPhone: Proper modal sizing instead of full-screen
-                content.frame(width: 340, height: 600)
+                // iPhone: Simple frame to fill sheet - no complex calculations
+                content
             }
             #endif
         }
@@ -1174,46 +1923,60 @@ struct SmartStudyView: View {
                             return 8 // macOS default
                             #endif
                         }()) {
+                                    #if os(iOS)
+                            if UIDevice.current.userInterfaceIdiom != .phone {
+                                // Only show header text on iPad, not iPhone
+                                Text("Ask a Bible Question")
+                                    .font(.system(size: 14, weight: .medium))
+                                    .padding(.horizontal, 8)
+                                    .padding(.top, 12)
+                            }
+                                    #else
+                            // Always show on macOS
                             Text("Ask a Bible Question")
-                                .font(.system(size: {
-                                    #if os(iOS)
-                                    let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-                                    return isPhone ? 14 : 16 // Smaller text for iPhone
-                                    #else
-                                    return 16 // macOS default
+                                .font(.system(size: 14, weight: .medium))
+                                .padding(.horizontal, 8)
+                                .padding(.top, 12)
                                     #endif
-                                }(), weight: .medium))
-                                .padding(.horizontal, {
-                                    #if os(iOS)
-                                    let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-                                    return isPhone ? 8 : 20 // Smaller padding for iPhone
-                                    #else
-                                    return 20 // macOS default
-                                    #endif
-                                }())
-                                .padding(.top, {
-                                    #if os(iOS)
-                                    let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-                                    return isPhone ? 12 : 18 // Smaller top padding for iPhone
-                                    #else
-                                    return 18 // macOS default
-                                    #endif
-                                }())
                             
                             HStack(spacing: 8) {
+                                #if os(iOS)
+                                if UIDevice.current.userInterfaceIdiom == .phone {
+                                    // iPhone: Use native SwiftUI TextField with FocusState
+                                    TextField("Ask a question about the Bible...", text: $userQuery)
+                                        .focused($isTextFieldFocused)
+                                        .textFieldStyle(.roundedBorder)
+                                        .frame(height: 32)
+                                        .disabled(isLoading)
+                                        .onSubmit {
+                                            askQuestion()
+                                        }
+                                        .onAppear {
+                                            // Force focus immediately when text field appears
+                                            DispatchQueue.main.async {
+                                                isTextFieldFocused = true
+                                            }
+                                        }
+                                } else {
+                                    // iPad: Use the existing GeminiFocusedTextField
                                 GeminiFocusedTextField(
                                     text: $userQuery,
                                     placeholder: "Ask a question about the Bible...",
                                     onSubmit: askQuestion
                                 )
-                                .frame(height: {
-                                    #if os(iOS)
-                                    let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-                                    return isPhone ? 32 : 36 // Smaller height for iPhone
+                                    .frame(height: 36)
+                                    .disabled(isLoading)
+                                }
                                     #else
-                                    return 36 // macOS default
+                                // macOS: Use the existing GeminiFocusedTextField
+                                GeminiFocusedTextField(
+                                    text: $userQuery,
+                                    placeholder: "Ask a question about the Bible...",
+                                    onSubmit: askQuestion
+                                )
+                                .frame(height: 36)
+                                .disabled(isLoading)
                                     #endif
-                                }())
                                 
                                 Button(action: askQuestion) {
                                     Text("Ask")
@@ -1327,7 +2090,180 @@ struct SmartStudyView: View {
         }
     }
     
-    // MARK: - Answer Display Components
+    // MARK: - Answer Display Components (iPhone Scrollable)
+    #if os(iOS)
+    private var answerDisplayViewScrollable: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Display search queries if present
+            if !searchQueries.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        Text("Google Search:")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.secondary)
+                            .padding(.trailing, 4)
+                        
+                        ForEach(searchQueries, id: \.self) { query in
+                            Link(destination: URL(string: "https://www.google.com/search?q=\(query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query)")!) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "magnifyingglass")
+                                        .font(.system(size: 12))
+                                    Text(query)
+                                        .font(.system(size: 12))
+                                        .lineLimit(1)
+                                }
+                                .padding(.vertical, 6)
+                                .padding(.horizontal, 10)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .fill(Color.blue.opacity(0.1))
+                                )
+                                .foregroundColor(.blue)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 8)
+                }
+                .padding(.vertical, 12)
+            }
+            
+            HStack {
+                Text("Answer")
+                    .font(.system(size: 14, weight: .medium))
+                Spacer()
+                Button(action: saveQA) {
+                    #if os(iOS)
+                    if UIDevice.current.userInterfaceIdiom == .phone {
+                        // iPhone: Bigger Save button with more padding
+                        HStack(spacing: 6) {
+                            Image(systemName: "bookmark")
+                                .font(.system(size: 16))
+                            Text("Save")
+                                .font(.system(size: 16, weight: .medium))
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(Color.blue.opacity(0.1))
+                        )
+                        .foregroundColor(.blue)
+                    } else {
+                        // iPad: Keep existing style
+                        Label("Save", systemImage: "bookmark")
+                            .font(.system(size: 11))
+                    }
+                    #else
+                    // macOS: Keep existing style
+                    Label("Save", systemImage: "bookmark")
+                        .font(.system(size: 11))
+                    #endif
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 20) // Match header padding
+            .padding(.vertical, 8)
+            
+            Divider()
+                .padding(.bottom, 12)
+            
+            if let errorMessage = errorMessage {
+                Text(errorMessage)
+                    .font(.system(size: 14))
+                    .foregroundColor(.red)
+                    .padding(.horizontal, 20) // Match header padding
+                    .padding(.vertical, 12)
+            }
+            
+            // Plain text display for iPhone
+            Text(answer)
+                .font(.system(size: 14))
+                .lineSpacing(4)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 20) // Match header padding
+                .textSelection(.enabled)
+            
+            // Source information (moved to content area since references are sticky)
+            if let sourceTitle = sourceDocumentTitleForAnswer {
+                sourceDocumentViewScrollable(sourceTitle)
+            }
+        }
+    }
+    #endif
+    
+    // MARK: - Empty State (iPhone Scrollable)
+    #if os(iOS)
+    private var emptyStateViewScrollable: some View {
+        VStack(spacing: 12) {
+            Spacer().frame(height: 30)
+            
+            Image(systemName: "sparkles.square.filled.on.square")
+                .font(.system(size: 32))
+                .foregroundColor(colorScheme == .dark ? Color.purple.opacity(0.8) : Color.purple.opacity(0.7))
+            
+            Text("Ask anything about the Bible")
+                .font(.system(size: 14))
+                .foregroundColor(colorScheme == .dark ? Color.white.opacity(0.8) : Color.gray)
+            
+            Text("Example: How old was David when he died? What does Proverbs say about wisdom? Explain the meaning of John 3:16.")
+                .font(.system(size: 12))
+                .foregroundColor(colorScheme == .dark ? Color.white.opacity(0.6) : Color.gray.opacity(0.7))
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 20) // Match header padding (reduced from 16)
+
+            if useInternetSearch {
+                Text("Internet search is enabled for more detailed answers")
+                    .font(.system(size: 11))
+                    .foregroundColor(colorScheme == .dark ? .blue.opacity(0.9) : .blue)
+                    .padding(.top, 8)
+            }
+            
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+    #endif
+    
+    // MARK: - Source Document View (iPhone Scrollable)
+    #if os(iOS)
+    private func sourceDocumentViewScrollable(_ sourceTitle: String) -> some View {
+        VStack(spacing: 0) {
+            Divider()
+                .padding(.top, 16)
+            
+            HStack(spacing: 8) {
+                Text("Source Document:")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.secondary)
+                    .padding(.trailing, 4)
+                
+                Button(action: { openPDFFromWebView(documentTitle: sourceTitle) }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "doc.text.fill")
+                            .font(.system(size: 12))
+                        Text(sourceTitle)
+                            .font(.system(size: 12))
+                            .lineLimit(1)
+                    }
+                    .padding(.vertical, 6)
+                    .padding(.horizontal, 10)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color.orange.opacity(0.1))
+                    )
+                    .foregroundColor(.orange)
+                }
+                .buttonStyle(.plain)
+                
+                Spacer()
+            }
+            .padding(.horizontal, 20) // Match header padding
+            .padding(.vertical, 10)
+        }
+    }
+    #endif
+    
+    // MARK: - Answer Display Components (Original for iPad/macOS)
     private var answerDisplayView: some View {
                                 ScrollView {
                                     VStack(alignment: .leading, spacing: 0) {
@@ -1702,6 +2638,18 @@ struct SmartStudyView: View {
         let currentQuery = userQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !currentQuery.isEmpty else { return }
         
+        // Dismiss keyboard immediately when asking question on iPhone
+        #if os(iOS)
+        if UIDevice.current.userInterfaceIdiom == .phone {
+            isTextFieldFocused = false
+            // Reset to expanded state when asking new question
+            isQuestionFieldCompact = false
+            // Force hide keyboard at UIKit level immediately
+            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        }
+        #endif
+        
+        // Set loading state on main thread
         isLoading = true
         errorMessage = nil
         answer = "" // Clear previous answer
@@ -1712,33 +2660,37 @@ struct SmartStudyView: View {
         // Get the system prompt based on the current query and selected scope
         let systemPrompt = getBiblePrompt(query: currentQuery)
         
-        // Call the new unified AIService method
+        // Call the AI service using Task to ensure proper threading
+        Task {
+            do {
+                let result = try await withCheckedThrowingContinuation { continuation in
         AIService.shared.generateSmartStudyResponse(
             prompt: systemPrompt, 
             scope: selectedScope, 
-            userQuery: currentQuery, // Pass the original query for vector searching the library
-            userLibraryService: libraryService // Pass the @StateObject instance
+                        userQuery: currentQuery,
+                        userLibraryService: libraryService
         ) { result in
-                DispatchQueue.main.async {
+                        continuation.resume(with: result)
+                    }
+                }
+                
+                // Update UI on main thread
+                await MainActor.run {
                     self.isLoading = false
-                    
-                    switch result {
-                    case .success(let resultTuple):
-                        self.answer = cleanAnswerText(resultTuple.text.trimmingCharacters(in: .whitespacesAndNewlines))
-                        self.searchQueries = resultTuple.searchQueries
+                    self.answer = cleanAnswerText(result.text.trimmingCharacters(in: .whitespacesAndNewlines))
+                    self.searchQueries = result.searchQueries
                         
                         // Extract scripture references from the answer
-                        self.scriptureReferences = AIService.shared.extractScriptureReferences(from: resultTuple.text)
+                    self.scriptureReferences = AIService.shared.extractScriptureReferences(from: result.text)
                         
                         // Create consolidated chapter references for the UI
                         self.consolidatedChapterReferences = self.scriptureReferences.consolidatedByChapter()
                         
                         // Only set source document if we're actually using library search AND the AI used library content
-                        // AND this is a question that should show library sources (not Bible-only question)
                         if (self.selectedScope == .libraryOnly || self.selectedScope == .allSources) && 
-                           resultTuple.sourceDocumentTitle != nil && 
+                       result.sourceDocumentTitle != nil && 
                            !isBibleQuestion(query: self.userQuery) {
-                            self.sourceDocumentTitleForAnswer = resultTuple.sourceDocumentTitle
+                        self.sourceDocumentTitleForAnswer = result.sourceDocumentTitle
                         } else {
                             self.sourceDocumentTitleForAnswer = nil
                         }
@@ -1747,7 +2699,26 @@ struct SmartStudyView: View {
                             self.searchQueries = [currentQuery]
                         }
                         
-                    case .failure(let error):
+                        // Dismiss keyboard on iPhone when answer is received
+                        #if os(iOS)
+                        if UIDevice.current.userInterfaceIdiom == .phone {
+                            self.isTextFieldFocused = false
+                            // Set to compact state once answer is received
+                            withAnimation(.easeInOut(duration: 0.3)) {
+                                self.isQuestionFieldCompact = true
+                            }
+                            // Also force hide keyboard at UIKit level
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                            }
+                        }
+                        #endif
+                }
+            } catch {
+                // Handle errors on main thread
+                await MainActor.run {
+                    self.isLoading = false
+                        
                         if let apiError = error as? AIServiceError, case .apiError(let message) = apiError {
                             if message.contains("token limit") {
                                 self.errorMessage = "Token limit reached. Please purchase more tokens or wait for the next cycle."
@@ -1755,12 +2726,22 @@ struct SmartStudyView: View {
                             } else {
                                 self.errorMessage = "API Error: \(message)"
                             print("🚨 Smart Study generation failed with error: \(message)")
-                            // No automatic fallback here anymore as scope dictates behavior
                             }
                         } else {
                             self.errorMessage = "Error: \(error.localizedDescription)"
                         self.answer = "Sorry, an error occurred. Please try again."
                     }
+                    
+                    // Dismiss keyboard on iPhone when there's an error too
+                    #if os(iOS)
+                    if UIDevice.current.userInterfaceIdiom == .phone {
+                        self.isTextFieldFocused = false
+                        // Also force hide keyboard at UIKit level
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                        }
+                    }
+                    #endif
                 }
             }
         }
@@ -1895,9 +2876,24 @@ struct SmartStudyView: View {
     }
     
     private func loadSavedQAs() {
-        if let savedData = UserDefaults.standard.data(forKey: "savedSmartStudyQAs"),
-           let decoded = try? JSONDecoder().decode([SmartStudyEntry].self, from: savedData) {
-            savedQAs = decoded
+        // Perform all heavy operations on background queue to avoid blocking UI
+        Task.detached(priority: .background) {
+            var decodedQAs: [SmartStudyEntry] = []
+            
+            // Do the heavy UserDefaults and JSON decoding work off main thread
+            if let savedData = UserDefaults.standard.data(forKey: "savedSmartStudyQAs") {
+                do {
+                    decodedQAs = try JSONDecoder().decode([SmartStudyEntry].self, from: savedData)
+                } catch {
+                    print("⚠️ Failed to load saved QAs: \(error)")
+                    // Keep empty array on error
+                }
+            }
+            
+            // Only update UI on main thread with minimal work
+            await MainActor.run {
+                self.savedQAs = decodedQAs
+            }
         }
     }
     
@@ -2194,14 +3190,22 @@ struct SmartStudyView: View {
                     .padding(.horizontal, 1) // Prevent clipping
                 }
             }
-            .padding(.horizontal, 20)
+            .padding(.horizontal, 20) // Match header padding
             .padding(.vertical, 10)
         }
     }
     
     private func chapterReferenceButton(_ chapterRef: ConsolidatedChapterReference) -> some View {
         Button(action: { 
-            // Toggle the popover for this chapter
+            #if os(iOS)
+            let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+            if isPhone {
+                // iPhone: Use sheet presentation instead of popover
+                popoverChapterReference = chapterRef
+                chapterPopoverStates[chapterRef.id.uuidString] = true
+                print("🎯 Opening chapter sheet for iPhone: \(chapterRef.displayText)")
+            } else {
+                // iPad: Use popover as before
             let isCurrentlyOpen = chapterPopoverStates[chapterRef.id.uuidString] ?? false
             
             // Close all other popovers
@@ -2214,28 +3218,147 @@ struct SmartStudyView: View {
             if !isCurrentlyOpen {
                 popoverChapterReference = chapterRef
                 chapterPopoverStates[chapterRef.id.uuidString] = true
-                print("🎯 Opening chapter popover for: \(chapterRef.displayText)")
+                    print("🎯 Opening chapter popover for iPad: \(chapterRef.displayText)")
             } else {
                 popoverChapterReference = nil
-                print("🎯 Closing chapter popover for: \(chapterRef.displayText)")
+                    print("🎯 Closing chapter popover for iPad: \(chapterRef.displayText)")
+                }
             }
+            #else
+            // macOS: Use popover as before
+            let isCurrentlyOpen = chapterPopoverStates[chapterRef.id.uuidString] ?? false
+            
+            // Close all other popovers
+            for key in chapterPopoverStates.keys {
+                chapterPopoverStates[key] = false
+                popoverHoverStates[key] = false
+            }
+            
+            // Toggle this popover
+            if !isCurrentlyOpen {
+                popoverChapterReference = chapterRef
+                chapterPopoverStates[chapterRef.id.uuidString] = true
+                print("🎯 Opening chapter popover for macOS: \(chapterRef.displayText)")
+            } else {
+                popoverChapterReference = nil
+                print("🎯 Closing chapter popover for macOS: \(chapterRef.displayText)")
+            }
+            #endif
         }) {
-            HStack(spacing: 4) {
+            HStack(spacing: {
+                #if os(iOS)
+                let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                return isPhone ? 6 : 4 // More spacing for iPhone
+                #else
+                return 4 // Keep smaller spacing for other platforms
+                #endif
+            }()) {
                 Image(systemName: "book.fill")
-                    .font(.system(size: 12))
+                    .font(.system(size: {
+                        #if os(iOS)
+                        let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                        return isPhone ? 16 : 12 // Bigger icon for iPhone
+                        #else
+                        return 12 // Keep smaller for other platforms
+                        #endif
+                    }()))
                 Text(chapterRef.displayText)
-                    .font(.system(size: 12))
+                    .font(.system(size: {
+                        #if os(iOS)
+                        let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                        return isPhone ? 16 : 12 // Bigger text for iPhone
+                        #else
+                        return 12 // Keep smaller for other platforms
+                        #endif
+                    }()))
                     .lineLimit(1)
             }
-            .padding(.vertical, 6)
-            .padding(.horizontal, 10)
+            .padding(.vertical, {
+                #if os(iOS)
+                let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                return isPhone ? 10 : 6 // More vertical padding for iPhone
+                #else
+                return 6 // Keep smaller for other platforms
+                #endif
+            }())
+            .padding(.horizontal, {
+                #if os(iOS)
+                let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                return isPhone ? 16 : 10 // More horizontal padding for iPhone
+                #else
+                return 10 // Keep smaller for other platforms
+                #endif
+            }())
             .background(
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: {
+                    #if os(iOS)
+                    let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                    return isPhone ? 12 : 16 // Less rounded for bigger button on iPhone
+                    #else
+                    return 16 // Keep more rounded for other platforms
+                    #endif
+                }())
                     .fill(Color.blue.opacity(0.1))
             )
             .foregroundColor(.blue)
         }
         .buttonStyle(.plain)
+        #if os(iOS)
+        .background(
+            Group {
+                if UIDevice.current.userInterfaceIdiom == .phone {
+                    // iPhone: Use sheet
+                    EmptyView()
+                } else {
+                    // iPad: Use popover
+                    EmptyView()
+                }
+            }
+        )
+        .popover(isPresented: Binding(
+            get: { 
+                #if os(iOS)
+                if UIDevice.current.userInterfaceIdiom == .phone {
+                    return false // Never show popover on iPhone
+                } else {
+                    return chapterPopoverStates[chapterRef.id.uuidString] ?? false
+                }
+                #else
+                return chapterPopoverStates[chapterRef.id.uuidString] ?? false
+                #endif
+            },
+            set: { 
+                #if os(iOS)
+                if UIDevice.current.userInterfaceIdiom != .phone {
+                    chapterPopoverStates[chapterRef.id.uuidString] = $0
+                }
+                #else
+                chapterPopoverStates[chapterRef.id.uuidString] = $0
+                #endif
+            }
+        )) {
+            ChapterPopoverView(chapterReference: chapterRef)
+                .onAppear {
+                    print("📖 Chapter popover appeared for: \(chapterRef.displayText)")
+                }
+                .onDisappear {
+                    print("📖 Chapter popover disappeared for: \(chapterRef.displayText)")
+                    #if os(iOS)
+                    if UIDevice.current.userInterfaceIdiom != .phone {
+                        chapterPopoverStates[chapterRef.id.uuidString] = false
+                        if popoverChapterReference?.id == chapterRef.id {
+                            popoverChapterReference = nil
+                        }
+                    }
+                    #else
+                    chapterPopoverStates[chapterRef.id.uuidString] = false
+                    if popoverChapterReference?.id == chapterRef.id {
+                        popoverChapterReference = nil
+                    }
+                    #endif
+                }
+        }
+        #else
         .popover(isPresented: Binding(
             get: { chapterPopoverStates[chapterRef.id.uuidString] ?? false },
             set: { chapterPopoverStates[chapterRef.id.uuidString] = $0 }
@@ -2252,6 +3375,7 @@ struct SmartStudyView: View {
                 }
             }
         }
+        #endif
     }
     
     private func sourceDocumentView(_ sourceTitle: String) -> some View {
@@ -2285,7 +3409,7 @@ struct SmartStudyView: View {
                 
                 Spacer()
             }
-            .padding(.horizontal, 20)
+            .padding(.horizontal, 20) // Match header padding
             .padding(.vertical, 10)
         }
     }
@@ -2456,3 +3580,32 @@ struct PDFPreviewView: UIViewControllerRepresentable {
     }
 }
 #endif 
+
+// MARK: - Smart Study Preloading
+extension SmartStudyView {
+    /// Preload Smart Study components to eliminate first-time keyboard delay
+    static func preloadForIPhone() {
+        #if os(iOS)
+        guard UIDevice.current.userInterfaceIdiom == .phone else { return }
+        
+        Task.detached(priority: .background) {
+            print("🔄 Preloading Smart Study for iPhone...")
+            
+            // Initialize all heavy components
+            let _ = UserLibraryService()
+            let _ = TokenUsageService.shared
+            let _ = AIService.shared
+            
+            // Preload UserDefaults data
+            if let savedData = UserDefaults.standard.data(forKey: "savedSmartStudyQAs") {
+                let _ = try? JSONDecoder().decode([SmartStudyEntry].self, from: savedData)
+            }
+            
+            // Preload other common UserDefaults access
+            _ = UserDefaults.standard.bool(forKey: "Letterspace_FirstClickHandled")
+            
+            print("✅ Smart Study preloading complete for iPhone")
+        }
+        #endif
+    }
+}

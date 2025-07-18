@@ -378,6 +378,14 @@ struct BibleReaderView: View {
     @State private var bookmarkNotes = "" // For new bookmark notes
     @State private var currentVerseForBookmark = 1 // Current verse for bookmarking
     @State private var isBookSelectorSidebarVisible: Bool = true // For iPad sidebar toggle
+    @State private var headerOffset: CGFloat = 0
+    @State private var lastScrollOffset: CGFloat = 0
+    @State private var isHeaderHidden: Bool = false
+    @State private var showingSearchModal = false // New state variable for search modal
+    
+    // Static cache for expensive operations
+    private static var cachedBibleStructure: [BibleSection]? = nil
+    private static var cachedAllBooks: [(String, Int)]? = nil
     
     // Available Bible translations
     private let availableTranslations = [
@@ -398,58 +406,72 @@ struct BibleReaderView: View {
         availableTranslations.first(where: { $0.0 == selectedTranslation })?.1 ?? "King James Version"
     }
     
-    // Organized Bible books with testament and group headers
-    private let bibleStructure = [
-        // OLD TESTAMENT
-        BibleSection(testament: "OLD TESTAMENT", groups: [
-            BibleGroup(name: "THE LAW", books: [
-                ("Genesis", 50), ("Exodus", 40), ("Leviticus", 27), ("Numbers", 36), ("Deuteronomy", 34)
+    // Bible structure with static caching for performance
+    private var bibleStructure: [BibleSection] {
+        if let cached = Self.cachedBibleStructure {
+            return cached
+        }
+        
+        let structure = [
+            BibleSection(testament: "OLD TESTAMENT", groups: [
+                BibleGroup(name: "LAW", books: [
+                    ("Genesis", 50), ("Exodus", 40), ("Leviticus", 27), ("Numbers", 36), ("Deuteronomy", 34)
+                ]),
+                BibleGroup(name: "HISTORY", books: [
+                    ("Joshua", 24), ("Judges", 21), ("Ruth", 4), ("1 Samuel", 31), ("2 Samuel", 24),
+                    ("1 Kings", 22), ("2 Kings", 25), ("1 Chronicles", 29), ("2 Chronicles", 36),
+                    ("Ezra", 10), ("Nehemiah", 13), ("Esther", 10)
+                ]),
+                BibleGroup(name: "POETRY & WISDOM", books: [
+                    ("Job", 42), ("Psalms", 150), ("Proverbs", 31), ("Ecclesiastes", 12), ("Song of Songs", 8)
+                ]),
+                BibleGroup(name: "MAJOR PROPHETS", books: [
+                    ("Isaiah", 66), ("Jeremiah", 52), ("Lamentations", 5), ("Ezekiel", 48), ("Daniel", 12)
+                ]),
+                BibleGroup(name: "MINOR PROPHETS", books: [
+                    ("Hosea", 14), ("Joel", 3), ("Amos", 9), ("Obadiah", 1), ("Jonah", 4),
+                    ("Micah", 7), ("Nahum", 3), ("Habakkuk", 3), ("Zephaniah", 3), ("Haggai", 2),
+                    ("Zechariah", 14), ("Malachi", 4)
+                ])
             ]),
-            BibleGroup(name: "HISTORY", books: [
-                ("Joshua", 24), ("Judges", 21), ("Ruth", 4), ("1 Samuel", 31), ("2 Samuel", 24),
-                ("1 Kings", 22), ("2 Kings", 25), ("1 Chronicles", 29), ("2 Chronicles", 36),
-                ("Ezra", 10), ("Nehemiah", 13), ("Esther", 10)
-            ]),
-            BibleGroup(name: "WISDOM LITERATURE", books: [
-                ("Job", 42), ("Psalms", 150), ("Proverbs", 31), ("Ecclesiastes", 12), ("Song of Solomon", 8)
-            ]),
-            BibleGroup(name: "MAJOR PROPHETS", books: [
-                ("Isaiah", 66), ("Jeremiah", 52), ("Lamentations", 5), ("Ezekiel", 48), ("Daniel", 12)
-            ]),
-            BibleGroup(name: "MINOR PROPHETS", books: [
-                ("Hosea", 14), ("Joel", 3), ("Amos", 9), ("Obadiah", 1), ("Jonah", 4),
-                ("Micah", 7), ("Nahum", 3), ("Habakkuk", 3), ("Zephaniah", 3), ("Haggai", 2),
-                ("Zechariah", 14), ("Malachi", 4)
+            BibleSection(testament: "NEW TESTAMENT", groups: [
+                BibleGroup(name: "GOSPELS", books: [
+                    ("Matthew", 28), ("Mark", 16), ("Luke", 24), ("John", 21)
+                ]),
+                BibleGroup(name: "EARLY CHURCH HISTORY", books: [
+                    ("Acts", 28)
+                ]),
+                BibleGroup(name: "LETTERS", books: [
+                    ("Romans", 16), ("1 Corinthians", 16), ("2 Corinthians", 13), ("Galatians", 6),
+                    ("Ephesians", 6), ("Philippians", 4), ("Colossians", 4), ("1 Thessalonians", 5),
+                    ("2 Thessalonians", 3), ("1 Timothy", 6), ("2 Timothy", 4), ("Titus", 3),
+                    ("Philemon", 1), ("Hebrews", 13), ("James", 5), ("1 Peter", 5), ("2 Peter", 3),
+                    ("1 John", 5), ("2 John", 1), ("3 John", 1), ("Jude", 1)
+                ]),
+                BibleGroup(name: "PROPHECY", books: [
+                    ("Revelation", 22)
+                ])
             ])
-        ]),
-        // NEW TESTAMENT
-        BibleSection(testament: "NEW TESTAMENT", groups: [
-            BibleGroup(name: "GOSPELS", books: [
-                ("Matthew", 28), ("Mark", 16), ("Luke", 24), ("John", 21)
-            ]),
-            BibleGroup(name: "EARLY CHURCH HISTORY", books: [
-                ("Acts", 28)
-            ]),
-            BibleGroup(name: "LETTERS", books: [
-                ("Romans", 16), ("1 Corinthians", 16), ("2 Corinthians", 13), ("Galatians", 6),
-                ("Ephesians", 6), ("Philippians", 4), ("Colossians", 4), ("1 Thessalonians", 5),
-                ("2 Thessalonians", 3), ("1 Timothy", 6), ("2 Timothy", 4), ("Titus", 3),
-                ("Philemon", 1), ("Hebrews", 13), ("James", 5), ("1 Peter", 5), ("2 Peter", 3),
-                ("1 John", 5), ("2 John", 1), ("3 John", 1), ("Jude", 1)
-            ]),
-            BibleGroup(name: "PROPHECY", books: [
-                ("Revelation", 22)
-            ])
-        ])
-    ]
+        ]
+        
+        Self.cachedBibleStructure = structure
+        return structure
+    }
     
-    // Flattened list for easy lookup
+    // Flattened list for easy lookup with caching
     private var allBooks: [(String, Int)] {
-        bibleStructure.flatMap { section in
+        if let cached = Self.cachedAllBooks {
+            return cached
+        }
+        
+        let books = bibleStructure.flatMap { section in
             section.groups.flatMap { group in
                 group.books
             }
         }
+        
+        Self.cachedAllBooks = books
+        return books
     }
     
     var onDismiss: () -> Void
@@ -462,14 +484,40 @@ struct BibleReaderView: View {
         Group {
             #if os(iOS)
             if isPhone {
-                // iPhone: Wrap in ScrollView for content that might overflow
-                ScrollView {
-                    VStack(spacing: 0) {
-                        bibleReaderBody
+                ZStack(alignment: .top) {
+                    // ScrollView with offset tracking
+                    ScrollView {
+                        VStack(spacing: 0) {
+                            Spacer().frame(height: 100) // Increased from 80 to 100 for sticky header offset
+                            GeometryReader { geo in
+                                Color.clear
+                                    .preference(key: ScrollOffsetPreferenceKey.self, value: geo.frame(in: .named("scroll")).minY)
+                            }
+                            .frame(height: 0)
+                            bibleReaderBody
+                        }
+                        // Remove bottom padding for iPhone to fill the sheet completely
                     }
-                    .padding(.bottom, 20)  // Add bottom padding for scroll content
+                    .coordinateSpace(name: "scroll")
+                    .onPreferenceChange(ScrollOffsetPreferenceKey.self) { value in
+                        let delta = value - lastScrollOffset
+                        if delta < -2 { // Scrolling down
+                            withAnimation(.easeInOut(duration: 0.18)) {
+                                isHeaderHidden = true
+                            }
+                        } else if delta > 2 { // Scrolling up
+                            withAnimation(.easeInOut(duration: 0.18)) {
+                                isHeaderHidden = false
+                            }
+                        }
+                        lastScrollOffset = value
+                    }
+                    // Sticky, animated header
+                    headerView
+                        .offset(y: isHeaderHidden ? -80 : 0)
+                        .animation(.easeInOut(duration: 0.18), value: isHeaderHidden)
                 }
-                .clipped() // Prevent content from expanding beyond bounds
+                .clipped()
             } else {
                 // iPad: Use regular VStack
                 VStack(spacing: 0) {
@@ -485,9 +533,17 @@ struct BibleReaderView: View {
         }
         .modifier(BibleReaderFrameModifier())
         .background(theme.surface)
+        #if os(iOS)
+        .applyIf(UIDevice.current.userInterfaceIdiom != .phone, {
+            $0.cornerRadius(12)
+                .shadow(color: Color.black.opacity(0.1), radius: 20, x: 0, y: 10)
+                .shadow(color: Color.black.opacity(0.05), radius: 6, x: 0, y: 4)
+        })
+        #else
         .cornerRadius(12)
         .shadow(color: Color.black.opacity(0.1), radius: 20, x: 0, y: 10)
         .shadow(color: Color.black.opacity(0.05), radius: 6, x: 0, y: 4)
+        #endif
         .animation(.none) // Disable all layout animations
         .onAppear {
             // Load last read position
@@ -535,15 +591,37 @@ struct BibleReaderView: View {
         .sheet(isPresented: $showingAddBookmarkSheet) {
             addBookmarkView
         }
+        .sheet(isPresented: $showingSearchModal) {
+            BibleGlobalSearchModal(
+                onSelectReference: { book, chapter, verse in
+                    selectedBook = book
+                    selectedChapter = chapter
+                    // Optionally scroll to verse or highlight
+                    // Update maxChapters if needed
+                    if let bookChapters = allBooks.first(where: { $0.0 == book })?.1 {
+                        maxChapters = bookChapters
+                    }
+                    loadCurrentChapter()
+                    showingSplashPage = false
+                    showingSearchModal = false
+                },
+                onDismiss: { showingSearchModal = false }
+            )
+        }
     }
     
     private var bibleReaderBody: some View {
         Group {
-            // Header with navigation
+            #if os(iOS)
+            let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+            if !isPhone {
+                headerView
+                Divider()
+            }
+            #else
             headerView
-            
             Divider()
-            
+            #endif
             // Main content
             HStack(spacing: 0) {
                 // Left sidebar with book selection - Hide on iPhone due to space constraints
@@ -605,23 +683,42 @@ struct BibleReaderView: View {
         Group {
             #if os(iOS)
             let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-            
             if isPhone {
-                // iPhone: Separate title and navigation layout
                 VStack(spacing: 12) {
                     // Title section
                     HStack {
                         Text("Bible Reader")
                             .font(.system(size: 18, weight: .semibold))
-                        
                         Spacer()
-                        
-                        // Close button - removed for iPhone, only show on iPad/macOS
+                        // Close button for iPhone modal
+                        Button(action: { onDismiss() }) {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 18, weight: .bold))
+                                .foregroundColor(.primary)
+                                .padding(8)
+                        }
+                        .buttonStyle(.plain)
                     }
                     
                     // Navigation section
                     if !showingSplashPage {
                         HStack(spacing: 8) {
+                            // Back button (moved from right side)
+                            Button(action: {
+                                readerData.saveLastRead(book: selectedBook, chapter: selectedChapter, translation: selectedTranslation)
+                                withAnimation(.easeInOut(duration: 0.3)) {
+                                    showingSplashPage = true
+                                }
+                            }) {
+                                Image(systemName: "chevron.left")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(.blue)
+                                    .frame(width: 32, height: 32)
+                                    .background(Circle().fill(Color.blue.opacity(0.1)))
+                                    .contentShape(Circle())
+                            }
+                            .buttonStyle(.plain)
+                            
                             // Book selector
                             Menu {
                                 ForEach(allBooks, id: \.0) { book, chapterCount in
@@ -701,14 +798,9 @@ struct BibleReaderView: View {
                                         .contentShape(Circle())
                                 }
                                 .buttonStyle(.plain)
-                                
-                                Button(action: {
-                                    readerData.saveLastRead(book: selectedBook, chapter: selectedChapter, translation: selectedTranslation)
-                                    withAnimation(.easeInOut(duration: 0.3)) {
-                                        showingSplashPage = true
-                                    }
-                                }) {
-                                    Image(systemName: "house")
+                                // SEARCH BUTTON
+                                Button(action: { showingSearchModal = true }) {
+                                    Image(systemName: "magnifyingglass")
                                         .font(.system(size: 12))
                                         .foregroundColor(.blue)
                                         .frame(width: 32, height: 32)
@@ -716,6 +808,7 @@ struct BibleReaderView: View {
                                         .contentShape(Circle())
                                 }
                                 .buttonStyle(.plain)
+                                .help("Search Bible or Jump to Reference")
                             }
                         }
                     }
@@ -724,6 +817,24 @@ struct BibleReaderView: View {
                 .padding(.vertical, 8)
                 .padding(.top, 4) // Add breathing room at the top for iPhone
                 .background(theme.surface)
+                // SEARCH MODAL
+                .sheet(isPresented: $showingSearchModal) {
+                    BibleGlobalSearchModal(
+                        onSelectReference: { book, chapter, verse in
+                            selectedBook = book
+                            selectedChapter = chapter
+                            // Optionally scroll to verse or highlight
+                            // Update maxChapters if needed
+                            if let bookChapters = allBooks.first(where: { $0.0 == book })?.1 {
+                                maxChapters = bookChapters
+                            }
+                            loadCurrentChapter()
+                            showingSplashPage = false
+                            showingSearchModal = false
+                        },
+                        onDismiss: { showingSearchModal = false }
+                    )
+                }
             } else {
                 // iPad: Original layout
                 iPadHeaderLayout
@@ -750,6 +861,24 @@ struct BibleReaderView: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .padding(.trailing, 12)
+
+            // Back button (moved from right side)
+            Button(action: {
+                readerData.saveLastRead(book: selectedBook, chapter: selectedChapter, translation: selectedTranslation)
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    showingSplashPage = true
+                }
+            }) {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(.blue)
+                    .frame(width: 44, height: 44)
+                    .background(Circle().fill(Color.blue.opacity(0.1)))
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .help("Back")
             .padding(.trailing, 12)
 
             Text("Bible Reader")
@@ -869,6 +998,24 @@ struct BibleReaderView: View {
     
     private var macOSHeaderLayout: some View {
         HStack {
+            // Back button (moved from right side)
+            Button(action: {
+                readerData.saveLastRead(book: selectedBook, chapter: selectedChapter, translation: selectedTranslation)
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    showingSplashPage = true
+                }
+            }) {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(.blue)
+                    .frame(width: 44, height: 44)
+                    .background(Circle().fill(Color.blue.opacity(0.1)))
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .help("Back")
+            .padding(.trailing, 12)
+
             Text("Bible Reader")
                 .font(.system(size: 24, weight: .semibold))
             
@@ -946,23 +1093,6 @@ struct BibleReaderView: View {
                     }
                     .buttonStyle(.plain)
                     .help("Bookmark this chapter")
-                    
-                    // Home button
-                    Button(action: {
-                        readerData.saveLastRead(book: selectedBook, chapter: selectedChapter, translation: selectedTranslation)
-                        withAnimation(.easeInOut(duration: 0.3)) {
-                            showingSplashPage = true
-                        }
-                    }) {
-                        Image(systemName: "house")
-                            .font(.system(size: 16))
-                            .foregroundColor(.blue)
-                            .frame(width: 44, height: 44)
-                            .background(Circle().fill(Color.blue.opacity(0.1)))
-                            .contentShape(Circle())
-                    }
-                    .buttonStyle(.plain)
-                    .help("Return to home")
                 }
             } else {
                 Spacer()
@@ -1183,11 +1313,11 @@ struct BibleReaderView: View {
     private func groupHeaderColors(for testament: String, group: String) -> [Color] {
         if testament == "OLD TESTAMENT" {
             switch group {
-            case "THE LAW":
+            case "LAW":
                 return [Color(.systemIndigo), Color(.systemIndigo).opacity(0.7)]
             case "HISTORY":
                 return [Color(.systemTeal), Color(.systemTeal).opacity(0.7)]
-            case "WISDOM LITERATURE":
+            case "POETRY & WISDOM":
                 return [Color(.systemPurple), Color(.systemPurple).opacity(0.7)]
             case "MAJOR PROPHETS":
                 return [Color(.systemBlue), Color(.systemBlue).opacity(0.7)]
@@ -1280,7 +1410,7 @@ struct BibleReaderView: View {
                         iPhoneReadingContent
                     }
                     .padding(.horizontal, 12)
-                    .padding(.vertical, 12)
+                    .padding(.top, 12) // Only top padding for iPhone to fill bottom completely
                 } else {
                     LazyVStack(alignment: .leading, spacing: 0) {
                         iPadReadingContent
@@ -1299,6 +1429,42 @@ struct BibleReaderView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(theme.surface)
+        #if os(iOS)
+        // Add swipe gestures for iPhone chapter navigation
+        .simultaneousGesture(
+            UIDevice.current.userInterfaceIdiom == .phone && !showingSplashPage ?
+            DragGesture(minimumDistance: 60)
+                .onEnded { value in
+                    // Balanced approach - clear horizontal swipes but not too restrictive
+                    let horizontalDistance = abs(value.translation.width)
+                    let verticalDistance = abs(value.translation.height)
+                    
+                    // Balanced requirements:
+                    // 1. Horizontal movement must be at least 3x greater than vertical
+                    // 2. Horizontal distance must be at least 90pt
+                    // 3. Vertical distance must be less than 60pt (allows some drift)
+                    let isHorizontalSwipe = horizontalDistance > verticalDistance * 3.0 && 
+                                          horizontalDistance > 90 && 
+                                          verticalDistance < 60
+                    let isRightSwipe = value.translation.width > 90
+                    let isLeftSwipe = value.translation.width < -90
+                    
+                    if isHorizontalSwipe && (isRightSwipe || isLeftSwipe) {
+                        // Provide haptic feedback
+                        let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+                        impactFeedback.impactOccurred()
+                        
+                        if isRightSwipe {
+                            // Swipe right: Previous chapter
+                            loadPreviousChapter()
+                        } else if isLeftSwipe {
+                            // Swipe left: Next chapter
+                            loadNextChapter()
+                        }
+                    }
+                } : nil
+        )
+        #endif
     }
     
     // iPhone-specific content with no loading states
@@ -1326,7 +1492,6 @@ struct BibleReaderView: View {
                 Spacer()
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .padding(.bottom, 20)
         } else {
             // Placeholder
             VStack(spacing: 12) {
@@ -1339,7 +1504,6 @@ struct BibleReaderView: View {
                 Spacer()
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .padding(.bottom, 20)
         }
     }
     
@@ -1381,7 +1545,6 @@ struct BibleReaderView: View {
                 Spacer()
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .padding(.bottom, 40)
         } else if !isLoading {
             VStack(spacing: 16) {
                 Spacer().frame(height: 30)
@@ -1393,7 +1556,6 @@ struct BibleReaderView: View {
                 Spacer()
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .padding(.bottom, 40)
         }
     }
     
@@ -1435,7 +1597,6 @@ struct BibleReaderView: View {
                 Spacer()
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .padding(.bottom, 40)
         } else if !isLoading {
             VStack(spacing: 16) {
                 Spacer().frame(height: 30)
@@ -1447,7 +1608,6 @@ struct BibleReaderView: View {
                 Spacer()
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .padding(.bottom, 40)
         }
     }
     
@@ -1698,76 +1858,87 @@ struct BibleReaderView: View {
                     #endif
                 }())
             
-            // Reading options
-            VStack(spacing: {
-                #if os(iOS)
-                let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-                return isPhone ? 16 : 20 // Better button spacing for iPhone
-                #else
-                return 20 // macOS default
-                #endif
-            }()) {
-                // Continue reading button
-                Button(action: {
-                    // Continue from last reading position
-                    selectedBook = readerData.lastReadBook
-                    selectedChapter = readerData.lastReadChapter
-                    selectedTranslation = readerData.lastReadTranslation
+            // Book and Chapter Selection (iPhone only)
+            #if os(iOS)
+            if UIDevice.current.userInterfaceIdiom == .phone {
+                VStack(spacing: 12) {
+                    Text("Go to Chapter")
+                        .font(.system(size: 18, weight: .semibold))
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     
-                    // Update maxChapters based on book
-                    if let bookChapters = allBooks.first(where: { $0.0 == selectedBook })?.1 {
-                        maxChapters = bookChapters
+                    HStack(spacing: 12) {
+                        // Book selector
+                        Menu {
+                            ForEach(allBooks, id: \.0) { book, chapterCount in
+                                Button(book) {
+                                    selectedBook = book
+                                    maxChapters = chapterCount
+                                    selectedChapter = 1 // Reset to chapter 1 when book changes
+                                }
+                            }
+                        } label: {
+                            HStack {
+                                Text(selectedBook)
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundColor(.primary)
+                                Spacer()
+                                Image(systemName: "chevron.down")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                            )
+                        }
+                        .frame(maxWidth: 200)
+                        
+                        // Chapter selector
+                        Menu {
+                            ForEach(1...maxChapters, id: \.self) { chapter in
+                                Button("Chapter \(chapter)") {
+                                    selectedChapter = chapter
+                                }
+                            }
+                        } label: {
+                            HStack {
+                                Text("Ch. \(selectedChapter)")
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundColor(.primary)
+                                Spacer()
+                                Image(systemName: "chevron.down")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                            )
+                        }
+                        .frame(width: 120)
                     }
                     
-                    #if os(iOS)
-                    let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-                    if !isPhone {
-                        loadCurrentChapter()
-                    }
-                    // For iPhone, content is already preloaded, just dismiss splash
-                    #else
-                    loadCurrentChapter()
-                    #endif
-                    withAnimation(.easeInOut(duration: 0.3)) {
-                        showingSplashPage = false
-                    }
-                }) {
-                    HStack {
-                        Image(systemName: "book.fill")
-                            .font(.system(size: 16))
-                        Text("Continue Reading")
-                            .font(.system(size: 16, weight: .medium))
-                        Text("\(readerData.lastReadBook) \(readerData.lastReadChapter)")
-                            .font(.system(size: 16, weight: .medium))
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 14)
-                    .background(
-                        RoundedRectangle(cornerRadius: 10)
-                            .fill(Color.blue)
-                    )
-                    .foregroundColor(.white)
-                }
-                .buttonStyle(.plain)
-                
-                // Start fresh button
-                Button(action: {
-                    selectedBook = "Genesis"
-                    selectedChapter = 1
-                    selectedTranslation = "KJV"
-                    maxChapters = 50 // Genesis has 50 chapters
-                    #if os(iOS)
-                    let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-                    if !isPhone {
-                        loadCurrentChapter()
-                    } else {
-                        // For iPhone, load Genesis content without showing loading state
+                    Spacer()
+                        .frame(height: 8)
+                    
+                    // Go to selected chapter button
+                    Button(action: {
+                        // Update maxChapters based on selected book
+                        if let bookChapters = allBooks.first(where: { $0.0 == selectedBook })?.1 {
+                            maxChapters = bookChapters
+                        }
+                        
+                        // Load the selected chapter
                         Task {
                             do {
                                 let result = try await BibleAPI.fetchChapter(
-                                    book: "Genesis",
-                                    chapter: 1,
-                                    translation: "KJV",
+                                    book: selectedBook,
+                                    chapter: selectedChapter,
+                                    translation: selectedTranslation,
                                     focusedVerses: []
                                 )
                                 
@@ -1780,20 +1951,32 @@ struct BibleReaderView: View {
                                 }
                             }
                         }
+                        
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            showingSplashPage = false
+                        }
+                    }) {
+                        HStack {
+                            Image(systemName: "arrow.right.circle.fill")
+                                .font(.system(size: 16))
+                            Text("Go to \(selectedBook) \(selectedChapter)")
+                                .font(.system(size: 16, weight: .medium))
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 12)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(Color.blue)
+                        )
+                        .foregroundColor(.white)
                     }
-                    #else
-                    loadCurrentChapter()
-                    #endif
-                    withAnimation(.easeInOut(duration: 0.3)) {
-                        showingSplashPage = false
-                    }
-                }) {
-                    Text("Start from Genesis")
-                        .font(.system(size: 14))
-                        .foregroundColor(.blue)
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
+                .padding(.horizontal, 4)
             }
+            #endif
+            
+
             
             Spacer()
                 .frame(minHeight: {
@@ -2074,8 +2257,8 @@ struct BibleReaderView: View {
                 content.frame(idealWidth: 800, maxWidth: 900, idealHeight: 1000, maxHeight: 1150)
                 }
             } else { // For iPhone
-                // iPhone: Better width utilization for text content
-                content.frame(width: 380, height: 600)
+                // Fill the sheet/modal
+                content.frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             #endif
         }
@@ -2092,6 +2275,18 @@ extension Text {
         let baseFontSize: CGFloat = 16
         #endif
         return self.lineSpacing(lineHeight * baseFontSize - baseFontSize)
+    }
+}
+
+// Helper for conditional modifier
+extension View {
+    @ViewBuilder
+    func applyIf<T: View>(_ condition: Bool, _ transform: (Self) -> T) -> some View {
+        if condition {
+            transform(self)
+        } else {
+            self
+        }
     }
 }
 

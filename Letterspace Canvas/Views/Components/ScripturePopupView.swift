@@ -14,31 +14,113 @@ struct ScripturePopupView: View {
     @State private var errorMessage: String? = nil
     
     var body: some View {
-        ZStack {
-            // Background
-            (colorScheme == .dark ? Color.black.opacity(0.8) : Color.white)
-                .ignoresSafeArea()
-            
-            VStack(spacing: 0) {
-                // Header with beautiful design
-                headerView
-                
-                // Content area
-                contentView
-                
-                // Footer with action buttons
-                footerView
+        Group {
+            #if os(iOS)
+            if UIDevice.current.userInterfaceIdiom == .phone {
+                // iPhone: Use simple structure like BibleReaderView
+                VStack(spacing: 0) {
+                    // Header for iPhone
+                    iPhoneHeaderView
+                    
+                    // Main scrollable content
+                    ScrollView {
+                        VStack(spacing: 20) {
+                            if isLoading {
+                                loadingView
+                            } else if let error = errorMessage {
+                                errorView(error)
+                            } else if !scriptureText.isEmpty {
+                                scriptureContentView
+                            } else {
+                                emptyStateView
+                            }
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 16)
+                    }
+                    
+                    // Footer for iPhone
+                    footerView
+                }
+                .background(colorScheme == .dark ? Color(.systemBackground) : Color.white)
+            } else {
+                // iPad: Use modal card layout with fixed frame
+                ZStack {
+                    // Background
+                    (colorScheme == .dark ? Color.black.opacity(0.8) : Color.white)
+                        .ignoresSafeArea()
+                    
+                    VStack(spacing: 0) {
+                        // Header with beautiful design
+                        headerView
+                        
+                        // Content area - direct embed like iPhone
+                        ScrollView {
+                            VStack(spacing: 20) {
+                                if isLoading {
+                                    loadingView
+                                } else if let error = errorMessage {
+                                    errorView(error)
+                                } else if !scriptureText.isEmpty {
+                                    scriptureContentView
+                                } else {
+                                    emptyStateView
+                                }
+                            }
+                            .padding(.horizontal, 30)
+                            .padding(.vertical, 20)
+                        }
+                        
+                        // Footer with action buttons
+                        footerView
+                    }
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(colorScheme == .dark ? Color(.systemBackground) : Color.white)
+                            .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 10)
+                    )
+                    .frame(width: 550, height: 650) // Only apply fixed frame to iPad
+                }
             }
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    #if os(macOS)
-                    .fill(colorScheme == .dark ? Color(.controlBackgroundColor) : Color.white)
-                    #elseif os(iOS)
-                    .fill(colorScheme == .dark ? Color(.systemBackground) : Color.white)
-                    #endif
-                    .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 10)
-            )
-            .frame(width: 550, height: 650)
+            #else
+            // macOS: Use modal card layout  
+            ZStack {
+                // Background
+                (colorScheme == .dark ? Color.black.opacity(0.8) : Color.white)
+                    .ignoresSafeArea()
+                
+                VStack(spacing: 0) {
+                    // Header with beautiful design
+                    headerView
+                    
+                    // Content area - direct embed like iPhone
+                    ScrollView {
+                        VStack(spacing: 20) {
+                            if isLoading {
+                                loadingView
+                            } else if let error = errorMessage {
+                                errorView(error)
+                            } else if !scriptureText.isEmpty {
+                                scriptureContentView
+                            } else {
+                                emptyStateView
+                            }
+                        }
+                        .padding(.horizontal, 30)
+                        .padding(.vertical, 20)
+                    }
+                    
+                    // Footer with action buttons
+                    footerView
+                }
+                .background(
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(colorScheme == .dark ? Color(.controlBackgroundColor) : Color.white)
+                        .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 10)
+                )
+                .frame(width: 550, height: 650)
+            }
+            #endif
         }
         .onAppear {
             loadScriptureText()
@@ -95,24 +177,6 @@ struct ScripturePopupView: View {
                 endPoint: .bottom
             )
         )
-    }
-    
-    private var contentView: some View {
-        ScrollView {
-            VStack(spacing: 20) {
-                if isLoading {
-                    loadingView
-                } else if let error = errorMessage {
-                    errorView(error)
-                } else if !scriptureText.isEmpty {
-                    scriptureContentView
-                } else {
-                    emptyStateView
-                }
-            }
-            .padding(.horizontal, 30)
-            .padding(.vertical, 20)
-        }
     }
     
     private var loadingView: some View {
@@ -244,34 +308,85 @@ struct ScripturePopupView: View {
                 
                 Spacer()
                 
-                // Action buttons
+                // Action buttons - hide Copy button on iPhone to save space
                 HStack(spacing: 12) {
+                    #if os(iOS)
+                    let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                    if !isPhone {
+                        Button("Copy Text") {
+                            UIPasteboard.general.string = scriptureText
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .disabled(scriptureText.isEmpty)
+                    }
+                    #else
                     Button("Copy Text") {
-                        #if os(macOS)
                         NSPasteboard.general.clearContents()
                         NSPasteboard.general.setString(scriptureText, forType: .string)
-                        #elseif os(iOS)
-                        UIPasteboard.general.string = scriptureText
-                        #endif
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.small)
                     .disabled(scriptureText.isEmpty)
+                    #endif
                     
+                    // Done button is handled by navigation bar on iPhone
+                    #if os(iOS)
+                    if !isPhone {
+                        Button("Done") {
+                            dismiss()
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                    }
+                    #else
                     Button("Done") {
                         dismiss()
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.small)
+                    #endif
                 }
             }
-            .padding(.horizontal, 24)
+            .padding(.horizontal, {
+                #if os(iOS)
+                let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                return isPhone ? 20 : 24 // Consistent with content padding
+                #else
+                return 24 // macOS default
+                #endif
+            }())
             .padding(.vertical, 16)
         }
         .background(
             colorScheme == .dark ? Color.black.opacity(0.2) : Color.gray.opacity(0.05)
         )
     }
+    
+    // MARK: - iPhone Header View
+    #if os(iOS)
+    private var iPhoneHeaderView: some View {
+        VStack(spacing: 0) {
+            // Top row with title and close button
+            HStack {
+                Text(reference?.fullReference ?? "Scripture")
+                    .font(.system(size: 16, weight: .semibold))
+                
+                Spacer()
+                
+                Button("Done") { dismiss() }
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(.blue)
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 16)
+            .padding(.bottom, 12)
+            
+            Divider()
+        }
+        .background(colorScheme == .dark ? Color(.systemBackground) : Color.white)
+    }
+    #endif
     
     private func loadScriptureText() {
         guard let reference = reference else {

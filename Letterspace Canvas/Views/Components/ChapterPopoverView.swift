@@ -11,6 +11,7 @@ struct ChapterPopoverView: View {
     @State private var currentBook: String = ""
     @State private var currentChapter: Int = 1
     @Environment(\.colorScheme) var colorScheme
+    @Environment(\.dismiss) private var dismiss
     
     private var popoverBackgroundColor: Color {
         if colorScheme == .dark {
@@ -49,11 +50,31 @@ struct ChapterPopoverView: View {
             // Footer
             footerView
         }
-        .frame(width: 600, height: 650)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(popoverBackgroundColor)
+        .frame(
+            maxWidth: {
+                #if os(iOS)
+                if UIDevice.current.userInterfaceIdiom == .phone {
+                    return .infinity // iPhone: Use full width
+                } else {
+                    return 600 // iPad: Use fixed width
+                }
+                #else
+                return 600 // macOS: Use fixed width
+                #endif
+            }(),
+            maxHeight: {
+                #if os(iOS)
+                if UIDevice.current.userInterfaceIdiom == .phone {
+                    return .infinity // iPhone: Use full height
+                } else {
+                    return 650 // iPad: Use fixed height
+                }
+                #else
+                return 650 // macOS: Use fixed height
+                #endif
+            }()
         )
+        .background(backgroundView)
         .onAppear {
             loadChapter()
             // Initialize current chapter tracking
@@ -62,8 +83,52 @@ struct ChapterPopoverView: View {
         }
     }
     
+    // Helper view for background to handle platform differences
+    @ViewBuilder
+    private var backgroundView: some View {
+        #if os(iOS)
+        if UIDevice.current.userInterfaceIdiom == .phone {
+            // iPhone: Use full background without rounded corners for sheet presentation
+            Rectangle()
+                .fill(popoverBackgroundColor)
+        } else {
+            // iPad: Use rounded rectangle
+            RoundedRectangle(cornerRadius: 12)
+                .fill(popoverBackgroundColor)
+        }
+        #else
+        // macOS: Use rounded rectangle
+        RoundedRectangle(cornerRadius: 12)
+            .fill(popoverBackgroundColor)
+        #endif
+    }
+    
     private var headerView: some View {
         VStack(spacing: 12) {
+            #if os(iOS)
+            // iPhone: Add close button at the top right
+            if UIDevice.current.userInterfaceIdiom == .phone {
+                HStack {
+                    Spacer()
+                    Button(action: {
+                        dismiss()
+                    }) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.white)
+                            .frame(width: 24, height: 24)
+                            .background(
+                                Circle()
+                                    .fill(Color.gray.opacity(0.6))
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+            }
+            #endif
+            
             HStack(alignment: .center, spacing: 12) {
                 // Previous Chapter Button
                 Button(action: { 
