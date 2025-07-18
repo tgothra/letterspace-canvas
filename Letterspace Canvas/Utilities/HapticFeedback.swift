@@ -2,7 +2,6 @@ import SwiftUI
 
 #if os(iOS)
 import UIKit
-import os.log
 #endif
 
 struct HapticFeedback {
@@ -13,62 +12,60 @@ struct HapticFeedback {
     }
     
     #if os(iOS)
-    // Track if haptic system is available
-    private static var isHapticSystemAvailable = true
+    // Pre-initialized generators to avoid first-time delays
+    private static let lightGenerator = UIImpactFeedbackGenerator(style: .light)
+    private static let mediumGenerator = UIImpactFeedbackGenerator(style: .medium) 
+    private static let heavyGenerator = UIImpactFeedbackGenerator(style: .heavy)
     
-    // Lazy initialization with error handling
-    private static var lightGenerator: UIImpactFeedbackGenerator? = {
-        guard isHapticSystemAvailable else { return nil }
-        return UIImpactFeedbackGenerator(style: .light)
-    }()
+    // Track preparation status to avoid multiple preparations
+    private static var isPrepared = false
+    private static let preparationQueue = DispatchQueue(label: "haptic.preparation", qos: .utility)
     
-    private static var mediumGenerator: UIImpactFeedbackGenerator? = {
-        guard isHapticSystemAvailable else { return nil }
-        return UIImpactFeedbackGenerator(style: .medium)
-    }()
-    
-    private static var heavyGenerator: UIImpactFeedbackGenerator? = {
-        guard isHapticSystemAvailable else { return nil }
-        return UIImpactFeedbackGenerator(style: .heavy)
+    // Pre-warm generators on first access
+    private static let preparedGenerators: Void = {
+        preparationQueue.async {
+            do {
+                lightGenerator.prepare()
+                mediumGenerator.prepare()
+                heavyGenerator.prepare()
+                isPrepared = true
+                print("✅ Haptic feedback generators prepared successfully")
+            } catch {
+                print("⚠️ Warning: Failed to prepare haptic generators: \(error)")
+            }
+        }
     }()
     #endif
     
     static func impact(_ style: Style) {
         #if os(iOS)
-        guard isHapticSystemAvailable else { return }
+        // Check if haptics are available and enabled
+        guard UIDevice.current.userInterfaceIdiom == .phone else { return }
         
-        // Perform haptic feedback on background queue to avoid blocking main thread
+        // Ensure generators are prepared
+        _ = preparedGenerators
+        
+        // Dispatch haptic feedback on a background queue to avoid blocking UI
         DispatchQueue.global(qos: .userInteractive).async {
-            let generator: UIImpactFeedbackGenerator?
-            switch style {
-            case .light:
-                generator = lightGenerator
-            case .medium:
-                generator = mediumGenerator
-            case .heavy:
-                generator = heavyGenerator
-            }
-            
-            // Safely trigger haptic feedback with timeout protection
-            guard let generator = generator else { return }
-            
-            // Use a timeout to prevent hanging
-            let semaphore = DispatchSemaphore(value: 0)
-            var completed = false
-            
-            DispatchQueue.global(qos: .userInteractive).async {
-                generator.impactOccurred()
-                if !completed {
-                    completed = true
-                    semaphore.signal()
+            do {
+                let generator: UIImpactFeedbackGenerator
+                switch style {
+                case .light:
+                    generator = lightGenerator
+                case .medium:
+                    generator = mediumGenerator
+                case .heavy:
+                    generator = heavyGenerator
                 }
-            }
-            
-            // Timeout after 100ms to prevent blocking
-            _ = semaphore.wait(timeout: .now() + 0.1)
-            if !completed {
-                os_log("Haptic feedback timed out, disabling haptic system", log: .default, type: .error)
-                isHapticSystemAvailable = false
+                
+                // Re-prepare if needed (defensive programming)
+                if !isPrepared {
+                    generator.prepare()
+                }
+                
+                generator.impactOccurred()
+            } catch {
+                print("⚠️ Warning: Haptic feedback failed: \(error)")
             }
         }
         #endif
@@ -78,34 +75,25 @@ struct HapticFeedback {
     // Method to pre-warm all generators (call during app startup)
     static func prepareAll() {
         #if os(iOS)
-        guard isHapticSystemAvailable else { return }
+        guard UIDevice.current.userInterfaceIdiom == .phone else { return }
+        _ = preparedGenerators
+        #endif
+    }
+    
+    // Method to safely trigger haptic feedback with timeout protection
+    static func safeTrigger(_ style: Style, timeout: TimeInterval = 0.1) {
+        #if os(iOS)
+        guard UIDevice.current.userInterfaceIdiom == .phone else { return }
         
-        // Prepare generators asynchronously to avoid blocking app startup
-        DispatchQueue.global(qos: .utility).async {
-            do {
-                // Try to prepare each generator with timeout protection
-                let preparationQueue = DispatchQueue.global(qos: .userInitiated)
-                let timeout: DispatchTime = .now() + 2.0 // 2 second timeout
-                
-                let group = DispatchGroup()
-                
-                // Prepare each generator in parallel with timeout
-                [lightGenerator, mediumGenerator, heavyGenerator].forEach { generator in
-                    guard let generator = generator else { return }
-                    group.enter()
-                    preparationQueue.async {
-                        generator.prepare()
-                        group.leave()
-                    }
-                }
-                
-                // Wait for completion or timeout
-                let result = group.wait(timeout: timeout)
-                if result == .timedOut {
-                    os_log("Haptic preparation timed out, disabling haptic system", log: .default, type: .error)
-                    isHapticSystemAvailable = false
-                }
-            }
+        let workItem = DispatchWorkItem {
+            impact(style)
+        }
+        
+        DispatchQueue.global(qos: .userInteractive).async(execute: workItem)
+        
+        // Cancel if it takes too long
+        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + timeout) {
+            workItem.cancel()
         }
         #endif
     }
