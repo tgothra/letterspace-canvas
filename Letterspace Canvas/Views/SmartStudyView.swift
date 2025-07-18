@@ -594,23 +594,8 @@ struct SmartStudyView: View {
                 #if os(iOS)
                 // iPhone: Defer all heavy operations to avoid blocking sheet presentation
                 if UIDevice.current.userInterfaceIdiom == .phone {
-                    // Mark as ready immediately for UI responsiveness
                     viewReady = true
-                    
-                    // Defer data loading to avoid blocking sheet presentation
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    Task.detached(priority: .utility) {
-                        await MainActor.run {
-                loadSavedQAs()
-                            }
-                        }
-                    }
-                    return
-                } else if UIDevice.current.userInterfaceIdiom == .pad {
-                    // iPad: Defer heavy operations to prevent modal hang
-                    viewReady = true
-                    
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                         Task.detached(priority: .utility) {
                             await MainActor.run {
                                 loadSavedQAs()
@@ -618,21 +603,27 @@ struct SmartStudyView: View {
                         }
                     }
                     return
+                } else if UIDevice.current.userInterfaceIdiom == .pad {
+                    // iPad: Show modal instantly, load QAs in background
+                    viewReady = true // UI is ready immediately
+                    Task.detached(priority: .utility) {
+                        await MainActor.run {
+                            loadSavedQAs()
+                        }
+                    }
+                    return
                 }
                 #endif
-                
                 // macOS: Normal initialization
                 Task.detached(priority: .background) {
                     await MainActor.run {
                         loadSavedQAs()
                     }
                 }
-                
                 #if os(macOS)
                 // Force input field to be focusable
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                     NotificationCenter.default.post(name: NSNotification.Name("FocusSmartStudyTextField"), object: nil)
-                    
                     if let window = NSApplication.shared.windows.first(where: { $0.isVisible && $0.isKeyWindow }),
                        let hostingView = window.contentView?.subviews.first(where: { String(describing: type(of: $0)).contains("NSHostingView") }),
                        let textField = hostingView.firstSubview(ofType: NSTextField.self) {
