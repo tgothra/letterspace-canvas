@@ -264,13 +264,12 @@ struct MainLayout: View {
                 })
                 .presentationBackground(.ultraThinMaterial)
             }
-            // TODO: Add proper SearchView implementation
-            // .sheet(isPresented: $showSearchModal) {
-            //     SearchView(onDismiss: {
-            //         showSearchModal = false
-            //     })
-            //     .presentationBackground(.ultraThinMaterial)
-            // }
+            .sheet(isPresented: $showSearchModal) {
+                SearchView(onDismiss: {
+                    showSearchModal = false
+                })
+                .presentationBackground(.ultraThinMaterial)
+            }
             .sheet(isPresented: $showSmartStudyModal) {
                 SmartStudyView(onDismiss: {
                     showSmartStudyModal = false

@@ -33,7 +33,7 @@ struct SearchHeaderView: View {
             return 12 // More padding for iPad
             #endif
         }())
-        .background(Color.white) // Force white background for search header
+        .background(theme.surface) // Use theme surface color for search header
     }
 }
 
@@ -104,7 +104,11 @@ struct SearchFieldView: View {
         .padding(.vertical, 6)
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill(Color(.sRGB, white: 0.95)) // Light gray background for visibility on white modal
+                .fill(theme.surface)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(theme.secondary.opacity(0.2), lineWidth: 1)
+                )
         )
     }
 }
@@ -978,7 +982,8 @@ struct SearchPopupContent: View {
                 return 16 // More spacious padding for iPad
                 #endif
             }())
-                                    }
+        }
+        .background(theme.surface)
     }
     
     private func findFirstMatchingElement(in document: Letterspace_CanvasDocument, searchText: String) -> (content: String, element: DocumentElement)? {
@@ -1020,8 +1025,16 @@ struct SearchView: View {
                     )
                     .navigationTitle("Search Documents")
                     .navigationBarTitleDisplayMode(.inline)
-                    .navigationBarItems(trailing: Button("Done", action: onDismiss))
+                    .navigationBarItems(trailing: 
+                        Button("Done") {
+                            onDismiss()
+                        }
+                        .foregroundColor(.blue)
+                    )
+                    .background(theme.surface)
                 }
+                .navigationViewStyle(StackNavigationViewStyle())
+                .background(theme.surface)
             } else {
                 // iPad: Use regular VStack
                 VStack(spacing: 0) {
