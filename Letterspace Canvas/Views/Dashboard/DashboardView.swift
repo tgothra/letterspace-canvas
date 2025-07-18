@@ -118,7 +118,7 @@ struct DashboardView: View {
             case .default:
                 return 0    // No offset
             case .expanded:
-                return -200 // Pull up by 200 points
+                return 0    // No offset - we now use frame height instead
             }
         }
         
@@ -2523,8 +2523,10 @@ struct DashboardView: View {
                 }
             }
         }
-        // iPhone and iPad sheet behavior
-        .offset(y: (isPhone || isIPad) ? allDocumentsPosition.offset + allDocumentsOffset : 0)
+        // iPhone and iPad sheet behavior - FIXED: Only expand upward, keep bottom anchored
+        .offset(y: (isPhone || isIPad) ? allDocumentsOffset : 0)
+        .frame(height: (isPhone || isIPad) ? 
+            (allDocumentsPosition == .expanded ? 600 : 400) : 400) // Expand height instead of moving entire view
         .gesture(
             (isPhone || isIPad) ? DragGesture()
                 .onChanged { value in
