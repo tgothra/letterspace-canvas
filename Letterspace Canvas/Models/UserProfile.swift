@@ -38,7 +38,19 @@ struct UserProfile: Codable {
 class UserProfileManager {
     static let shared = UserProfileManager()
     
+    // Cache profile in memory to avoid repeated loading
+    private var cachedProfile: UserProfile?
+    private var profileLoadingTask: Task<UserProfile, Never>?
+    
+    // Track iCloud availability
+    private var isiCloudAvailable = false
+    
     private init() {
+        // Pre-load profile asynchronously to avoid UI delays
+        profileLoadingTask = Task {
+            await loadProfileAsync()
+        }
+        
         // Set up notification for iCloud account changes
         NotificationCenter.default.addObserver(
             self,
@@ -47,40 +59,65 @@ class UserProfileManager {
             object: nil
         )
         
-        // Check iCloud availability on initialization
-        checkiCloudAvailability()
-    }
-    
-    // Track iCloud availability
-    private var isiCloudAvailable = false
-    
-    // MARK: - iCloud Integration
-    
-    @objc private func iCloudAccountDidChange(_ notification: Notification) {
-        checkiCloudAvailability()
-        
-        // If iCloud became available, sync local data to iCloud
-        if isiCloudAvailable {
-            syncLocalToiCloud()
+        // Check iCloud availability on initialization (async to avoid blocking)
+        Task {
+            await checkiCloudAvailabilityAsync()
         }
     }
     
-    private func checkiCloudAvailability() {
+    // MARK: - Async Profile Loading
+    
+    private func loadProfileAsync() async -> UserProfile {
+        // Try UserDefaults first (fastest)
+        if let profile = loadFromUserDefaults() {
+            cachedProfile = profile
+            return profile
+        }
+        
+        // Check iCloud availability
+        await checkiCloudAvailabilityAsync()
+        
+        // Try iCloud if available
+        if isiCloudAvailable, let iCloudProfile = loadiCloudProfile() {
+            // Cache and also save to UserDefaults for faster future access
+            cachedProfile = iCloudProfile
+            saveToUserDefaults(iCloudProfile)
+            return iCloudProfile
+        }
+        
+        // Fall back to local file
+        let localProfile = loadLocalProfile()
+        cachedProfile = localProfile
+        return localProfile
+    }
+    
+    private func checkiCloudAvailabilityAsync() async {
         // Check for iCloud availability in background to avoid UI freezes
-        DispatchQueue.global(qos: .background).async { [weak self] in
-            guard let self = self else { return }
-            
+        await Task.detached(priority: .background) {
             // Try to get the iCloud container URL
             if let _ = self.getiCloudContainerURL() {
-                DispatchQueue.main.async {
+                await MainActor.run {
                     self.isiCloudAvailable = true
                     print("☁️ iCloud is available")
                 }
             } else {
-                DispatchQueue.main.async {
+                await MainActor.run {
                     self.isiCloudAvailable = false
                     print("📱 iCloud is not available, using local storage only")
                 }
+            }
+        }.value
+    }
+    
+    // MARK: - iCloud Integration
+    
+    @objc private func iCloudAccountDidChange(_ notification: Notification) {
+        Task {
+            await checkiCloudAvailabilityAsync()
+            
+            // If iCloud became available, sync local data to iCloud
+            if isiCloudAvailable {
+                syncLocalToiCloud()
             }
         }
     }
@@ -274,24 +311,33 @@ class UserProfileManager {
     
     var userProfile: UserProfile {
         get {
-            // Try to get from iCloud if available
-            if isiCloudAvailable, let iCloudProfile = loadiCloudProfile() {
-                // Update local copies
-                saveLocalProfile(iCloudProfile)
-                return iCloudProfile
+            // Return cached profile if available
+            if let cached = cachedProfile {
+                return cached
             }
             
-            // Fall back to local storage
-            return loadLocalProfile()
+            // If not cached yet, fall back to fast UserDefaults loading
+            if let profile = loadFromUserDefaults() {
+                cachedProfile = profile
+                return profile
+            }
+            
+            // Last resort: synchronous local file loading
+            let profile = loadLocalProfile()
+            cachedProfile = profile
+            return profile
         }
         set {
+            // Update cache immediately
+            cachedProfile = newValue
+            
             // Save locally first (fast and reliable)
             saveLocalProfile(newValue)
             
             // Then save to iCloud asynchronously if available
             if isiCloudAvailable {
-                DispatchQueue.global(qos: .background).async { [weak self] in
-                    self?.saveiCloudProfile(newValue)
+                Task.detached(priority: .background) {
+                    self.saveiCloudProfile(newValue)
                 }
             }
         }

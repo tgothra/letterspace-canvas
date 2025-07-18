@@ -50,7 +50,27 @@ struct UserLibraryItem: Identifiable, Codable {
 class UserLibraryService: ObservableObject {
     @Published var libraryItems: [UserLibraryItem] = []
     
+    // Static instance for preloading
+    private static var preloadedInstance: UserLibraryService?
+    
     // Simple in-memory storage for now
+    
+    // MARK: - Preloading
+    
+    static func preload() {
+        if preloadedInstance == nil {
+            Task.detached(priority: .background) {
+                let instance = UserLibraryService()
+                await MainActor.run {
+                    preloadedInstance = instance
+                }
+            }
+        }
+    }
+    
+    static func getPreloadedInstance() -> UserLibraryService {
+        return preloadedInstance ?? UserLibraryService()
+    }
     
     // MARK: - iCloud Helpers
 

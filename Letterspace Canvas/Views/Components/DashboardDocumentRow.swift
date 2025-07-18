@@ -13,6 +13,7 @@ struct DashboardDocumentRow: View {
     let dateFilterType: DateFilterType
     let isEditMode: Bool
     @Binding var selectedItems: Set<String>
+    let columnWidths: (statusWidth: CGFloat, nameWidth: CGFloat, seriesWidth: CGFloat, locationWidth: CGFloat, dateWidth: CGFloat, createdDateWidth: CGFloat)?
     let onTap: () -> Void
     let onLongPress: () -> Void
     let onShowDetails: () -> Void
@@ -54,6 +55,8 @@ struct DashboardDocumentRow: View {
     // Helper function to calculate flexible column widths for iPhone
     private func calculateFlexibleColumnWidths() -> (statusWidth: CGFloat, nameWidth: CGFloat, seriesWidth: CGFloat, locationWidth: CGFloat, dateWidth: CGFloat, createdDateWidth: CGFloat) {
         let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+        let isIPad = UIDevice.current.userInterfaceIdiom == .pad
+        
         if isPhone {
             // Get available width (93% of screen width minus padding)
             let availableWidth = UIScreen.main.bounds.width * 0.93 - 32 // Account for container padding
@@ -99,9 +102,12 @@ struct DashboardDocumentRow: View {
                 max(70, remainingWidth * (flexRatios["createdDate"] ?? 1.0) / totalFlexRatio) : 0
             
             return (statusWidth: statusWidth, nameWidth: nameWidth, seriesWidth: seriesWidth, locationWidth: locationWidth, dateWidth: dateWidth, createdDateWidth: createdDateWidth)
+        } else if isIPad {
+            // Fixed widths for iPad to ensure proper alignment
+            return (statusWidth: 80, nameWidth: 200, seriesWidth: 120, locationWidth: 140, dateWidth: 100, createdDateWidth: 100)
         }
         
-        // Default values for non-iPhone devices
+        // Default values for other devices
         return (statusWidth: 55, nameWidth: 120, seriesWidth: 100, locationWidth: 120, dateWidth: 90, createdDateWidth: 80)
     }
     
@@ -116,6 +122,7 @@ struct DashboardDocumentRow: View {
         dateFilterType: DateFilterType,
         isEditMode: Bool = false,
         selectedItems: Binding<Set<String>> = .constant(Set()),
+        columnWidths: (statusWidth: CGFloat, nameWidth: CGFloat, seriesWidth: CGFloat, locationWidth: CGFloat, dateWidth: CGFloat, createdDateWidth: CGFloat)? = nil,
         onTap: @escaping () -> Void,
         onLongPress: @escaping () -> Void,
         onShowDetails: @escaping () -> Void = {},
@@ -134,6 +141,7 @@ struct DashboardDocumentRow: View {
         self.dateFilterType = dateFilterType
         self.isEditMode = isEditMode
         self._selectedItems = selectedItems
+        self.columnWidths = columnWidths
         self.onTap = onTap
         self.onLongPress = onLongPress
         self.onShowDetails = onShowDetails
@@ -148,7 +156,7 @@ struct DashboardDocumentRow: View {
         let isIPad = UIDevice.current.userInterfaceIdiom == .pad
         let isPortrait = UIScreen.main.bounds.height > UIScreen.main.bounds.width
         let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-        let columnWidths = calculateFlexibleColumnWidths()
+        let widths = columnWidths ?? calculateFlexibleColumnWidths()
         
         ZStack {
             // Full-width selection background for non-iPad devices
@@ -203,7 +211,7 @@ struct DashboardDocumentRow: View {
                     }
                     }
                 }
-                .frame(width: isIPad ? 30 : (isPhone ? columnWidths.statusWidth : 80), alignment: isIPad ? .center : .leading)
+                .frame(width: isIPad ? widths.statusWidth : (isPhone ? widths.statusWidth : 80), alignment: isIPad ? .center : .leading)
                 .padding(.leading, isPhone ? 10 : 0) // Add breathing room from left edge on iPhone
                 
                 // Add breathing room between status indicators and name column on iPad
@@ -264,7 +272,7 @@ struct DashboardDocumentRow: View {
                                 Spacer()
                             }
                         }
-                        .frame(width: isPhone ? columnWidths.nameWidth : (visibleColumns.count > 1 ? nil : .infinity), alignment: .leading)
+                        .frame(width: isPhone ? widths.nameWidth : (isIPad ? widths.nameWidth : (visibleColumns.count > 1 ? nil : .infinity)), alignment: .leading)
                         
                         // Series column (if visible, aligned with header)
                         if visibleColumns.contains("series") {
@@ -285,7 +293,7 @@ struct DashboardDocumentRow: View {
                                         .foregroundColor(theme.secondary.opacity(0.5))
                                 }
                             }
-                            .frame(width: isPhone ? columnWidths.seriesWidth : 100, alignment: .leading)
+                            .frame(width: isPhone ? widths.seriesWidth : (isIPad ? widths.seriesWidth : 100), alignment: .leading)
                         }
                         
                         // Location column (if visible, aligned with header) - moved before date
@@ -307,7 +315,7 @@ struct DashboardDocumentRow: View {
                                         .foregroundColor(theme.secondary.opacity(0.5))
                                 }
                             }
-                            .frame(width: isPhone ? columnWidths.locationWidth : 120, alignment: .leading)
+                            .frame(width: isPhone ? widths.locationWidth : (isIPad ? widths.locationWidth : 120), alignment: .leading)
                         }
                         
                         // Date column (if visible, aligned with header) - moved after location
@@ -315,7 +323,7 @@ struct DashboardDocumentRow: View {
                             Text(formatDate(document.modifiedAt))
                                 .font(.system(size: isPhone ? 12 : (isPortrait && isIPad ? 15 : 16)))
                                 .foregroundColor(theme.secondary)
-                                .frame(width: isPhone ? columnWidths.dateWidth : 90, alignment: .leading)
+                                .frame(width: isPhone ? widths.dateWidth : (isIPad ? widths.dateWidth : 90), alignment: .leading)
                         }
                         
                         // Created date column (if visible, aligned with header)
@@ -323,7 +331,7 @@ struct DashboardDocumentRow: View {
                             Text(formatDate(document.createdAt))
                                 .font(.system(size: isPhone ? 12 : (isPortrait && isIPad ? 15 : 16)))
                                 .foregroundColor(theme.secondary)
-                                .frame(width: isPhone ? columnWidths.createdDateWidth : 80, alignment: .leading)
+                                .frame(width: isPhone ? widths.createdDateWidth : (isIPad ? widths.createdDateWidth : 80), alignment: .leading)
                         }
                     }
                 }
@@ -404,7 +412,7 @@ struct DashboardDocumentRow: View {
                             .buttonStyle(.plain)
                         }
                     }
-                    .frame(width: 80, alignment: .center)
+                    .frame(width: isIPad ? 100 : 80, alignment: .center)
                 }
             }
             .padding(.horizontal, isPhone ? 0 : (isPortrait && isIPad ? 16 : 16)) // iPhone: Remove padding to fill full width

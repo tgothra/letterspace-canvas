@@ -2,6 +2,10 @@ import SwiftUI
 
 #if os(iOS)
 import UIKit
+typealias PlatformImage = UIImage
+#elseif os(macOS)
+import AppKit
+typealias PlatformImage = NSImage
 #endif
 
 struct CircularMenuButton: View {
@@ -9,14 +13,14 @@ struct CircularMenuButton: View {
     @Environment(\.colorScheme) var colorScheme
     @Binding var isMenuOpen: Bool
     @State private var isPressed = false
-    @State private var rotationAngle: Double = 0
     
     var body: some View {
         Button(action: {
-            HapticFeedback.impact(.medium)
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+            // Use lighter haptic feedback for faster response
+            HapticFeedback.impact(.light)
+            // Simplified animation
+            withAnimation(.easeInOut(duration: 0.2)) {
                 isMenuOpen.toggle()
-                rotationAngle = isMenuOpen ? 45 : 0
             }
         }) {
             ZStack {
@@ -62,23 +66,25 @@ struct CircularMenuButton: View {
                         .rotationEffect(.degrees(isMenuOpen ? -45 : 0))
                         .offset(y: isMenuOpen ? -3 : 0)
                 }
-                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isMenuOpen)
+                .animation(.easeInOut(duration: 0.2), value: isMenuOpen)
             }
         }
-        .frame(width: 65, height: 65) // Increased tappable area
-        .contentShape(Rectangle()) // Makes entire frame tappable
+        .frame(width: 64, height: 64) // Slightly smaller frame
+        .contentShape(Circle()) // Use Circle shape for better touch detection
         .buttonStyle(.plain)
-        .scaleEffect(isPressed ? 0.95 : 1.0)
-        .onTapGesture {
-            withAnimation(.easeInOut(duration: 0.1)) {
-                isPressed = true
-            }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                withAnimation(.easeInOut(duration: 0.1)) {
+        .scaleEffect(isPressed ? 0.96 : 1.0)
+        .animation(.easeInOut(duration: 0.1), value: isPressed)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in
+                    if !isPressed {
+                        isPressed = true
+                    }
+                }
+                .onEnded { _ in
                     isPressed = false
                 }
-            }
-        }
+        )
         .shadow(color: Color.black.opacity(0.2), radius: 8, x: 0, y: 2)
     }
 }
@@ -98,8 +104,12 @@ struct CircularMenuOverlay: View {
     let onRecentlyDeleted: () -> Void
     let onSettings: () -> Void
     
-    @State private var menuScale: CGFloat = 0.8
-    @State private var menuOffset: CGFloat = 20
+    @State private var menuScale: CGFloat = 0.85
+    @State private var menuOffset: CGFloat = 15
+    
+    // Pre-cache user profile components to avoid first-load delays
+    @State private var cachedUserProfile = UserProfileManager.shared.userProfile
+    @State private var cachedProfileImage: PlatformImage? = UserProfileManager.shared.getProfileImage()
     
     var body: some View {
         ZStack {
@@ -120,8 +130,8 @@ struct CircularMenuOverlay: View {
                     
                     // Menu items
                     VStack(spacing: 0) {
-                        // Menu items container
-                        LazyVStack(spacing: 0) {
+                        // Menu items container - use VStack instead of LazyVStack for faster rendering
+                        VStack(spacing: 0) {
                             menuItem(icon: "rectangle.3.group", title: "Dashboard", action: onDashboard)
                             menuItem(icon: "magnifyingglass", title: "Search", action: onSearch)
                             menuItem(icon: "plus.square", title: "New Document", action: onNewDocument)
@@ -175,13 +185,14 @@ struct CircularMenuOverlay: View {
             }
         }
         .onChange(of: isMenuOpen) { newValue in
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+            // Simplified animation for better performance
+            withAnimation(.easeInOut(duration: 0.25)) {
                 if newValue {
                     menuScale = 1
                     menuOffset = 0
                 } else {
-                    menuScale = 0.8
-                    menuOffset = 20
+                    menuScale = 0.85
+                    menuOffset = 15
                 }
             }
         }
@@ -193,14 +204,39 @@ struct CircularMenuOverlay: View {
     private func menuItem(icon: String, title: String, action: @escaping () -> Void, isUserProfile: Bool = false) -> some View {
         Button(action: {
             HapticFeedback.impact(.light)
-            action()
+            // Close menu first, then execute action to prevent gesture conflicts
             closeMenu()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { // Reduced delay
+                action()
+            }
         }) {
-            HStack(spacing: 12) {
+            HStack(spacing: 16) {
                 // Icon
-                if icon == "rectangle.3.group" {
+                if isUserProfile && icon == "person.crop.circle.fill" {
+                    // Use cached user profile data to avoid loading delays
+                    if let profileImage = cachedProfileImage {
+                        PlatformImageView(platformImage: profileImage)
+                            .scaledToFill()
+                            .frame(width: 20, height: 20)
+                            .clipShape(Circle())
+                            .overlay(
+                                Circle()
+                                    .stroke(theme.primary.opacity(0.2), lineWidth: 1)
+                            )
+                    } else {
+                        // Fallback to cached initials
+                        Circle()
+                            .fill(theme.accent.opacity(0.2))
+                            .frame(width: 20, height: 20)
+                            .overlay(
+                                Text(cachedUserProfile.initials)
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundColor(theme.accent)
+                            )
+                    }
+                } else if icon == "rectangle.3.group" {
                     // Custom dashboard icon
-                    VStack(spacing: 1.5) {
+                    VStack(spacing: 1) {
                         Rectangle()
                             .fill(theme.primary)
                             .frame(width: 8, height: 3)
@@ -215,28 +251,6 @@ struct CircularMenuOverlay: View {
                             .cornerRadius(0.5)
                     }
                     .frame(width: 20, height: 20)
-                } else if isUserProfile && icon == "person.crop.circle.fill" {
-                    // User profile image or initials
-                    if let profileImage = UserProfileManager.shared.getProfileImage() {
-                        PlatformImageView(platformImage: profileImage)
-                            .scaledToFill()
-                            .frame(width: 20, height: 20)
-                            .clipShape(Circle())
-                            .overlay(
-                                Circle()
-                                    .stroke(theme.primary.opacity(0.2), lineWidth: 1)
-                            )
-                    } else {
-                        // Fallback to initials
-                        Circle()
-                            .fill(theme.accent.opacity(0.2))
-                            .frame(width: 20, height: 20)
-                            .overlay(
-                                Text(UserProfileManager.shared.userProfile.initials)
-                                    .font(.system(size: 10, weight: .medium))
-                                    .foregroundColor(theme.accent)
-                            )
-                    }
                 } else {
                     Image(systemName: icon)
                         .font(.system(size: 16, weight: .medium))
@@ -256,18 +270,10 @@ struct CircularMenuOverlay: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .background(
-            Rectangle()
-                .fill(Color.clear)
-                .onTapGesture {
-                    action()
-                    closeMenu()
-                }
-        )
     }
     
     private func closeMenu() {
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+        withAnimation(.easeInOut(duration: 0.2)) {
             isMenuOpen = false
         }
     }
