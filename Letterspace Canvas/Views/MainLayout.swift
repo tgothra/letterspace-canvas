@@ -252,70 +252,40 @@ struct MainLayout: View {
     
     var body: some View {
         content
-            .sheet(isPresented: $showBibleReaderModal) {
-                #if os(iOS)
-                if UIDevice.current.userInterfaceIdiom == .phone {
+            // iPhone-only sheets
+            #if os(iOS)
+            .applyIf(UIDevice.current.userInterfaceIdiom == .phone, { view in
+                view
+                .sheet(isPresented: $showBibleReaderModal) {
                     BibleReaderView(onDismiss: {
                         showBibleReaderModal = false
                     })
                     .presentationBackground(.ultraThinMaterial)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
-                    .presentationCornerRadius(16)
                 }
-                #endif
-            }
-            .sheet(isPresented: $showFoldersModal) {
-                #if os(iOS)
-                if UIDevice.current.userInterfaceIdiom == .phone {
+                .sheet(isPresented: $showFoldersModal) {
                     FoldersView(onDismiss: {
                         showFoldersModal = false
                     })
                     .presentationBackground(.ultraThinMaterial)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
-                    .presentationCornerRadius(16)
                 }
-                #endif
-            }
-            .sheet(isPresented: $showSearchModal) {
-                #if os(iOS)
-                if UIDevice.current.userInterfaceIdiom == .phone {
+                .sheet(isPresented: $showSearchModal) {
                     SearchView(onDismiss: {
                         showSearchModal = false
                     })
                     .presentationBackground(.ultraThinMaterial)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
-                    .presentationCornerRadius(16)
                 }
-                #endif
-            }
-            .sheet(isPresented: $showSmartStudyModal) {
-                #if os(iOS)
-                if UIDevice.current.userInterfaceIdiom == .phone {
+                .sheet(isPresented: $showSmartStudyModal) {
                     SmartStudyView(onDismiss: {
                         showSmartStudyModal = false
                     })
                     .presentationBackground(.ultraThinMaterial)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
-                    .presentationCornerRadius(16)
                 }
-                #endif
-            }
-
-            .sheet(isPresented: $showRecentlyDeletedModal) {
-                #if os(iOS)
-                if UIDevice.current.userInterfaceIdiom == .phone {
+                .sheet(isPresented: $showRecentlyDeletedModal) {
                     RecentlyDeletedView(isPresented: $showRecentlyDeletedModal)
                         .presentationBackground(.ultraThinMaterial)
-                        .presentationDetents([.large])
-                        .presentationDragIndicator(.visible)
-                        .presentationCornerRadius(16)
                 }
-                #endif
-            }
+            })
+            #endif
             .overlay {
                 #if os(macOS)
                 if showBibleReaderModal {
@@ -344,68 +314,9 @@ struct MainLayout: View {
                         ))
                     }
                 }
-                #endif
-            }
-            .overlay {
-                #if os(iOS)
-                if UIDevice.current.userInterfaceIdiom == .pad {
-                    if showSmartStudyModal {
-                        ZStack {
-                            Color.clear
-                                .contentShape(Rectangle())
-                                .ignoresSafeArea()
-                                .onTapGesture {
-                                    withAnimation(.easeInOut(duration: 0.2)) {
-                                        showSmartStudyModal = false
-                                    }
-                                }
-                            LazyModalContainer {
-                                SmartStudyView(onDismiss: {
-                                    withAnimation(.easeInOut(duration: 0.2)) {
-                                        showSmartStudyModal = false
-                                    }
-                                })
-                            }
-                            .frame(width: 700, height: 650)
-                            .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 10)
-                            .transition(.asymmetric(
-                                insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .center)),
-                                removal: .opacity.combined(with: .scale(scale: 0.95, anchor: .center))
-                            ))
-                        }
-                    }
-                }
                 #else
-                if showSmartStudyModal {
-                    ZStack {
-                        Color.clear
-                            .contentShape(Rectangle())
-                            .ignoresSafeArea()
-                            .onTapGesture {
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    showSmartStudyModal = false
-                                }
-                            }
-                        LazyModalContainer {
-                            SmartStudyView(onDismiss: {
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    showSmartStudyModal = false
-                                }
-                            })
-                        }
-                        .fixedSize()
-                        .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 10)
-                        .transition(.asymmetric(
-                            insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .center)),
-                            removal: .opacity.combined(with: .scale(scale: 0.95, anchor: .center))
-                        ))
-                    }
-                }
-                #endif
-            }
-            .overlay {
-                #if os(iOS)
-                if UIDevice.current.userInterfaceIdiom == .pad {
+                // iPad custom modal overlays (to replace iPhone sheets)
+                if UIDevice.current.userInterfaceIdiom != .phone {
                     if showBibleReaderModal {
                         ZStack {
                             Color.clear
@@ -416,70 +327,22 @@ struct MainLayout: View {
                                         showBibleReaderModal = false
                                     }
                                 }
-                            BibleReaderView(onDismiss: {
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    showBibleReaderModal = false
-                                }
-                            })
-                            .frame(width: 750, height: 700)
-                            .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 10)
-                            .transition(.asymmetric(
-                                insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .center)),
-                                removal: .opacity.combined(with: .scale(scale: 0.95, anchor: .center))
-                            ))
-                        }
-                    }
-                }
-                #endif
-            }
-            .overlay {
-                #if os(iOS)
-                if UIDevice.current.userInterfaceIdiom == .pad {
-                    if showRecentlyDeletedModal {
-                        ZStack {
-                            Color.clear
-                                .contentShape(Rectangle())
-                                .ignoresSafeArea()
-                                .onTapGesture {
+                            LazyModalContainer {
+                                BibleReaderView(onDismiss: {
                                     withAnimation(.easeInOut(duration: 0.2)) {
-                                        showRecentlyDeletedModal = false
+                                        showBibleReaderModal = false
                                     }
-                                }
-                            RecentlyDeletedView(isPresented: $showRecentlyDeletedModal)
-                                .frame(width: 650, height: 550)
-                                .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 10)
-                                .transition(.asymmetric(
-                                    insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .center)),
-                                    removal: .opacity.combined(with: .scale(scale: 0.95, anchor: .center))
-                                ))
-                        }
-                    }
-                }
-                #else
-                if showRecentlyDeletedModal {
-                    ZStack {
-                        Color.clear
-                            .contentShape(Rectangle())
-                            .ignoresSafeArea()
-                            .onTapGesture {
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    showRecentlyDeletedModal = false
-                                }
+                                })
                             }
-                        RecentlyDeletedView(isPresented: $showRecentlyDeletedModal)
                             .fixedSize()
                             .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 10)
                             .transition(.asymmetric(
                                 insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .center)),
                                 removal: .opacity.combined(with: .scale(scale: 0.95, anchor: .center))
                             ))
+                        }
                     }
-                }
-                #endif
-            }
-            .overlay {
-                #if os(iOS)
-                if UIDevice.current.userInterfaceIdiom == .pad {
+                    
                     if showFoldersModal {
                         ZStack {
                             Color.clear
@@ -490,12 +353,14 @@ struct MainLayout: View {
                                         showFoldersModal = false
                                     }
                                 }
-                            FoldersView(onDismiss: {
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    showFoldersModal = false
-                                }
-                            })
-                            .frame(width: 650, height: 600)
+                            LazyModalContainer {
+                                FoldersView(onDismiss: {
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        showFoldersModal = false
+                                    }
+                                })
+                            }
+                            .fixedSize()
                             .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 10)
                             .transition(.asymmetric(
                                 insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .center)),
@@ -503,12 +368,7 @@ struct MainLayout: View {
                             ))
                         }
                     }
-                }
-                #endif
-            }
-            .overlay {
-                #if os(iOS)
-                if UIDevice.current.userInterfaceIdiom == .pad {
+                    
                     if showSearchModal {
                         ZStack {
                             Color.clear
@@ -519,12 +379,14 @@ struct MainLayout: View {
                                         showSearchModal = false
                                     }
                                 }
-                            SearchView(onDismiss: {
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    showSearchModal = false
-                                }
-                            })
-                            .frame(width: 650, height: 600)
+                            LazyModalContainer {
+                                SearchView(onDismiss: {
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        showSearchModal = false
+                                    }
+                                })
+                            }
+                            .fixedSize()
                             .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 10)
                             .transition(.asymmetric(
                                 insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .center)),
@@ -536,28 +398,88 @@ struct MainLayout: View {
                 #endif
             }
             .onAppear {
-                // Only load essential data synchronously
                 loadFolders()
                 
-                // Move ALL heavy operations to background with delays to prevent hangs
+                // Preload haptic feedback generators to eliminate first-tap delays
+                HapticFeedback.prepareAll()
+                
+                // Preload user profile asynchronously
                 Task.detached(priority: .background) {
-                    // Delay all preloading to avoid blocking UI
-                    try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 second delay
-                    
-                    // Minimal preloading only when needed
-                    HapticFeedback.prepareAll()
-                    
-                    // Only preload user profile if needed
-                    Task.detached(priority: .utility) {
-                        _ = UserProfileManager.shared.userProfile
+                    _ = UserProfileManager.shared.userProfile
+                }
+                
+                // UserLibraryService will be initialized lazily when needed
+                
+                // Preload Smart Study specifically for iPhone to eliminate keyboard delay
+                #if os(iOS)
+                if UIDevice.current.userInterfaceIdiom == .phone {
+                    Task.detached(priority: .background) {
+                        print("🔄 Additional Smart Study preloading...")
+                        
+                        // Force creation of key Smart Study objects
+                        let _ = UserLibraryService()
+                        let _ = TokenUsageService.shared
+                        
+                        // Preload UserDefaults access patterns
+                        _ = UserDefaults.standard.data(forKey: "savedSmartStudyQAs")
+                        _ = UserDefaults.standard.bool(forKey: "Letterspace_FirstClickHandled")
+                        
+                        print("✅ Additional Smart Study preloading complete")
+                    }
+                }
+                #endif
+                
+                // Preload folder data in background
+                Task.detached(priority: .background) {
+                    // Pre-load folder data from UserDefaults to warm up the cache
+                    if let _ = UserDefaults.standard.data(forKey: "SavedFolders") {
+                        // Just accessing it loads it into memory cache
                     }
                 }
                 
-                // Remove aggressive preloading that causes hangs
-                // UserLibraryService and TokenUsageService will be initialized only when sheets are opened
+                // Preload modal views to eliminate first-time delays on iPhone
+                #if os(iOS)
+                if UIDevice.current.userInterfaceIdiom == .phone {
+                    // Simplified iPhone sheet preloading - focus only on critical bottlenecks
+                    Task.detached(priority: .background) {
+                        print("🔄 Starting optimized iPhone sheet preloading...")
+                        
+                        // Delay preloading to avoid blocking initial app launch
+                        try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second delay
+                        
+                        // 1. Essential UserDefaults access only
+                        _ = UserDefaults.standard.data(forKey: "bible_reader_bookmarks")
+                            _ = UserDefaults.standard.data(forKey: "SavedFolders")
+                        _ = UserDefaults.standard.data(forKey: "savedSmartStudyQAs")
+                            
+                        // 2. Pre-warm only the most critical services
+                            let _ = DocumentCacheManager.shared
+                            
+                        // 3. Force initialization of essential data structures in background
+                        Task.detached(priority: .utility) {
+                            let _ = BibleReaderData()
+                            print("📖 Bible Reader data preloaded")
+                        }
+                        
+                        print("✅ Optimized iPhone sheet preloading complete")
+                    }
+                }
+                #endif
                 
-                // Remove heavy preloading operations that cause hangs
-                // Smart Study and other services will initialize when actually needed
+                // Global folder data preloading for all platforms
+                Task.detached(priority: .background) {
+                    // Pre-load folder data from UserDefaults to warm up the cache
+                    if let _ = UserDefaults.standard.data(forKey: "SavedFolders") {
+                        // Just accessing it loads it into memory cache
+                    }
+                }
+                
+                // Preload Smart Study after a short delay to avoid first-tap freeze
+                if !smartStudyPreloaded {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                        preloadSmartStudy()
+                    }
+                }
                 
                 // Debug logging for iOS navigation (both iPad and iPhone now use iPad interface)
                 #if os(iOS)
@@ -631,7 +553,29 @@ struct MainLayout: View {
                 }
             }
             .overlay {
-                #if os(macOS)
+                #if os(iOS)
+                if UIDevice.current.userInterfaceIdiom != .phone {
+                    if showRecentlyDeletedModal {
+                        ZStack {
+                            Color.clear
+                                .contentShape(Rectangle())
+                                .ignoresSafeArea()
+                                .onTapGesture {
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        showRecentlyDeletedModal = false
+                                    }
+                                }
+                            RecentlyDeletedView(isPresented: $showRecentlyDeletedModal)
+                                .fixedSize()
+                                .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 10)
+                                .transition(.asymmetric(
+                                    insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .center)),
+                                    removal: .opacity.combined(with: .scale(scale: 0.95, anchor: .center))
+                                ))
+                        }
+                    }
+                }
+                #else
                 if showRecentlyDeletedModal {
                     ZStack {
                         Color.clear
@@ -654,7 +598,35 @@ struct MainLayout: View {
                 #endif
             }
             .overlay {
-                #if os(macOS)
+                #if os(iOS)
+                if UIDevice.current.userInterfaceIdiom != .phone {
+                    if showSmartStudyModal {
+                        ZStack {
+                            Color.clear
+                                .contentShape(Rectangle())
+                                .ignoresSafeArea()
+                                .onTapGesture {
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        showSmartStudyModal = false
+                                    }
+                                }
+                            LazyModalContainer {
+                                SmartStudyView(onDismiss: {
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        showSmartStudyModal = false
+                                    }
+                                })
+                            }
+                            .fixedSize()
+                            .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 10)
+                            .transition(.asymmetric(
+                                insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .center)),
+                                removal: .opacity.combined(with: .scale(scale: 0.95, anchor: .center))
+                            ))
+                        }
+                    }
+                }
+                #else
                 if showSmartStudyModal {
                     ZStack {
                         Color.clear
@@ -682,7 +654,35 @@ struct MainLayout: View {
                 }
                 #endif
             }
-
+            .overlay {
+                #if os(iOS)
+                if UIDevice.current.userInterfaceIdiom != .phone {
+                    if showBibleReaderModal {
+                        ZStack {
+                            Color.clear
+                                .contentShape(Rectangle())
+                                .ignoresSafeArea()
+                                .onTapGesture {
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        showBibleReaderModal = false
+                                    }
+                                }
+                            BibleReaderView(onDismiss: {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    showBibleReaderModal = false
+                                }
+                            })
+                            .fixedSize()
+                            .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 10)
+                            .transition(.asymmetric(
+                                insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .center)),
+                                removal: .opacity.combined(with: .scale(scale: 0.95, anchor: .center))
+                            ))
+                        }
+                    }
+                }
+                #endif
+            }
     }
     
     // Extracted Left Sidebar Content
@@ -790,8 +790,8 @@ struct MainLayout: View {
                                                                 }
                                                             }
                                                         }
-                                                        if horizontalSizeClass == .compact { showLeftSidebarSheet = false }
-                                                    },
+                                if horizontalSizeClass == .compact { showLeftSidebarSheet = false }
+                            },
                             tooltip: "Color Scheme: \(appearanceController.selectedScheme.rawValue)", activePopup: $activePopup, document: $document,
                             sidebarMode: $sidebarMode, isRightSidebarVisible: $isRightSidebarVisible,
                             folders: $folders, onAddFolder: addFolder
