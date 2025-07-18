@@ -419,49 +419,63 @@ class UserLibraryService: ObservableObject {
     
     // Make saveItems internal so it can be called from LibraryView
     func saveItems() {
-        guard let metadataURL = getLibraryMetadataURL() else {
-            print("❌ Cannot save library metadata: iCloud container URL not available.")
-            return
-        }
-        
-        do {
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = .prettyPrinted // Optional: for readability
-            let data = try encoder.encode(libraryItems)
-            try data.write(to: metadataURL, options: .atomic)
-            print("☁️ Library metadata saved to iCloud: \(metadataURL.path) with \(libraryItems.count) items")
-            // Print a summary of item types
-            let pdfCount = libraryItems.filter { $0.type == .pdf }.count
-            let webCount = libraryItems.filter { $0.type == .webLink }.count
-            let fileCount = libraryItems.filter { $0.type == .file }.count
-            print("  - PDFs: \(pdfCount), Web Links: \(webCount), Files: \(fileCount)")
-        } catch {
-            print("❌ Error saving library metadata to iCloud: \(error.localizedDescription)")
+        // Move iCloud save operations to background thread
+        Task.detached(priority: .utility) {
+            guard let metadataURL = self.getLibraryMetadataURL() else {
+                print("❌ Cannot save library metadata: iCloud container URL not available.")
+                return
+            }
+            
+            do {
+                let encoder = JSONEncoder()
+                encoder.outputFormatting = .prettyPrinted // Optional: for readability
+                let data = try encoder.encode(self.libraryItems)
+                try data.write(to: metadataURL, options: .atomic)
+                print("☁️ Library metadata saved to iCloud: \(metadataURL.path) with \(self.libraryItems.count) items")
+                // Print a summary of item types
+                let pdfCount = self.libraryItems.filter { $0.type == .pdf }.count
+                let webCount = self.libraryItems.filter { $0.type == .webLink }.count
+                let fileCount = self.libraryItems.filter { $0.type == .file }.count
+                print("  - PDFs: \(pdfCount), Web Links: \(webCount), Files: \(fileCount)")
+            } catch {
+                print("❌ Error saving library metadata to iCloud: \(error.localizedDescription)")
+            }
         }
     }
     
     private func loadItems() {
-        guard let metadataURL = getLibraryMetadataURL() else {
-            print("❌ Cannot load library metadata: iCloud container URL not available.")
-            self.libraryItems = []
-            return
-        }
-        
-        guard FileManager.default.fileExists(atPath: metadataURL.path) else {
-             print("☁️ No saved library metadata found at iCloud location: \(metadataURL.path)")
-             self.libraryItems = [] // Ensure it's empty if file doesn't exist
-            return
-        }
-        
-        do {
-            let data = try Data(contentsOf: metadataURL)
-            libraryItems = try JSONDecoder().decode([UserLibraryItem].self, from: data)
-            print("☁️ Loaded \(libraryItems.count) library items from iCloud: \(metadataURL.path)")
-        } catch {
-            print("‼️ Failed to load/decode library items from iCloud: \(error). Clearing potentially corrupt data or starting fresh.")
-            // Optionally try to delete the corrupt file?
-            // try? FileManager.default.removeItem(at: metadataURL)
-            self.libraryItems = [] // Reset to empty state
+        // Move iCloud operations to background thread to prevent main thread blocking
+        Task.detached(priority: .utility) {
+            guard let metadataURL = self.getLibraryMetadataURL() else {
+                print("❌ Cannot load library metadata: iCloud container URL not available.")
+                await MainActor.run {
+                    self.libraryItems = []
+                }
+                return
+            }
+            
+            guard FileManager.default.fileExists(atPath: metadataURL.path) else {
+                 print("☁️ No saved library metadata found at iCloud location: \(metadataURL.path)")
+                 await MainActor.run {
+                     self.libraryItems = [] // Ensure it's empty if file doesn't exist
+                 }
+                return
+            }
+            
+            do {
+                let data = try Data(contentsOf: metadataURL)
+                let items = try JSONDecoder().decode([UserLibraryItem].self, from: data)
+                print("☁️ Loaded \(items.count) library items from iCloud: \(metadataURL.path)")
+                
+                await MainActor.run {
+                    self.libraryItems = items
+                }
+            } catch {
+                print("‼️ Failed to load/decode library items from iCloud: \(error). Clearing potentially corrupt data or starting fresh.")
+                await MainActor.run {
+                    self.libraryItems = [] // Reset to empty state
+                }
+            }
         }
     }
     

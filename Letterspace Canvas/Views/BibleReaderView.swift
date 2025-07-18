@@ -306,26 +306,35 @@ class BibleReaderData: ObservableObject {
     private let lastReadKey = "bible_reader_last_read"
     
     init() {
-        loadBookmarks()
-        loadLastRead()
+        // Move initialization to background thread to prevent main thread blocking
+        Task.detached(priority: .utility) {
+            await self.loadBookmarks()
+            await self.loadLastRead()
+        }
     }
     
     func addBookmark(book: String, chapter: Int, verse: Int = 1, translation: String, notes: String = "") {
         let newBookmark = BibleBookmark(book: book, chapter: chapter, verse: verse, translation: translation, notes: notes)
-        bookmarks.append(newBookmark)
+        Task { @MainActor in
+            bookmarks.append(newBookmark)
+        }
         saveBookmarks()
     }
     
     func removeBookmark(at index: Int) {
         guard index < bookmarks.count else { return }
-        bookmarks.remove(at: index)
+        Task { @MainActor in
+            bookmarks.remove(at: index)
+        }
         saveBookmarks()
     }
     
     func saveLastRead(book: String, chapter: Int, translation: String) {
-        lastReadBook = book
-        lastReadChapter = chapter
-        lastReadTranslation = translation
+        Task { @MainActor in
+            lastReadBook = book
+            lastReadChapter = chapter
+            lastReadTranslation = translation
+        }
         
         let data: [String: Any] = [
             "book": book,
@@ -336,24 +345,38 @@ class BibleReaderData: ObservableObject {
         UserDefaults.standard.set(data, forKey: lastReadKey)
     }
     
-    private func loadLastRead() {
+    private func loadLastRead() async {
         if let data = UserDefaults.standard.dictionary(forKey: lastReadKey) {
-            lastReadBook = data["book"] as? String ?? "Genesis"
-            lastReadChapter = data["chapter"] as? Int ?? 1
-            lastReadTranslation = data["translation"] as? String ?? "KJV"
+            let book = data["book"] as? String ?? "Genesis"
+            let chapter = data["chapter"] as? Int ?? 1
+            let translation = data["translation"] as? String ?? "KJV"
+            
+            await MainActor.run {
+                lastReadBook = book
+                lastReadChapter = chapter
+                lastReadTranslation = translation
+            }
         }
     }
     
     private func saveBookmarks() {
-        if let encoded = try? JSONEncoder().encode(bookmarks) {
-            UserDefaults.standard.set(encoded, forKey: bookmarksKey)
+        Task.detached(priority: .utility) {
+            let bookmarksToSave = await MainActor.run {
+                return self.bookmarks
+            }
+            
+            if let encoded = try? JSONEncoder().encode(bookmarksToSave) {
+                UserDefaults.standard.set(encoded, forKey: self.bookmarksKey)
+            }
         }
     }
     
-    private func loadBookmarks() {
+    private func loadBookmarks() async {
         if let data = UserDefaults.standard.data(forKey: bookmarksKey),
            let decoded = try? JSONDecoder().decode([BibleBookmark].self, from: data) {
-            bookmarks = decoded
+            await MainActor.run {
+                bookmarks = decoded
+            }
         }
     }
 }
@@ -1769,36 +1792,37 @@ struct BibleReaderView: View {
         
         errorMessage = nil
         
-        Task {
+        // Move API call to background thread to prevent main thread blocking
+        Task.detached(priority: .userInitiated) {
             do {
                 let result = try await BibleAPI.fetchChapter(
                     book: book,
                     chapter: chapter,
-                    translation: selectedTranslation,
+                    translation: self.selectedTranslation,
                     focusedVerses: []
                 )
                 
                 await MainActor.run {
-                    chapterData = result
+                    self.chapterData = result
                     #if os(iOS)
                     let isPhone = UIDevice.current.userInterfaceIdiom == .phone
                     if !isPhone {
-                        isLoading = false
+                        self.isLoading = false
                     }
                     #else
-                    isLoading = false
+                    self.isLoading = false
                     #endif
                 }
             } catch {
                 await MainActor.run {
-                    errorMessage = error.localizedDescription
+                    self.errorMessage = error.localizedDescription
                     #if os(iOS)
                     let isPhone = UIDevice.current.userInterfaceIdiom == .phone
                     if !isPhone {
-                        isLoading = false
+                        self.isLoading = false
                     }
                     #else
-                    isLoading = false
+                    self.isLoading = false
                     #endif
                 }
             }

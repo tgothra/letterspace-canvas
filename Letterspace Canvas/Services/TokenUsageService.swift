@@ -112,15 +112,26 @@ class TokenUsageService: ObservableObject {
     }
     
     private func loadFromUserDefaults() {
-        print("📱 Loading token usage from local storage")
-        currentUsage = UserDefaults.standard.integer(forKey: "com.letterspace.geminiTokenUsage")
-        additionalTokensPurchased = UserDefaults.standard.integer(forKey: "com.letterspace.additionalTokens")
-        
-        if let savedDate = UserDefaults.standard.object(forKey: "com.letterspace.tokenResetDate") as? Date {
-            resetDate = savedDate
-        } else {
-            resetDate = calculateNextResetDate()
-            saveToUserDefaults()
+        // Move UserDefaults operations to background thread
+        Task.detached(priority: .utility) {
+            print("📱 Loading token usage from local storage")
+            let usage = UserDefaults.standard.integer(forKey: "com.letterspace.geminiTokenUsage")
+            let additional = UserDefaults.standard.integer(forKey: "com.letterspace.additionalTokens")
+            
+            var resetDate: Date
+            if let savedDate = UserDefaults.standard.object(forKey: "com.letterspace.tokenResetDate") as? Date {
+                resetDate = savedDate
+            } else {
+                resetDate = self.calculateNextResetDate()
+                // Save the new reset date
+                UserDefaults.standard.set(resetDate, forKey: "com.letterspace.tokenResetDate")
+            }
+            
+            await MainActor.run {
+                self.currentUsage = usage
+                self.additionalTokensPurchased = additional
+                self.resetDate = resetDate
+            }
         }
     }
     
@@ -270,10 +281,13 @@ class TokenUsageService: ObservableObject {
     }
     
     private func saveToUserDefaults() {
-        UserDefaults.standard.set(currentUsage, forKey: "com.letterspace.geminiTokenUsage")
-        UserDefaults.standard.set(additionalTokensPurchased, forKey: "com.letterspace.additionalTokens")
-        UserDefaults.standard.set(resetDate, forKey: "com.letterspace.tokenResetDate")
-        print("📱 Saved token usage to local storage")
+        // Move UserDefaults operations to background thread
+        Task.detached(priority: .utility) {
+            UserDefaults.standard.set(self.currentUsage, forKey: "com.letterspace.geminiTokenUsage")
+            UserDefaults.standard.set(self.additionalTokensPurchased, forKey: "com.letterspace.additionalTokens")
+            UserDefaults.standard.set(self.resetDate, forKey: "com.letterspace.tokenResetDate")
+            print("📱 Saved token usage to local storage")
+        }
     }
     
     // MARK: - CloudKit Subscriptions (for real-time sync)
