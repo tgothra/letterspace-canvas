@@ -1279,18 +1279,18 @@ struct FoldersView: View {
                 // iPhone: Use NavigationStack (iOS 16+) for better performance, fallback to VStack for older iOS
                 if #available(iOS 16.0, *) {
                     NavigationStack {
-                        FoldersPopupContent(
-                            activePopup: $activePopup,
-                            folders: $folders,
-                            document: $document,
-                            sidebarMode: $sidebarMode,
-                            isRightSidebarVisible: $isRightSidebarVisible,
-                            onAddFolder: addFolder,
-                            showHeader: false // Don't show header since we have navigation title
-                        )
-                        .navigationTitle("Folders")
+                    FoldersPopupContent(
+                        activePopup: $activePopup,
+                        folders: $folders,
+                        document: $document,
+                        sidebarMode: $sidebarMode,
+                        isRightSidebarVisible: $isRightSidebarVisible,
+                        onAddFolder: addFolder,
+                        showHeader: false // Don't show header since we have navigation title
+                    )
+                    .navigationTitle("Folders")
                         #if os(iOS)
-                        .navigationBarTitleDisplayMode(.inline)
+                    .navigationBarTitleDisplayMode(.inline)
                         #endif
                         .toolbar {
                             ToolbarItem(placement: {
@@ -1351,7 +1351,7 @@ struct FoldersView: View {
             if UIDevice.current.userInterfaceIdiom == .phone {
                 // iPhone: Defer heavy folder loading to avoid blocking sheet presentation
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    loadFolders()
+            loadFolders()
                 }
             } else {
                 // iPad: Load folders normally  

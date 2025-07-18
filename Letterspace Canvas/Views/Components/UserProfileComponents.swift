@@ -277,7 +277,7 @@ struct UserProfilePopupContent: View {
                                         .padding(.vertical, 6)
                                         .background(theme.accent.opacity(0.1))
                                         .cornerRadius(6)
-                                }
+                                    }
                                 .buttonStyle(.plain)
                             }
                             

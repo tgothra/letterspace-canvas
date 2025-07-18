@@ -136,162 +136,214 @@ struct RecentlyDeletedView: View {
         let isPhone = UIDevice.current.userInterfaceIdiom == .phone
         #endif
         
-        VStack(spacing: 0) {
-            // Header
-            VStack(spacing: 4) {
-                HStack {
-                    Text("Recently Deleted")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(theme.primary)
-                    Spacer()
-                    
-                    if !deletedDocuments.isEmpty {
-                        Button(action: deleteAllPermanently) {
-                            HStack(spacing: 4) {
-                                Image(systemName: "trash")
-                                    .font(.system(size: 10))
-                                    .frame(width: 24, height: 24)
-                                    .background(Color.red.opacity(0.1))
-                                    .clipShape(Circle())
-                                Text("Delete All Permanently")
-                                    .font(.system(size: 12))
+        ZStack {
+            // Dismiss layer
+            Color.clear
+                .contentShape(Rectangle())
+                .ignoresSafeArea()
+                .onTapGesture {
+                    withAnimation(.spring(response: 0.5, dampingFraction: 0.9)) {
+                        isPresented = false
+                    }
+                }
+            
+            // Modal content
+            VStack(spacing: 0) {
+                // Header
+                VStack(spacing: 4) {
+                    HStack {
+                        Text("Recently Deleted")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(theme.primary)
+                        Spacer()
+                        
+                        if !deletedDocuments.isEmpty {
+                            Button(action: deleteAllPermanently) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "trash")
+                                        .font(.system(size: 10))
+                                        .frame(width: 24, height: 24)
+                                        .background(Color.red.opacity(0.1))
+                                        .clipShape(Circle())
+                                    Text("Delete All Permanently")
+                                        .font(.system(size: 12))
+                                }
+                                .foregroundStyle(Color.red)
                             }
-                            .foregroundStyle(Color.red)
+                            .buttonStyle(.plain)
+                            .padding(.trailing, 8)
+                        }
+                        
+                        Button(action: { 
+                            withAnimation(.spring(response: 0.5, dampingFraction: 0.9)) {
+                                isPresented = false
+                            }
+                        }) {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundColor(.white)
+                                .frame(width: 22, height: 22)
+                                .background(
+                                    Circle()
+                                        .fill(isHoveringClose ? Color.red : Color.gray.opacity(0.5))
+                                )
                         }
                         .buttonStyle(.plain)
-                        .padding(.trailing, 8)
+                        .onHover { hovering in
+                            isHoveringClose = hovering
+                        }
                     }
                     
-                    Button(action: { 
-                        withAnimation(.spring(response: 0.5, dampingFraction: 0.9)) {
-                            isPresented = false
-                        }
-                    }) {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundColor(.white)
-                            .frame(width: 22, height: 22)
-                            .background(
-                                Circle()
-                                    .fill(isHoveringClose ? Color.red : Color.gray.opacity(0.5))
-                            )
-                    }
-                    .buttonStyle(.plain)
-                    .onHover { hovering in
-                        isHoveringClose = hovering
-                    }
+                    Text("Documents will be permanently deleted after 30 days")
+                        .font(.system(size: 11))
+                        .italic()
+                        .foregroundStyle(theme.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .padding(.bottom, 16)
                 
-                Text("Documents will be permanently deleted after 30 days")
-                    .font(.system(size: 11))
-                    .italic()
-                    .foregroundStyle(theme.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .padding(.bottom, 16)
-            
-            if isLoading {
-                ProgressView()
+                if isLoading {
+                    ProgressView()
+                        .frame(maxHeight: .infinity)
+                } else if deletedDocuments.isEmpty {
+                    VStack(spacing: 12) {
+                        Image(systemName: "trash")
+                            .font(.system(size: 32))
+                            .foregroundStyle(theme.secondary)
+                        Text("No Recently Deleted Documents")
+                            .font(.system(size: 14))
+                            .foregroundStyle(theme.secondary)
+                    }
                     .frame(maxHeight: .infinity)
-            } else if deletedDocuments.isEmpty {
-                VStack(spacing: 12) {
-                    Image(systemName: "trash")
-                        .font(.system(size: 32))
-                        .foregroundStyle(theme.secondary)
-                    Text("No Recently Deleted Documents")
-                        .font(.system(size: 14))
-                        .foregroundStyle(theme.secondary)
-                }
-                .frame(maxHeight: .infinity)
-            } else {
-                // Document List
-                ScrollView {
-                    LazyVStack(spacing: 4) {
-                        ForEach(Array(deletedDocuments.enumerated()), id: \.element.document.id) { index, deletedDoc in
-                            DeletedDocumentRow(
-                                document: deletedDoc,
-                                isSelected: selectedDocuments.contains(deletedDoc.document.id),
-                                onRestore: { restoreDocument(deletedDoc) },
-                                onDelete: { deletePermanently(deletedDoc) }
-                            )
-                            .contentShape(Rectangle())
-                            .onTapGesture(count: 1) { location in
-                                #if os(macOS)
-                                let event = NSApp.currentEvent
-                                let isCommandPressed = event?.modifierFlags.contains(.command) == true
-                                let isShiftPressed = event?.modifierFlags.contains(.shift) == true
-                                #elseif os(iOS)
-                                // On iOS, we'll handle multi-selection differently
-                                // For now, just do single selection
-                                let isCommandPressed = false
-                                let isShiftPressed = false
-                                #endif
-                                
-                                if isCommandPressed {
-                                    // Command-click for multi-select
-                                    if selectedDocuments.contains(deletedDoc.document.id) {
-                                        selectedDocuments.remove(deletedDoc.document.id)
-                                    } else {
-                                        selectedDocuments.insert(deletedDoc.document.id)
-                                    }
-                                } else if isShiftPressed, let lastIndex = lastSelectedIndex {
-                                    // Shift-click for range select
-                                    let currentIndex = deletedDocuments.firstIndex(where: { $0.document.id == deletedDoc.document.id }) ?? 0
-                                    let startIndex = min(lastIndex, currentIndex)
-                                    let endIndex = max(lastIndex, currentIndex)
+                } else {
+                    // Document List
+                    ScrollView {
+                        LazyVStack(spacing: 4) {
+                            ForEach(Array(deletedDocuments.enumerated()), id: \.element.document.id) { index, deletedDoc in
+                                DeletedDocumentRow(
+                                    document: deletedDoc,
+                                    isSelected: selectedDocuments.contains(deletedDoc.document.id),
+                                    onRestore: { restoreDocument(deletedDoc) },
+                                    onDelete: { deletePermanently(deletedDoc) }
+                                )
+                                .contentShape(Rectangle())
+                                .onTapGesture(count: 1) { location in
+                                    #if os(macOS)
+                                    let event = NSApp.currentEvent
+                                    let isCommandPressed = event?.modifierFlags.contains(.command) == true
+                                    let isShiftPressed = event?.modifierFlags.contains(.shift) == true
+                                    #elseif os(iOS)
+                                    // On iOS, we'll handle multi-selection differently
+                                    // For now, just do single selection
+                                    let isCommandPressed = false
+                                    let isShiftPressed = false
+                                    #endif
                                     
-                                    for i in startIndex...endIndex {
-                                        if i < deletedDocuments.count {
-                                            selectedDocuments.insert(deletedDocuments[i].document.id)
+                                    if isCommandPressed {
+                                        // Command+click: Toggle selection
+                                        if selectedDocuments.contains(deletedDoc.document.id) {
+                                            selectedDocuments.remove(deletedDoc.document.id)
+                                        } else {
+                                            selectedDocuments.insert(deletedDoc.document.id)
                                         }
+                                        lastSelectedIndex = index
+                                    } else if isShiftPressed {
+                                        // Shift+click: Range selection
+                                        if let lastIndex = lastSelectedIndex {
+                                            let range = lastIndex < index ? 
+                                                lastIndex...index : 
+                                                index...lastIndex
+                                            
+                                            for i in range {
+                                                selectedDocuments.insert(deletedDocuments[i].document.id)
+                                            }
+                                        } else {
+                                            // If no previous selection, just select this one
+                                            selectedDocuments = [deletedDoc.document.id]
+                                        }
+                                        lastSelectedIndex = index
+                                    } else {
+                                        // Normal click: Single selection
+                                        selectedDocuments = [deletedDoc.document.id]
+                                        lastSelectedIndex = index
                                     }
-                                } else {
-                                    // Single selection
-                                    selectedDocuments.removeAll()
-                                    selectedDocuments.insert(deletedDoc.document.id)
-                                    lastSelectedIndex = deletedDocuments.firstIndex(where: { $0.document.id == deletedDoc.document.id })
                                 }
                             }
                         }
+                        .padding(.vertical, 4)
                     }
-                    .padding(.vertical, 4)
-                }
-                .frame(maxHeight: .infinity)
-                
-                Divider()
-                    .padding(.vertical, 16)
-                
-                // Footer with actions
-                HStack {
-                    Text("\(selectedDocuments.count) selected")
-                        .font(.system(size: 12))
-                        .foregroundStyle(theme.secondary)
-                        .opacity(selectedDocuments.isEmpty ? 0 : 1)
+                    .frame(maxHeight: .infinity)
                     
-                    Spacer()
+                    Divider()
+                        .padding(.vertical, 16)
                     
-                    if !selectedDocuments.isEmpty {
-                        HStack(spacing: 8) {
-                            ActionButton(
-                                title: "Restore Selected",
-                                color: .blue,
-                                action: restoreSelectedDocuments
-                            )
-                            
-                            ActionButton(
-                                title: "Delete Permanently",
-                                color: .red,
-                                action: deleteSelectedPermanently
-                            )
+                    // Footer with actions
+                    HStack {
+                        Text("\(selectedDocuments.count) selected")
+                            .font(.system(size: 12))
+                            .foregroundStyle(theme.secondary)
+                            .opacity(selectedDocuments.isEmpty ? 0 : 1)
+                        
+                        Spacer()
+                        
+                        if !selectedDocuments.isEmpty {
+                            HStack(spacing: 8) {
+                                ActionButton(
+                                    title: "Restore Selected",
+                                    color: .blue,
+                                    action: restoreSelectedDocuments
+                                )
+                                
+                                ActionButton(
+                                    title: "Delete Permanently",
+                                    color: .red,
+                                    action: deleteSelectedPermanently
+                                )
+                            }
                         }
                     }
                 }
             }
+            .padding(24)
+            .applyIf(!({
+                #if os(iOS)
+                UIDevice.current.userInterfaceIdiom == .phone
+                #else
+                false
+                #endif
+            }()), {
+                $0.frame(width: {
+                    #if os(iOS)
+                    let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                    return isPhone ? 340 : 500  // Smaller for iPhone, larger for iPad
+                    #else
+                    return 500 // macOS default
+                    #endif
+                }(), height: {
+                    #if os(iOS)
+                    let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                    return isPhone ? 600 : 700  // Constrain height for iPhone
+                    #else
+                    return 600 // macOS default
+                    #endif
+                }())
+                .background({
+                    #if os(macOS)
+                    colorScheme == .dark ? Color(.controlBackgroundColor) : Color.white
+                    #elseif os(iOS)
+                    colorScheme == .dark ? Color(.systemBackground) : Color.white
+                    #endif
+                }())
+                .cornerRadius(12)
+                .shadow(color: Color.black.opacity(0.25), radius: 25, x: 0, y: 10)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(theme.secondary.opacity(0.1), lineWidth: 1)
+                )
+            })
+            .opacity(appearanceOpacity)
+            .scaleEffect(appearanceOpacity * 0.05 + 0.95, anchor: .center)
         }
-        .padding(24)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .opacity(appearanceOpacity)
-        .scaleEffect(appearanceOpacity * 0.05 + 0.95, anchor: .center)
         .onAppear {
             // Start loading documents immediately
             Task {

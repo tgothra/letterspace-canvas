@@ -259,15 +259,8 @@ struct MainLayout: View {
                 .presentationBackground(.ultraThinMaterial)
                 #if os(iOS)
                 .presentationDetents([
-                    .large,
-                    .custom(resolver: { context in
-                        // iPad: Use larger size, iPhone: Use standard large
-                        if UIDevice.current.userInterfaceIdiom == .pad {
-                            return context.maxHeight * 0.9 // 90% of screen height for iPad
-                        } else {
-                            return context.maxHeight * 0.8 // 80% for iPhone
-                        }
-                    })
+                    UIDevice.current.userInterfaceIdiom == .pad ? .height(800) : .large,
+                    .large
                 ])
                 .presentationDragIndicator(.visible)
                 #endif
@@ -279,14 +272,8 @@ struct MainLayout: View {
                 .presentationBackground(.ultraThinMaterial)
                 #if os(iOS)
                 .presentationDetents([
-                    .large,
-                    .custom(resolver: { context in
-                        if UIDevice.current.userInterfaceIdiom == .pad {
-                            return context.maxHeight * 0.85 // 85% for iPad
-                        } else {
-                            return context.maxHeight * 0.8 // 80% for iPhone
-                        }
-                    })
+                    UIDevice.current.userInterfaceIdiom == .pad ? .height(700) : .large,
+                    .large
                 ])
                 .presentationDragIndicator(.visible)
                 #endif
@@ -298,14 +285,8 @@ struct MainLayout: View {
                 .presentationBackground(.ultraThinMaterial)
                 #if os(iOS)
                 .presentationDetents([
-                    .large,
-                    .custom(resolver: { context in
-                        if UIDevice.current.userInterfaceIdiom == .pad {
-                            return context.maxHeight * 0.85 // 85% for iPad
-                        } else {
-                            return context.maxHeight * 0.8 // 80% for iPhone
-                        }
-                    })
+                    UIDevice.current.userInterfaceIdiom == .pad ? .height(700) : .large,
+                    .large
                 ])
                 .presentationDragIndicator(.visible)
                 #endif
@@ -317,14 +298,8 @@ struct MainLayout: View {
                 .presentationBackground(.ultraThinMaterial)
                 #if os(iOS)
                 .presentationDetents([
-                    .large,
-                    .custom(resolver: { context in
-                        if UIDevice.current.userInterfaceIdiom == .pad {
-                            return context.maxHeight * 0.9 // 90% for iPad
-                        } else {
-                            return context.maxHeight * 0.8 // 80% for iPhone
-                        }
-                    })
+                    UIDevice.current.userInterfaceIdiom == .pad ? .height(800) : .large,
+                    .large
                 ])
                 .presentationDragIndicator(.visible)
                 #endif
@@ -335,14 +310,8 @@ struct MainLayout: View {
                     .presentationBackground(.ultraThinMaterial)
                     #if os(iOS)
                     .presentationDetents([
-                        .large,
-                        .custom(resolver: { context in
-                            if UIDevice.current.userInterfaceIdiom == .pad {
-                                return context.maxHeight * 0.85 // 85% for iPad
-                            } else {
-                                return context.maxHeight * 0.8 // 80% for iPhone
-                            }
-                        })
+                        UIDevice.current.userInterfaceIdiom == .pad ? .height(600) : .large,
+                        .large
                     ])
                     .presentationDragIndicator(.visible)
                     #endif

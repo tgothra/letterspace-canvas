@@ -599,9 +599,9 @@ struct SmartStudyView: View {
                     
                     // Defer data loading to avoid blocking sheet presentation
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                        Task.detached(priority: .utility) {
-                            await MainActor.run {
-                                loadSavedQAs()
+                    Task.detached(priority: .utility) {
+                        await MainActor.run {
+                loadSavedQAs()
                             }
                         }
                     }
@@ -757,8 +757,8 @@ struct SmartStudyView: View {
                         Spacer()
                     }
                     .background(theme.surface)
-                    .presentationDetents([.medium, .large])
-                    .presentationDragIndicator(.visible)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
                 }
             }
             .sheet(isPresented: $showingScripturePopup) {

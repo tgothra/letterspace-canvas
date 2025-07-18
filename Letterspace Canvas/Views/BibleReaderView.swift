@@ -562,22 +562,22 @@ struct BibleReaderView: View {
             if isPhone {
                 // Defer content loading to avoid blocking sheet presentation
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    Task {
-                        do {
-                            let result = try await BibleAPI.fetchChapter(
-                                book: selectedBook,
-                                chapter: selectedChapter,
-                                translation: selectedTranslation,
-                                focusedVerses: []
-                            )
-                            
-                            await MainActor.run {
-                                chapterData = result
-                                // Don't change isLoading state to prevent layout changes
-                            }
-                        } catch {
-                            await MainActor.run {
-                                errorMessage = error.localizedDescription
+                Task {
+                    do {
+                        let result = try await BibleAPI.fetchChapter(
+                            book: selectedBook,
+                            chapter: selectedChapter,
+                            translation: selectedTranslation,
+                            focusedVerses: []
+                        )
+                        
+                        await MainActor.run {
+                            chapterData = result
+                            // Don't change isLoading state to prevent layout changes
+                        }
+                    } catch {
+                        await MainActor.run {
+                            errorMessage = error.localizedDescription
                             }
                         }
                     }

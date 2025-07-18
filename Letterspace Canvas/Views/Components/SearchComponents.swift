@@ -1147,7 +1147,7 @@ struct SearchPopupContent: View {
                 return 16 // More spacious padding for iPad
                 #endif
             }())
-        }
+                                    }
         .onAppear {
             #if os(iOS)
             // Trigger focus immediately on iPhone
@@ -1191,17 +1191,17 @@ struct SearchView: View {
                 // iPhone: Use NavigationStack (iOS 16+) for better performance, fallback to VStack for older iOS
                 if #available(iOS 16.0, *) {
                     NavigationStack {
-                        SearchPopupContent(
-                            activePopup: $activePopup,
-                            document: $document,
-                            sidebarMode: $sidebarMode,
-                            isRightSidebarVisible: $isRightSidebarVisible,
-                            onDismiss: onDismiss
-                        )
+                    SearchPopupContent(
+                        activePopup: $activePopup,
+                        document: $document,
+                        sidebarMode: $sidebarMode,
+                        isRightSidebarVisible: $isRightSidebarVisible,
+                        onDismiss: onDismiss
+                    )
                         .background(theme.background)
-                        .navigationTitle("Search Documents")
+                    .navigationTitle("Search Documents")
                         #if os(iOS)
-                        .navigationBarTitleDisplayMode(.inline)
+                    .navigationBarTitleDisplayMode(.inline)
                         #endif
                         .toolbar {
                             ToolbarItem(placement: {
@@ -1211,7 +1211,7 @@ struct SearchView: View {
                                 .automatic
                                 #endif
                             }()) {
-                                Button("Done", action: onDismiss)
+                        Button("Done", action: onDismiss)
                                     .foregroundColor(theme.accent)
                             }
                         }

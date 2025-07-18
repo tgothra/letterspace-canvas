@@ -71,7 +71,7 @@ struct BibleGlobalSearchModal: View {
                         }
                 }
             } else {
-                NavigationView {
+        NavigationView {
                     searchContentView
                         .navigationTitle("Bible Search")
                         .toolbar {
@@ -89,76 +89,76 @@ struct BibleGlobalSearchModal: View {
     }
     
     private var searchContentView: some View {
-        VStack(spacing: 0) {
-            // Jump-to-Reference
-            HStack {
-                TextField("Jump to reference (e.g. John 3:16)", text: $jumpReference, onCommit: jumpToReference)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                    #if os(iOS)
-                    .autocapitalization(.words)
-                    .disableAutocorrection(true)
-                    #endif
-                    .focused($isJumpFieldFocused)
-                    .padding(.vertical, 8)
-                    .padding(.horizontal, 12)
-                Button(action: jumpToReference) {
-                    Image(systemName: "arrow.right.circle.fill")
-                        .font(.system(size: 22))
-                        .foregroundColor(.blue)
-                }
-                .padding(.trailing, 12)
-            }
-            #if os(iOS)
-            .background(Color(.secondarySystemBackground))
-            #else
-            .background(Color(NSColor.controlBackgroundColor))
-            #endif
-            .cornerRadius(10)
-            .padding(.top, 20)
-            .padding(.horizontal, 16)
-            
-            Divider().padding(.vertical, 8)
-            
-            // Global Search
-            VStack(spacing: 16) {
-                TextField("Search the Bible...", text: $searchText, onCommit: performSearch)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                    #if os(iOS)
-                    .autocapitalization(.words)
-                    .disableAutocorrection(true)
-                    #endif
-                    .padding(.horizontal, 16)
-                
-                if isSearching {
-                    ProgressView("Searching...")
-                        .padding()
-                } else if let errorMessage = errorMessage {
-                    Text(errorMessage)
-                        .foregroundColor(.red)
-                        .padding()
-                } else if !searchResults.isEmpty {
-                    List(searchResults, id: \.reference) { verse in
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(verse.reference)
-                                .font(.headline)
-                            Text(verse.text)
-                                .font(.body)
-                                .foregroundColor(.secondary)
-                        }
-                        .onTapGesture {
-                            selectVerse(verse)
-                        }
+            VStack(spacing: 0) {
+                // Jump-to-Reference
+                HStack {
+                    TextField("Jump to reference (e.g. John 3:16)", text: $jumpReference, onCommit: jumpToReference)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                        #if os(iOS)
+                        .autocapitalization(.words)
+                        .disableAutocorrection(true)
+                        #endif
+                        .focused($isJumpFieldFocused)
+                        .padding(.vertical, 8)
+                        .padding(.horizontal, 12)
+                    Button(action: jumpToReference) {
+                        Image(systemName: "arrow.right.circle.fill")
+                            .font(.system(size: 22))
+                            .foregroundColor(.blue)
                     }
-                    #if os(iOS)
-                    .listStyle(PlainListStyle())
-                    #endif
-                } else {
-                    Text("Enter a search term to find verses")
-                        .foregroundColor(.secondary)
-                        .padding()
-                    Spacer()
+                    .padding(.trailing, 12)
                 }
-            }
+                #if os(iOS)
+                .background(Color(.secondarySystemBackground))
+                #else
+                .background(Color(NSColor.controlBackgroundColor))
+                #endif
+                .cornerRadius(10)
+                .padding(.top, 20)
+                .padding(.horizontal, 16)
+                
+                Divider().padding(.vertical, 8)
+                
+                // Global Search
+                VStack(spacing: 16) {
+                    TextField("Search the Bible...", text: $searchText, onCommit: performSearch)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                        #if os(iOS)
+                        .autocapitalization(.words)
+                        .disableAutocorrection(true)
+                        #endif
+                        .padding(.horizontal, 16)
+                    
+                    if isSearching {
+                        ProgressView("Searching...")
+                            .padding()
+                    } else if let errorMessage = errorMessage {
+                        Text(errorMessage)
+                            .foregroundColor(.red)
+                            .padding()
+                    } else if !searchResults.isEmpty {
+                        List(searchResults, id: \.reference) { verse in
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(verse.reference)
+                                    .font(.headline)
+                                Text(verse.text)
+                                    .font(.body)
+                                    .foregroundColor(.secondary)
+                            }
+                            .onTapGesture {
+                                selectVerse(verse)
+                            }
+                        }
+                        #if os(iOS)
+                        .listStyle(PlainListStyle())
+                        #endif
+                    } else {
+                        Text("Enter a search term to find verses")
+                            .foregroundColor(.secondary)
+                            .padding()
+                        Spacer()
+                    }
+                }
         }
     }
     
