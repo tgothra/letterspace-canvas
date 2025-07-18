@@ -974,6 +974,11 @@ struct SearchPopupContent: View {
     }
     
     var groupedResults: [(String, [Letterspace_CanvasDocument])] {
+        // Early exit to avoid heavy computation on first load
+        guard !searchText.isEmpty && !searchResults.isEmpty else {
+            return []
+        }
+        
         var groups: [(String, [Letterspace_CanvasDocument])] = []
         
         // Group by title/subtitle matches
@@ -1054,15 +1059,19 @@ struct SearchView: View {
     @Environment(\.colorScheme) var colorScheme
     let onDismiss: () -> Void
     @State private var activePopup: ActivePopup = .search
-    @State private var document = Letterspace_CanvasDocument(title: "", subtitle: "", elements: [], id: "", markers: [], series: nil, variations: [], isVariation: false, parentVariationId: nil, createdAt: Date(), modifiedAt: Date(), tags: nil, isHeaderExpanded: false, isSubtitleVisible: true, links: [])
+    @State private var document: Letterspace_CanvasDocument = {
+        // Lazy initialization to avoid blocking main thread
+        Letterspace_CanvasDocument(title: "", subtitle: "", elements: [], id: "", markers: [], series: nil, variations: [], isVariation: false, parentVariationId: nil, createdAt: Date(), modifiedAt: Date(), tags: nil, isHeaderExpanded: false, isSubtitleVisible: true, links: [])
+    }()
     @State private var sidebarMode: RightSidebar.SidebarMode = .allDocuments
     @State private var isRightSidebarVisible = false
     
     // Track if view has been initialized to avoid multiple onAppear calls
     @State private var hasInitialized = false
     
-    // Optimized loading: delay heavy content until after initial render (disabled for now since we have preloading)
-    @State private var contentReady = true // Start with true since we're preloading everything
+    // Optimized loading for iPhone - start with false and enable immediately for instant response
+    @State private var contentReady = false
+    @State private var viewReady = false
     
     // Add focus state at SearchView level for more direct control
     #if os(iOS)
@@ -1157,9 +1166,13 @@ struct SearchView: View {
             
             #if os(iOS)
             if UIDevice.current.userInterfaceIdiom == .phone {
-                print("🔍 SearchView appeared on iPhone - immediate keyboard focus and delayed content loading")
+                print("🔍 SearchView appeared on iPhone - applying Smart Study pattern")
                 
-                // Immediate keyboard focus attempts on loading view
+                // Apply Smart Study pattern: minimal work, mark as ready immediately
+                viewReady = true
+                contentReady = true
+                
+                // Immediate keyboard focus attempts
                 isSearchFocused = true
                 
                 // Force keyboard appearance at UIKit level - immediate
@@ -1183,8 +1196,11 @@ struct SearchView: View {
                     print("🔍 SearchView - 20ms focus attempt")
                 }
                 
-                // Content is already ready due to preloading - no need for delayed loading
-                print("🔍 SearchView - content ready immediately due to preloading")
+                print("🔍 SearchView - applying Smart Study instant-ready pattern")
+            } else {
+                // iPad/macOS: Normal initialization
+                contentReady = true
+                viewReady = true
             }
             #endif
         }
