@@ -257,29 +257,59 @@ struct MainLayout: View {
                     showBibleReaderModal = false
                 })
                 .presentationBackground(.ultraThinMaterial)
+                #if os(iOS)
+                .presentationDetents([
+                    .large
+                ])
+                .presentationDragIndicator(.visible)
+                #endif
             }
             .sheet(isPresented: $showFoldersModal) {
                 FoldersView(onDismiss: {
                     showFoldersModal = false
                 })
                 .presentationBackground(.ultraThinMaterial)
+                #if os(iOS)
+                .presentationDetents([
+                    .large
+                ])
+                .presentationDragIndicator(.visible)
+                #endif
             }
             .sheet(isPresented: $showSearchModal) {
                 SearchView(onDismiss: {
                     showSearchModal = false
                 })
                 .presentationBackground(.ultraThinMaterial)
+                #if os(iOS)
+                .presentationDetents([
+                    .large
+                ])
+                .presentationDragIndicator(.visible)
+                #endif
             }
             .sheet(isPresented: $showSmartStudyModal) {
                 SmartStudyView(onDismiss: {
                     showSmartStudyModal = false
                 })
                 .presentationBackground(.ultraThinMaterial)
+                #if os(iOS)
+                .presentationDetents([
+                    .large
+                ])
+                .presentationDragIndicator(.visible)
+                #endif
             }
 
             .sheet(isPresented: $showRecentlyDeletedModal) {
                 RecentlyDeletedView(isPresented: $showRecentlyDeletedModal)
                     .presentationBackground(.ultraThinMaterial)
+                    #if os(iOS)
+                    .presentationDetents([
+                        .large
+                    ])
+                    .presentationDragIndicator(.visible)
+                    #endif
             }
             .overlay {
                 #if os(macOS)
@@ -467,29 +497,7 @@ struct MainLayout: View {
                 }
             }
             .overlay {
-                #if os(iOS)
-                if UIDevice.current.userInterfaceIdiom != .phone {
-                    if showRecentlyDeletedModal {
-                        ZStack {
-                            Color.clear
-                                .contentShape(Rectangle())
-                                .ignoresSafeArea()
-                                .onTapGesture {
-                                    withAnimation(.easeInOut(duration: 0.2)) {
-                                        showRecentlyDeletedModal = false
-                                    }
-                                }
-                            RecentlyDeletedView(isPresented: $showRecentlyDeletedModal)
-                                .fixedSize()
-                                .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 10)
-                                .transition(.asymmetric(
-                                    insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .center)),
-                                    removal: .opacity.combined(with: .scale(scale: 0.95, anchor: .center))
-                                ))
-                        }
-                    }
-                }
-                #else
+                #if os(macOS)
                 if showRecentlyDeletedModal {
                     ZStack {
                         Color.clear
@@ -512,35 +520,7 @@ struct MainLayout: View {
                 #endif
             }
             .overlay {
-                #if os(iOS)
-                if UIDevice.current.userInterfaceIdiom != .phone {
-                    if showSmartStudyModal {
-                        ZStack {
-                            Color.clear
-                                .contentShape(Rectangle())
-                                .ignoresSafeArea()
-                                .onTapGesture {
-                                    withAnimation(.easeInOut(duration: 0.2)) {
-                                        showSmartStudyModal = false
-                                    }
-                                }
-                            LazyModalContainer {
-                                SmartStudyView(onDismiss: {
-                                    withAnimation(.easeInOut(duration: 0.2)) {
-                                        showSmartStudyModal = false
-                                    }
-                                })
-                            }
-                            .fixedSize()
-                            .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 10)
-                            .transition(.asymmetric(
-                                insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .center)),
-                                removal: .opacity.combined(with: .scale(scale: 0.95, anchor: .center))
-                            ))
-                        }
-                    }
-                }
-                #else
+                #if os(macOS)
                 if showSmartStudyModal {
                     ZStack {
                         Color.clear
@@ -568,35 +548,7 @@ struct MainLayout: View {
                 }
                 #endif
             }
-            .overlay {
-                #if os(iOS)
-                if UIDevice.current.userInterfaceIdiom != .phone {
-                    if showBibleReaderModal {
-                        ZStack {
-                            Color.clear
-                                .contentShape(Rectangle())
-                                .ignoresSafeArea()
-                                .onTapGesture {
-                                    withAnimation(.easeInOut(duration: 0.2)) {
-                                        showBibleReaderModal = false
-                                    }
-                                }
-                            BibleReaderView(onDismiss: {
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    showBibleReaderModal = false
-                                }
-                            })
-                            .fixedSize()
-                            .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 10)
-                            .transition(.asymmetric(
-                                insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .center)),
-                                removal: .opacity.combined(with: .scale(scale: 0.95, anchor: .center))
-                            ))
-                        }
-                    }
-                }
-                #endif
-            }
+
     }
     
     // Extracted Left Sidebar Content
