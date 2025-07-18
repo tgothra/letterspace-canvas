@@ -1089,7 +1089,7 @@ struct SearchView: View {
                 // iPhone: Use NavigationView like Bible Reader search modal
                 NavigationView {
                     Group {
-                        if contentReady {
+                        if viewReady {
                             SearchPopupContent(
                                 activePopup: $activePopup,
                                 document: $document,
@@ -1098,7 +1098,7 @@ struct SearchView: View {
                                 onDismiss: onDismiss
                             )
                         } else {
-                            // Minimal loading view with immediate search field
+                            // Minimal loading view with immediate search field - like SmartStudyView pattern
                             VStack(spacing: 20) {
                                 // Immediate search field for instant keyboard focus
                                 HStack(spacing: 8) {
@@ -1166,13 +1166,12 @@ struct SearchView: View {
             
             #if os(iOS)
             if UIDevice.current.userInterfaceIdiom == .phone {
-                print("🔍 SearchView appeared on iPhone - applying Smart Study pattern")
+                print("🔍 SearchView appeared on iPhone - applying exact Smart Study pattern")
                 
-                // Apply Smart Study pattern: minimal work, mark as ready immediately
-                viewReady = true
-                contentReady = true
+                // Apply exact Smart Study pattern: DO NOT set viewReady immediately
+                // This prevents SearchPopupContent from loading until ready
                 
-                // Immediate keyboard focus attempts
+                // Immediate keyboard focus attempts on minimal view
                 isSearchFocused = true
                 
                 // Force keyboard appearance at UIKit level - immediate
@@ -1196,11 +1195,23 @@ struct SearchView: View {
                     print("🔍 SearchView - 20ms focus attempt")
                 }
                 
-                print("🔍 SearchView - applying Smart Study instant-ready pattern")
+                // Load heavy SearchPopupContent in background like Smart Study does
+                Task.detached(priority: .utility) {
+                    // Simulate the background loading that Smart Study does
+                    try? await Task.sleep(nanoseconds: 100_000_000) // 100ms delay
+                    
+                    await MainActor.run {
+                        print("🔍 SearchView - loading heavy content like Smart Study")
+                        viewReady = true
+                        contentReady = true
+                    }
+                }
+                
+                print("🔍 SearchView - exact Smart Study pattern applied")
             } else {
                 // iPad/macOS: Normal initialization
-                contentReady = true
                 viewReady = true
+                contentReady = true
             }
             #endif
         }
