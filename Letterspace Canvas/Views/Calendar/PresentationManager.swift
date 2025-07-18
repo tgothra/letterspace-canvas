@@ -1372,7 +1372,7 @@ struct PresentationManager: View {
             let directKey = "presentation_direct_\(editId.uuidString)"
             print("📌 Saving direct backup to key: \(directKey) with \(todoItemsArray.count) todos")
             UserDefaults.standard.set(presentationDict, forKey: directKey)
-            UserDefaults.standard.synchronize()
+            // Remove synchronize() to prevent main thread hangs
             
             // 4. Save encoded collections to UserDefaults
             if let presentationData = try? JSONEncoder().encode(mutableDoc.presentations) {
@@ -1383,7 +1383,7 @@ struct PresentationManager: View {
                 let oldKey = "document_presentations_\(document.id)"
                 UserDefaults.standard.set(presentationData, forKey: oldKey)
                 
-                UserDefaults.standard.synchronize()
+                // Remove synchronize() to prevent main thread hangs
                 print("✅ Saved todos to encoded UserDefaults collections")
             }
             
@@ -1539,7 +1539,7 @@ struct PresentationManager: View {
                     let oldKey = "document_presentations_\(document.id)"
                     UserDefaults.standard.set(presentationData, forKey: oldKey)
                     
-                    UserDefaults.standard.synchronize()
+                    // Remove synchronize() to prevent main thread hangs
                     print("✅ Saved todos to encoded UserDefaults collections")
                 }
             }
@@ -1585,7 +1585,7 @@ struct PresentationManager: View {
                         let oldKey = "document_presentations_\(document.id)"
                         UserDefaults.standard.set(presentationData, forKey: oldKey)
                         
-                        UserDefaults.standard.synchronize()
+                        // Remove synchronize() to prevent main thread hangs
                         print("✅ Saved todos to encoded UserDefaults collections")
                     }
                 }
@@ -1637,7 +1637,7 @@ struct PresentationManager: View {
                         let oldKey = "document_presentations_\(document.id)"
                         UserDefaults.standard.set(presentationData, forKey: oldKey)
                         
-                        UserDefaults.standard.synchronize()
+                        // Remove synchronize() to prevent main thread hangs
                         print("✅ Saved todos to encoded UserDefaults collections")
                     }
                     

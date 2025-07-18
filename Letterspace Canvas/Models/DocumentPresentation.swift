@@ -213,7 +213,7 @@ extension Letterspace_CanvasDocument {
                 }
                 
                 UserDefaults.standard.set(data, forKey: presentationsKey)
-                UserDefaults.standard.synchronize() // Force save immediately
+                // Remove synchronize() to prevent main thread hangs
                 
                 // For backwards compatibility, set old key too
                 UserDefaults.standard.set(data, forKey: "document_presentations_\(id)")

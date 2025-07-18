@@ -330,7 +330,12 @@ struct MainLayout: View {
                 #endif
             }
             .onAppear {
-                loadFolders()
+                // Move loadFolders to background thread to prevent main thread blocking
+                Task.detached(priority: .utility) {
+                    await MainActor.run {
+                        loadFolders()
+                    }
+                }
                 
                 // Preload haptic feedback generators to eliminate first-tap delays
                 HapticFeedback.prepareAll()
@@ -2713,8 +2718,7 @@ private func mainContentView(availableWidth: CGFloat) -> some View {
                 // Force immediate save
                 saveFolders()
                 
-                // Force UserDefaults to save immediately
-                UserDefaults.standard.synchronize()
+                // Remove synchronize() to prevent main thread hangs
                 
                 // Notify that folders have been updated
                 NotificationCenter.default.post(name: NSNotification.Name("FoldersDidUpdate"), object: nil)

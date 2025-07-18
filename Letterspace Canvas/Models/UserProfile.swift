@@ -193,7 +193,7 @@ class UserProfileManager {
             UserDefaults.standard.set(imageData, forKey: "UserProfileImage")
         }
         
-        UserDefaults.standard.synchronize()
+        // Remove synchronize() to prevent main thread hangs
     }
     
     private func loadFromUserDefaults() -> UserProfile? {
