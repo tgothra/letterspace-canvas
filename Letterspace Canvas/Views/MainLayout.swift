@@ -349,8 +349,8 @@ struct MainLayout: View {
             .onAppear {
                 loadFolders()
                 
-                // Preload haptic feedback generators to eliminate first-tap delays
-                HapticFeedback.prepareAll()
+                // DISABLED: Haptic feedback preloading causing 7-second freeze on search
+                // HapticFeedback.prepareAll()
                 
                 // Preload user profile asynchronously
                 Task.detached(priority: .background) {

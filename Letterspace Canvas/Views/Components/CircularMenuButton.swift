@@ -16,8 +16,8 @@ struct CircularMenuButton: View {
     
     var body: some View {
         Button(action: {
-            // Use lighter haptic feedback for faster response
-            HapticFeedback.impact(.light)
+            // DISABLED: Haptic feedback causing 7-second freeze on search
+            // HapticFeedback.impact(.light)
             // Simplified animation
             withAnimation(.easeInOut(duration: 0.2)) {
                 isMenuOpen.toggle()
@@ -203,7 +203,8 @@ struct CircularMenuOverlay: View {
     
     private func menuItem(icon: String, title: String, action: @escaping () -> Void, isUserProfile: Bool = false) -> some View {
         Button(action: {
-            HapticFeedback.impact(.light)
+            // DISABLED: Haptic feedback causing 7-second freeze when opening search
+            // HapticFeedback.impact(.light)
             // Close menu first, then execute action to prevent gesture conflicts
             closeMenu()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { // Reduced delay
