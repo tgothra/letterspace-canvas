@@ -330,128 +330,25 @@ struct MainLayout: View {
                 #endif
             }
             .onAppear {
-                // Move loadFolders to background thread to prevent main thread blocking
+                // Only do essential initialization - like Apple Notes and Craft
+                // Load folders in background (minimal work)
                 Task.detached(priority: .utility) {
                     await MainActor.run {
                         loadFolders()
                     }
                 }
                 
-                // Preload haptic feedback generators to eliminate first-tap delays
+                // Preload haptic feedback (fast operation)
                 HapticFeedback.prepareAll()
                 
-                // Preload user profile asynchronously
-                Task.detached(priority: .background) {
-                    _ = UserProfileManager.shared.userProfile
-                }
-                
-                // UserLibraryService will be initialized lazily when needed
-                
-                // Preload Smart Study specifically for iPhone to eliminate keyboard delay
+                // iOS navigation setup (minimal UserDefaults access)
                 #if os(iOS)
-                if UIDevice.current.userInterfaceIdiom == .phone {
-                    Task.detached(priority: .background) {
-                        print("🔄 Additional Smart Study preloading...")
-                        
-                        // Force creation of key Smart Study objects
-                        let _ = UserLibraryService()
-                        let _ = TokenUsageService.shared
-                        
-                        // Preload UserDefaults access patterns
-                        _ = UserDefaults.standard.data(forKey: "savedSmartStudyQAs")
-                        _ = UserDefaults.standard.bool(forKey: "Letterspace_FirstClickHandled")
-                        
-                        print("✅ Additional Smart Study preloading complete")
-                    }
-                }
-                #endif
-                
-                // Preload folder data in background
-                Task.detached(priority: .background) {
-                    // Pre-load folder data from UserDefaults to warm up the cache
-                    if let _ = UserDefaults.standard.data(forKey: "SavedFolders") {
-                        // Just accessing it loads it into memory cache
-                    }
-                }
-                
-                // Preload modal views to eliminate first-time delays on iPhone
-                #if os(iOS)
-                if UIDevice.current.userInterfaceIdiom == .phone {
-                    // Simplified iPhone sheet preloading - focus only on critical bottlenecks
-                    Task.detached(priority: .background) {
-                        print("🔄 Starting optimized iPhone sheet preloading...")
-                        
-                        // Delay preloading to avoid blocking initial app launch
-                        try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second delay
-                        
-                        // 1. Essential UserDefaults access only
-                        _ = UserDefaults.standard.data(forKey: "bible_reader_bookmarks")
-                            _ = UserDefaults.standard.data(forKey: "SavedFolders")
-                        _ = UserDefaults.standard.data(forKey: "savedSmartStudyQAs")
-                            
-                        // 2. Pre-warm only the most critical services
-                            let _ = DocumentCacheManager.shared
-                            
-                        // 3. Force initialization of essential data structures in background
-                        Task.detached(priority: .utility) {
-                            let _ = BibleReaderData()
-                            print("📖 Bible Reader data preloaded")
-                        }
-                        
-                        print("✅ Optimized iPhone sheet preloading complete")
-                    }
-                }
-                #endif
-                
-                // Global folder data preloading for all platforms
-                Task.detached(priority: .background) {
-                    // Pre-load folder data from UserDefaults to warm up the cache
-                    if let _ = UserDefaults.standard.data(forKey: "SavedFolders") {
-                        // Just accessing it loads it into memory cache
-                    }
-                }
-                
-                // Preload Smart Study after a short delay to avoid first-tap freeze
-                if !smartStudyPreloaded {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                        preloadSmartStudy()
-                    }
-                }
-                
-                // Debug logging for iOS navigation (both iPad and iPhone now use iPad interface)
-                #if os(iOS)
-                // Apply iPad-style navigation setup to both iPad and iPhone
-                print("🐛 iOS Navigation Debug (iPad interface for both iPad and iPhone):")
-                print("🐛 isDocked: \(isDocked)")
-                print("🐛 isNavigationCollapsed: \(isNavigationCollapsed)")
-                print("🐛 viewMode.isDistractionFreeMode: \(viewMode.isDistractionFreeMode)")
-                print("🐛 sidebarMode: \(sidebarMode)")
-                
-                // Force reset navigation state to ensure sidebar shows
-                if isNavigationCollapsed {
-                    print("🐛 Force resetting navigation collapsed state")
-                    isNavigationCollapsed = false
-                    UserDefaults.standard.set(isNavigationCollapsed, forKey: "navigationIsCollapsed")
-                }
-                
-                // Force dock navigation to be visible
-                if !isDocked {
-                    print("🐛 Force setting isDocked to true")
-                    isDocked = true
-                    UserDefaults.standard.set(isDocked, forKey: "sidebarIsDocked")
-                }
-                
-                // If this is the first time, default to docked mode
+                // Only set defaults if they don't exist (fast check)
                 if UserDefaults.standard.object(forKey: "sidebarIsDocked") == nil {
-                    isDocked = true
                     UserDefaults.standard.set(true, forKey: "sidebarIsDocked")
-                    print("🐛 Set isDocked to true for first time use")
                 }
-                // Also ensure navigation is not collapsed by default
                 if UserDefaults.standard.object(forKey: "navigationIsCollapsed") == nil {
-                    isNavigationCollapsed = false
                     UserDefaults.standard.set(false, forKey: "navigationIsCollapsed")
-                    print("🐛 Set isNavigationCollapsed to false for first time use")
                 }
                 #endif
             }

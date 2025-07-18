@@ -6,68 +6,14 @@ import UIKit
 
 class iPadAppDelegate: NSObject, UIApplicationDelegate {
 
-    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         print("iPadAppDelegate: application didFinishLaunchingWithOptions")
         
-        // Preload haptic feedback generators early to avoid first-tap delays
-        HapticFeedback.prepareAll()
+        // Only do essential initialization - like Apple Notes and Craft
+        // No heavy preloading that blocks the main thread
         
-        // Preload user profile asynchronously
-        Task.detached(priority: .background) {
-            _ = UserProfileManager.shared.userProfile
-        }
-        
-        // Preload Smart Study components to eliminate first-time keyboard delay
-        if UIDevice.current.userInterfaceIdiom == .phone {
-            // Call dedicated preloading method
-            SmartStudyView.preloadForIPhone()
-            
-            Task.detached(priority: .background) {
-                print("🔄 Preloading Smart Study components for iPhone...")
-                
-                // Initialize UserLibraryService in background
-                let _ = UserLibraryService()
-                
-                // Preload saved QAs data
-                if let savedData = UserDefaults.standard.data(forKey: "savedSmartStudyQAs") {
-                    let _ = try? JSONDecoder().decode([SmartStudyEntry].self, from: savedData)
-                }
-                
-                // Initialize TokenUsageService
-                let _ = TokenUsageService.shared
-                
-                // Preload any other Smart Study dependencies
-                await MainActor.run {
-                    print("✅ Smart Study components preloaded for iPhone")
-                }
-            }
-        }
-        
-        // Preload modal views on iPhone to eliminate first-time delays
-        if UIDevice.current.userInterfaceIdiom == .phone {
-            // Delay slightly to avoid blocking app launch
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                Task.detached(priority: .utility) {
-                    print("🔄 Preloading iPhone modal data...")
-                    
-                    // Preload UserDefaults data in background
-                    _ = UserDefaults.standard.data(forKey: "SavedFolders")
-                    _ = UserDefaults.standard.data(forKey: "FolderDocuments")
-                    
-                    print("✅ iPhone modal data preloaded")
-                }
-            }
-        }
-        
-        // checkForTextSubsystemReset() // Removed: macOS-specific AppKit text system reset
-        
-        // Enable debug visualization for text views if the flag is set (adapt or remove)
-        // if UserDefaults.standard.bool(forKey: "com.letterspace.enableDebugBorders") {
-        //     enableTextViewDebugging() // Removed: macOS-specific NSTextView debugging
-        // }
-        
-        // Refresh documents after app launch - with slightly longer delay
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+        // Refresh documents after app launch with minimal delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             self.refreshDocumentList()
         }
         

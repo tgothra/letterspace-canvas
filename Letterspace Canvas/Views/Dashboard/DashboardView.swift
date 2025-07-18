@@ -709,286 +709,121 @@ struct DashboardView: View {
             .ignoresSafeArea(isIPad ? .all : [], edges: isIPad ? .top : [])
         }
         .onAppear {
-                loadFolders()
-                
-                // Load pinned documents
-                if let pinnedArray = UserDefaults.standard.array(forKey: "PinnedDocuments") as? [String] {
-                    pinnedDocuments = Set(pinnedArray)
-                }
-                
-                // Load WIP documents
-                if let wipArray = UserDefaults.standard.array(forKey: "WIPDocuments") as? [String] {
-                    wipDocuments = Set(wipArray)
-                }
-                
-                // Load calendar documents
-                if let calendarArray = UserDefaults.standard.array(forKey: "CalendarDocuments") as? [String] {
-                    calendarDocuments = Set(calendarArray)
-                }
-                
-                // iPhone-specific: Clear filters by default on app open for clean startup experience
-                #if os(iOS)
-                let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-                if isPhone {
-                    // Always start with cleared filters on iPhone
-                    selectedTags.removeAll()
-                    selectedFilterColumn = nil
-                    selectedFilterCategory = "Filter"
-                    updateVisibleColumns() // Update UI to reflect cleared filters
-                }
-                #endif
-                
-                // Load visible columns
-                if let savedColumns = UserDefaults.standard.array(forKey: "VisibleColumns") as? [String] {
-                    visibleColumns = Set(savedColumns)
-                    
-                    // iPad validation: ensure only one date column is visible
-                    #if os(iOS)
-                    let isIPad = UIDevice.current.userInterfaceIdiom == .pad
-                    if isIPad && visibleColumns.contains("date") && visibleColumns.contains("createdDate") {
-                        // If both date columns are saved, prefer modified date and remove created date
-                        visibleColumns.remove("createdDate")
-                        // Save the corrected preferences
-                        UserDefaults.standard.set(Array(visibleColumns), forKey: "VisibleColumns")
-                    }
-                    #endif
+            // Only do essential initialization - like Apple Notes and Craft
+            // Load basic UserDefaults data (fast operations)
+            if let pinnedArray = UserDefaults.standard.array(forKey: "PinnedDocuments") as? [String] {
+                pinnedDocuments = Set(pinnedArray)
+            }
+            if let wipArray = UserDefaults.standard.array(forKey: "WIPDocuments") as? [String] {
+                wipDocuments = Set(wipArray)
+            }
+            if let calendarArray = UserDefaults.standard.array(forKey: "CalendarDocuments") as? [String] {
+                calendarDocuments = Set(calendarArray)
+            }
+            
+            // Load visible columns (fast operation)
+            if let savedColumns = UserDefaults.standard.array(forKey: "VisibleColumns") as? [String] {
+                visibleColumns = Set(savedColumns)
+            } else {
+                // Set default visible columns
+                visibleColumns = Set(["name"])
+            }
+            
+            // Load carousel position (fast operation)
+            if !isFirstLaunch {
+                selectedCarouselIndex = UserDefaults.standard.integer(forKey: "SelectedCarouselIndex")
+            } else {
+                let savedIndex = UserDefaults.standard.integer(forKey: "SelectedCarouselIndex")
+                if UserDefaults.standard.object(forKey: "SelectedCarouselIndex") == nil {
+                    selectedCarouselIndex = 0
                 } else {
-                    // Set default visible columns if none are saved
-                    #if os(iOS)
-                    let isIPad = UIDevice.current.userInterfaceIdiom == .pad
-                    if isIPad {
-                        // iPad default: only name column
-                        visibleColumns = Set(["name"])
-                    } else {
-                        // iPhone default: only name column
-                        visibleColumns = Set(["name"])
-                    }
-                    #else
-                    // macOS default: only name column
-                    visibleColumns = Set(["name"])
-                    #endif
+                    selectedCarouselIndex = savedIndex
                 }
-                
-                // Load carousel position (only if not first launch)
-                if !isFirstLaunch {
-                    selectedCarouselIndex = UserDefaults.standard.integer(forKey: "SelectedCarouselIndex")
-                } else {
-                    // On first launch, check if there's a saved position
-                    let savedIndex = UserDefaults.standard.integer(forKey: "SelectedCarouselIndex")
-                    // If no saved position exists (new user), start at 0, otherwise use saved position
-                    if UserDefaults.standard.object(forKey: "SelectedCarouselIndex") == nil {
-                        selectedCarouselIndex = 0 // New user - start at first card
-                    } else {
-                        selectedCarouselIndex = savedIndex // Returning user - use saved position
-                    }
-                    isFirstLaunch = false // Mark as no longer first launch
+                isFirstLaunch = false
+            }
+            
+            // Load documents in background (heavy operation)
+            Task.detached(priority: .utility) {
+                await MainActor.run {
+                    loadDocuments()
+                    initializeCarouselSections()
                 }
-                
-                loadDocuments()
-                
-                // Initialize carousel sections AFTER all data is loaded
-                initializeCarouselSections()
-                
-                // Listen for document unscheduling to refresh the calendar icons
-                NotificationCenter.default.addObserver(
-                    forName: NSNotification.Name("DocumentUnscheduled"),
-                    object: nil,
-                    queue: .main
-                ) { notification in
-                    // When a document is explicitly unscheduled by user action
-                    if let documentId = notification.userInfo?["documentId"] as? String {
-                        // When a user explicitly chooses to remove scheduling,
-                        // we remove the blue indicator by removing from calendarDocuments
-                        self.calendarDocuments.remove(documentId)
-                        
-                        // Save updated blue indicator state
-                        UserDefaults.standard.set(Array(self.calendarDocuments), forKey: "CalendarDocuments")
-                        UserDefaults.standard.synchronize()
-                        
-                        // Post a notification to tell SermonCalendar to remove this document
-                        // from its display list as well (different from just turning off the blue icon)
-                        NotificationCenter.default.post(
-                            name: NSNotification.Name("RemoveFromCalendarList"),
-                            object: nil,
-                            userInfo: ["documentId": documentId]
+            }
+            
+            // Load folders in background (heavy operation)
+            Task.detached(priority: .utility) {
+                await MainActor.run {
+                    loadFolders()
+                }
+            }
+            
+            // Set up notification observers (fast operation)
+            setupNotificationObservers()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("DocumentListDidUpdate"))) { _ in
+            loadDocuments()
+            // Refresh carousel sections when document list updates
+            initializeCarouselSections()
+        }
+        .overlay( // Keep the MultiSelectionActionBar overlay here
+            Group {
+                if selectedDocuments.count >= 2 {
+                    VStack {
+                        Spacer()
+                        MultiSelectionActionBar(
+                            selectedCount: selectedDocuments.count,
+                            onPin: {
+                                // Check if all selected documents are already pinned
+                                let allPinned = selectedDocuments.allSatisfy { pinnedDocuments.contains($0) }
+                                
+                                if allPinned {
+                                    // If all are pinned, unpin all of them
+                                    for docId in selectedDocuments {
+                                        pinnedDocuments.remove(docId)
+                                    }
+                                } else {
+                                    // Otherwise, pin any that aren't pinned yet
+                                    for docId in selectedDocuments {
+                                        pinnedDocuments.insert(docId)
+                                    }
+                                }
+                                saveDocumentState()
+                            },
+                            onWIP: {
+                                // Check if all selected documents are already WIP
+                                let allWIP = selectedDocuments.allSatisfy { wipDocuments.contains($0) }
+                                
+                                if allWIP {
+                                    // If all are WIP, remove all of them
+                                    for docId in selectedDocuments {
+                                        wipDocuments.remove(docId)
+                                    }
+                                } else {
+                                    // Otherwise, add any that aren't WIP yet
+                                    for docId in selectedDocuments {
+                                        wipDocuments.insert(docId)
+                                    }
+                                }
+                                saveDocumentState()
+                            },
+                            onDelete: deleteSelectedDocuments
                         )
-                        
-                        // Force refresh of the document list to update calendar icons
-                        self.refreshTrigger.toggle()
-                    }
-                }
-                
-                // Listen for edit presentation requests from SermonCalendar
-                NotificationCenter.default.addObserver(
-                    forName: NSNotification.Name("EditPresentation"),
-                    object: nil,
-                    queue: .main
-                ) { notification in
-                    guard let userInfo = notification.userInfo,
-                          let documentId = userInfo["documentId"] as? String,
-                          let presentationId = userInfo["presentationId"] as? UUID else {
-                        return
-                    }
-                    
-                    // Find the document
-                    if let doc = self.documents.first(where: { $0.id == documentId }) {
-                        // Set this document for presentation manager
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                            self.documentToShowInSheet = doc
-                            
-                            // The PresentationManager will need to look up the presentation by ID
-                            // and set isEditingPresentation = true and editingPresentationId = presentationId
-                            // We'll add this code in PresentationManager.swift
-                            UserDefaults.standard.set(presentationId.uuidString, forKey: "editingPresentationId")
-                            UserDefaults.standard.set(true, forKey: "openToNotesStep")
-                        }
-                    }
-                }
-                
-                // Listen for document details request
-                NotificationCenter.default.addObserver(
-                    forName: NSNotification.Name("ShowDocumentDetails"),
-                    object: nil,
-                    queue: .main
-                ) { notification in
-                    if let documentId = notification.userInfo?["documentId"] as? String,
-                       let document = documents.first(where: { $0.id == documentId }) {
-                        // Update selectedDetailsDocument
-                        selectedDetailsDocument = document
-                        // IMPORTANT: Also update selectedDocuments for the modal overlay condition
-                        selectedDocuments = [documentId]
-                        // Then show the card with animation
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            showDetailsCard = true
-                        }
-                    }
-                }
-                
-                // Timer to periodically check for past dates and update UI
-                // This ensures calendar icons are updated when dates become past
-                Timer.scheduledTimer(withTimeInterval: 60 * 60, repeats: true) { _ in
-                    // Update calendarDocuments to reflect ONLY documents with UPCOMING schedules
-                    // This controls which icons are blue in the document list
-                    // Note: We're not removing past events from the SermonCalendar list itself
-                    
-                    // Check all documents to see which should have blue calendar icons
-                    var docsWithFutureSchedules = Set<String>()
-                    
-                    for document in self.documents {
-                        if self.hasUpcomingSchedules(for: document) {
-                            docsWithFutureSchedules.insert(document.id)
-                        }
-                    }
-                    
-                    // Only update if the set has changed to avoid unnecessary UI refreshes
-                    if docsWithFutureSchedules != self.calendarDocuments {
-                        // Update calendarDocuments
-                        self.calendarDocuments = docsWithFutureSchedules
-                        
-                        // Save updated calendarDocuments
-                        UserDefaults.standard.set(Array(self.calendarDocuments), forKey: "CalendarDocuments")
-                        UserDefaults.standard.synchronize()
-                        
-                        // Refresh carousel sections when calendar documents change
-                        initializeCarouselSections()
-                        
-                        // Force UI update
-                        DispatchQueue.main.async {
-                            // Post notification to update views
-                            NotificationCenter.default.post(name: NSNotification.Name("DocumentListDidUpdate"), object: nil)
-                        }
-                    }
-                }
-                
-                // NEW: Observer for ShowPresentationManager
-                NotificationCenter.default.addObserver(
-                    forName: .showPresentationManager,
-                    object: nil,
-                    queue: .main
-                ) { notification in
-                    guard let userInfo = notification.userInfo,
-                          let documentId = userInfo["documentId"] as? String else {
-                        print("❌ ShowPresentationManager notification received without documentId")
-                        return
-                    }
-                    
-                    print("🔔 Received ShowPresentationManager notification for document ID: \(documentId)")
-                    // Find the document and set it to be shown in the overlay
-                    if let doc = self.documents.first(where: { $0.id == documentId }) {
-                        // Use DispatchQueue to avoid modifying state during view update
-                        DispatchQueue.main.async {
-                             print("🔄 Setting documentToShowInSheet for ID: \(documentId)")
-                            self.documentToShowInSheet = doc
-                        }
-                    } else {
-                         print("❌ Document with ID \(documentId) not found for PresentationManager")
+                        .padding(.bottom, 24)
+                        .transition(
+                            .asymmetric(
+                                insertion: .scale(scale: 0.8)
+                                    .combined(with: .offset(y: 50))
+                                    .combined(with: .opacity),
+                                removal: .scale(scale: 0.8)
+                                    .combined(with: .offset(y: 50))
+                                    .combined(with: .opacity)
+                            )
+                        )
                     }
                 }
             }
-            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("DocumentListDidUpdate"))) { _ in
-                loadDocuments()
-                // Refresh carousel sections when document list updates
-                initializeCarouselSections()
-            }
-            .overlay( // Keep the MultiSelectionActionBar overlay here
-                Group {
-                    if selectedDocuments.count >= 2 {
-                        VStack {
-                            Spacer()
-                            MultiSelectionActionBar(
-                                selectedCount: selectedDocuments.count,
-                                onPin: {
-                                    // Check if all selected documents are already pinned
-                                    let allPinned = selectedDocuments.allSatisfy { pinnedDocuments.contains($0) }
-                                    
-                                    if allPinned {
-                                        // If all are pinned, unpin all of them
-                                        for docId in selectedDocuments {
-                                            pinnedDocuments.remove(docId)
-                                        }
-                                    } else {
-                                        // Otherwise, pin any that aren't pinned yet
-                                        for docId in selectedDocuments {
-                                            pinnedDocuments.insert(docId)
-                                        }
-                                    }
-                                    saveDocumentState()
-                                },
-                                onWIP: {
-                                    // Check if all selected documents are already WIP
-                                    let allWIP = selectedDocuments.allSatisfy { wipDocuments.contains($0) }
-                                    
-                                    if allWIP {
-                                        // If all are WIP, remove all of them
-                                        for docId in selectedDocuments {
-                                            wipDocuments.remove(docId)
-                                        }
-                                    } else {
-                                        // Otherwise, add any that aren't WIP yet
-                                        for docId in selectedDocuments {
-                                            wipDocuments.insert(docId)
-                                        }
-                                    }
-                                    saveDocumentState()
-                                },
-                                onDelete: deleteSelectedDocuments
-                            )
-                            .padding(.bottom, 24)
-                            .transition(
-                                .asymmetric(
-                                    insertion: .scale(scale: 0.8)
-                                        .combined(with: .offset(y: 50))
-                                        .combined(with: .opacity),
-                                    removal: .scale(scale: 0.8)
-                                        .combined(with: .offset(y: 50))
-                                        .combined(with: .opacity)
-                                )
-                            )
-                        }
-                    }
-                }
-                .animation(.spring(response: 0.3, dampingFraction: 0.7, blendDuration: 0), value: selectedDocuments.count > 1)
-            )
+            .animation(.spring(response: 0.3, dampingFraction: 0.7, blendDuration: 0), value: selectedDocuments.count > 1)
+        )
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("DocumentScheduledUpdate"))) { notification in
             guard let userInfo = notification.userInfo,
                   let documentId = userInfo["documentId"] as? String else {
@@ -3655,6 +3490,106 @@ struct DashboardView: View {
 
     @State private var cachedFilteredDocuments: [Letterspace_CanvasDocument] = []
     @State private var cachedSortedFilteredDocuments: [Letterspace_CanvasDocument] = []
+
+    // MARK: - Notification Setup
+    
+    private func setupNotificationObservers() {
+        // Listen for document unscheduling to refresh the calendar icons
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("DocumentUnscheduled"),
+            object: nil,
+            queue: .main
+        ) { notification in
+            if let documentId = notification.userInfo?["documentId"] as? String {
+                self.calendarDocuments.remove(documentId)
+                UserDefaults.standard.set(Array(self.calendarDocuments), forKey: "CalendarDocuments")
+                
+                NotificationCenter.default.post(
+                    name: NSNotification.Name("RemoveFromCalendarList"),
+                    object: nil,
+                    userInfo: ["documentId": documentId]
+                )
+                
+                self.refreshTrigger.toggle()
+            }
+        }
+        
+        // Listen for edit presentation requests from SermonCalendar
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("EditPresentation"),
+            object: nil,
+            queue: .main
+        ) { notification in
+            guard let userInfo = notification.userInfo,
+                  let documentId = userInfo["documentId"] as? String,
+                  let presentationId = userInfo["presentationId"] as? UUID else {
+                return
+            }
+            
+            if let doc = self.documents.first(where: { $0.id == documentId }) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    self.documentToShowInSheet = doc
+                    UserDefaults.standard.set(presentationId.uuidString, forKey: "editingPresentationId")
+                    UserDefaults.standard.set(true, forKey: "openToNotesStep")
+                }
+            }
+        }
+        
+        // Listen for document details request
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("ShowDocumentDetails"),
+            object: nil,
+            queue: .main
+        ) { notification in
+            if let documentId = notification.userInfo?["documentId"] as? String,
+               let document = documents.first(where: { $0.id == documentId }) {
+                selectedDetailsDocument = document
+                selectedDocuments = [documentId]
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    showDetailsCard = true
+                }
+            }
+        }
+        
+        // Timer to periodically check for past dates and update UI
+        Timer.scheduledTimer(withTimeInterval: 60 * 60, repeats: true) { _ in
+            var docsWithFutureSchedules = Set<String>()
+            
+            for document in self.documents {
+                if self.hasUpcomingSchedules(for: document) {
+                    docsWithFutureSchedules.insert(document.id)
+                }
+            }
+            
+            if docsWithFutureSchedules != self.calendarDocuments {
+                self.calendarDocuments = docsWithFutureSchedules
+                UserDefaults.standard.set(Array(self.calendarDocuments), forKey: "CalendarDocuments")
+                initializeCarouselSections()
+                
+                DispatchQueue.main.async {
+                    NotificationCenter.default.post(name: NSNotification.Name("DocumentListDidUpdate"), object: nil)
+                }
+            }
+        }
+        
+        // Observer for ShowPresentationManager
+        NotificationCenter.default.addObserver(
+            forName: .showPresentationManager,
+            object: nil,
+            queue: .main
+        ) { notification in
+            guard let userInfo = notification.userInfo,
+                  let documentId = userInfo["documentId"] as? String else {
+                return
+            }
+            
+            if let doc = self.documents.first(where: { $0.id == documentId }) {
+                DispatchQueue.main.async {
+                    self.documentToShowInSheet = doc
+                }
+            }
+        }
+    }
 }
 
 // Add this helper view for the button background
