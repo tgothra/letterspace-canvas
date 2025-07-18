@@ -990,3 +990,86 @@ struct SearchPopupContent: View {
         return nil
     }
 }
+
+// SearchView for iPhone modal presentation
+struct SearchView: View {
+    @Environment(\.themeColors) var theme
+    @Environment(\.colorScheme) var colorScheme
+    let onDismiss: () -> Void
+    @State private var activePopup: ActivePopup = .search
+    @State private var document = Letterspace_CanvasDocument(title: "", subtitle: "", elements: [], id: "", markers: [], series: nil, variations: [], isVariation: false, parentVariationId: nil, createdAt: Date(), modifiedAt: Date(), tags: nil, isHeaderExpanded: false, isSubtitleVisible: true, links: [])
+    @State private var sidebarMode: RightSidebar.SidebarMode = .allDocuments
+    @State private var isRightSidebarVisible = false
+    
+    var body: some View {
+        #if os(iOS)
+        let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+        #endif
+        
+        Group {
+            #if os(iOS)
+            if isPhone {
+                // iPhone: Use NavigationView like Bible Reader search modal
+                NavigationView {
+                    SearchPopupContent(
+                        activePopup: $activePopup,
+                        document: $document,
+                        sidebarMode: $sidebarMode,
+                        isRightSidebarVisible: $isRightSidebarVisible,
+                        onDismiss: onDismiss
+                    )
+                    .navigationTitle("Search Documents")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .navigationBarItems(trailing: Button("Done", action: onDismiss))
+                }
+            } else {
+                // iPad: Use regular VStack
+                VStack(spacing: 0) {
+                    searchViewBody
+                }
+            }
+            #else
+            // macOS: Use regular VStack
+            VStack(spacing: 0) {
+                searchViewBody
+            }
+            #endif
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+    
+    private var searchViewBody: some View {
+        Group {
+            // Header
+            HStack {
+                Text("Search Documents")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(theme.primary)
+                
+                Spacer()
+                
+                Button(action: onDismiss) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(width: 22, height: 22)
+                        .background(
+                            Circle()
+                                .fill(Color.gray.opacity(0.5))
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.bottom, 8)
+            
+            // Search content
+            SearchPopupContent(
+                activePopup: $activePopup,
+                document: $document,
+                sidebarMode: $sidebarMode,
+                isRightSidebarVisible: $isRightSidebarVisible,
+                onDismiss: onDismiss
+            )
+        }
+    }
+}

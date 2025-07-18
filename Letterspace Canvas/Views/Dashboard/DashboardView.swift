@@ -123,14 +123,40 @@ struct DashboardView: View {
         }
         
         var carouselHeight: CGFloat {
+            #if os(iOS)
+            let isIPad = UIDevice.current.userInterfaceIdiom == .pad
+            if isIPad {
+                // iPad-specific heights - more compact
+                switch self {
+                case .collapsed:
+                    return 550  // Extended collapsed height for iPad carousel cards
+                case .default:
+                    return 320  // Extended default height for iPad carousel cards
+                case .expanded:
+                    return 120  // Smaller minimized height for iPad
+                }
+            } else {
+                // iPhone heights
+                switch self {
+                case .collapsed:
+                    return 420  // Much taller expanded carousel height
+                case .default:
+                    return 200  // Default carousel height
+                case .expanded:
+                    return 140  // Minimized carousel height
+                }
+            }
+            #else
+            // macOS and other platforms
             switch self {
             case .collapsed:
-                return 420  // Much taller expanded carousel height (increased from 350)
+                return 420
             case .default:
-                return 200  // Default carousel height
+                return 200
             case .expanded:
-                return 140  // Minimized carousel height
+                return 140
             }
+            #endif
         }
     }
     
@@ -170,10 +196,12 @@ struct DashboardView: View {
         #endif
     }
     
-    // Helper function to calculate flexible column widths for iPhone
-    private func calculateFlexibleColumnWidths() -> (statusWidth: CGFloat, nameWidth: CGFloat, seriesWidth: CGFloat, locationWidth: CGFloat, dateWidth: CGFloat, createdDateWidth: CGFloat) {
+    // Helper function to calculate flexible column widths for iPhone and iPad
+    private func calculateFlexibleColumnWidths(availableWidth: CGFloat? = nil) -> (statusWidth: CGFloat, nameWidth: CGFloat, seriesWidth: CGFloat, locationWidth: CGFloat, dateWidth: CGFloat, createdDateWidth: CGFloat) {
         #if os(iOS)
         let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+        let isIPad = UIDevice.current.userInterfaceIdiom == .pad
+        
         if isPhone {
             // Get available width (93% of screen width minus padding)
             let availableWidth = UIScreen.main.bounds.width * 0.93 - 32 // Account for container padding
@@ -184,8 +212,9 @@ struct DashboardView: View {
             // Calculate remaining width for other columns
             let remainingWidth = availableWidth - statusWidth
             
-            // Get visible columns (excluding status)
-            let visibleNonStatusColumns = visibleColumns.filter { $0 != "status" }
+            // Get visible columns (excluding status) - ensure name is always included
+            let effectiveVisibleColumns = visibleColumns.union(["name"])
+            let visibleNonStatusColumns = effectiveVisibleColumns.filter { $0 != "status" }
             
             // If only name column is visible, it takes all remaining space
             if visibleNonStatusColumns.count == 1 && visibleNonStatusColumns.contains("name") {
@@ -219,10 +248,32 @@ struct DashboardView: View {
                 max(70, remainingWidth * (flexRatios["createdDate"] ?? 1.0) / totalFlexRatio) : 0
             
             return (statusWidth: statusWidth, nameWidth: nameWidth, seriesWidth: seriesWidth, locationWidth: locationWidth, dateWidth: dateWidth, createdDateWidth: createdDateWidth)
+        } else if isIPad {
+            // Dynamic widths for iPad
+            let statusWidth: CGFloat = 60
+            let minNameWidth: CGFloat = 200
+            let minSeriesWidth: CGFloat = 120
+            let minLocationWidth: CGFloat = 130
+            let dateWidth: CGFloat = 100
+            let createdDateWidth: CGFloat = 100
+            let actionsWidth: CGFloat = 80 // Estimate for actions column
+            let spacing: CGFloat = 16 * 4 // 4 spacers between columns
+            
+            if let availableWidth = availableWidth {
+                let totalFixed = statusWidth + dateWidth + createdDateWidth + actionsWidth + spacing
+                let minTotal = minNameWidth + minSeriesWidth + minLocationWidth
+                let extra = max(0, availableWidth - totalFixed - minTotal)
+                // Distribute extra: Name 60%, Series 20%, Location 20%
+                let nameWidth = minNameWidth + extra * 0.6
+                let seriesWidth = minSeriesWidth + extra * 0.2
+                let locationWidth = minLocationWidth + extra * 0.2
+                return (statusWidth: statusWidth, nameWidth: nameWidth, seriesWidth: seriesWidth, locationWidth: locationWidth, dateWidth: dateWidth, createdDateWidth: createdDateWidth)
+            } else {
+                return (statusWidth: statusWidth, nameWidth: minNameWidth, seriesWidth: minSeriesWidth, locationWidth: minLocationWidth, dateWidth: dateWidth, createdDateWidth: createdDateWidth)
+            }
         }
         #endif
-        
-        // Default values for non-iPhone devices
+        // Default values for other devices
         return (statusWidth: 55, nameWidth: 120, seriesWidth: 100, locationWidth: 120, dateWidth: 90, createdDateWidth: 80)
     }
 
@@ -255,7 +306,7 @@ struct DashboardView: View {
             sidebarMode: $sidebarMode,
             isRightSidebarVisible: $isRightSidebarVisible,
             isExpanded: .constant(false), // Always collapsed in carousel
-            isCarouselMode: isLandscapeMode, // Use state variable for orientation
+            isCarouselMode: true, // Always true for iPhone carousel cards
             showExpandButtons: shouldShowExpandButtons, // separate parameter for expand buttons
             onShowModal: {
                 showPinnedModal = true
@@ -273,7 +324,7 @@ struct DashboardView: View {
             sidebarMode: $sidebarMode,
             isRightSidebarVisible: $isRightSidebarVisible,
             isExpanded: .constant(false), // Always collapsed in carousel
-            isCarouselMode: isLandscapeMode, // Use state variable for orientation
+            isCarouselMode: true, // Always true for iPhone carousel cards
             showExpandButtons: shouldShowExpandButtons, // separate parameter for expand buttons
             onShowModal: {
                 showWIPModal = true
@@ -291,7 +342,7 @@ struct DashboardView: View {
             onShowModal: { data in
                 self.calendarModalData = data 
             },
-            isCarouselMode: isLandscapeMode, // Use state variable for orientation
+            isCarouselMode: true, // Always true for iPhone carousel cards
             showExpandButtons: shouldShowExpandButtons, // separate parameter for expand buttons
             onShowExpandModal: {
                 showSchedulerModal = true
@@ -1129,286 +1180,295 @@ struct DashboardView: View {
     
     // NEW: Extracted computed property for the main dashboard layout
     private var dashboardContent: some View {
-        GeometryReader { geometry in
-            let isPortrait = geometry.size.height > geometry.size.width
-            let isIPad: Bool = {
-                #if os(iOS)
-                return UIDevice.current.userInterfaceIdiom == .pad || UIDevice.current.userInterfaceIdiom == .phone // iPhone now uses iPad interface
-                #else
-                return false // macOS is never an iPad
-                #endif
-            }()
-            
-            // Update landscape mode state for carousel sections
-            let _ = DispatchQueue.main.async {
-                #if os(macOS)
-                isLandscapeMode = false // macOS doesn't use carousel styling
-                shouldShowExpandButtons = true // but does show expand buttons
-                #else
-                isLandscapeMode = !isPortrait && isIPad // Both iPad and iPhone in landscape
-                shouldShowExpandButtons = !isPortrait && isIPad // Both iPad and iPhone in landscape
-                #endif
-            }
-            
-            if isPortrait && isIPad {
-                // iPad & iPhone Portrait: Special layout that respects navigation
-                    VStack(alignment: .leading, spacing: 0) {
-                    // Header with responsive positioning for navigation
-                    iPadDashboardHeaderView
-                    .padding(.horizontal, 20)
-                        .padding(.top, {
-                            // Responsive header positioning based on percentage of screen height
-                            let screenHeight = geometry.size.height
-                            #if os(iOS)
-                            if UIDevice.current.userInterfaceIdiom == .phone {
-                                return screenHeight * 0.10 // Slightly less top padding on iPhone (reduced from 12%)
-                            } else {
-                                return screenHeight * 0.08 // Original iPad padding
-                            }
-                            #else
-                            return screenHeight * 0.08
-                            #endif
-                        }())
-                        
-                        // iPad & iPhone Carousel for sections
-                        iPadSectionCarousel
-                        .padding(.horizontal, {
-                            #if os(iOS)
-                            if UIDevice.current.userInterfaceIdiom == .phone {
-                                return 20 // iPhone: centered with breathing room
-                            } else {
-                                return 10 // iPad: reduced from 20 to 10 to make carousel wider
-                            }
-                            #else
-                            return 10
-                            #endif
-                        }())
-                        .padding(.top, {
-                            // Position carousel with comfortable breathing room from greeting
-                            let screenHeight = geometry.size.height
-                            #if os(iOS)
-                            if UIDevice.current.userInterfaceIdiom == .phone {
-                                // Adjust to keep carousel's absolute position the same after lowering the greeting
-                                return screenHeight * 0.06
-                            } else {
-                                return screenHeight * 0.10 // Original iPad padding
-                            }
-                            #else
-                            return screenHeight * 0.10
-                            #endif
-                        }())
-                        
-                        // Carousel Navigation Pills (iPhone only)
-                        #if os(iOS)
-                        if UIDevice.current.userInterfaceIdiom == .phone {
-                            carouselNavigationPills
-                        }
-                        #endif
-                        
-                        allDocumentsSectionView
-                        .padding(.top, {
-                            #if os(iOS)
-                            if UIDevice.current.userInterfaceIdiom == .phone {
-                                return 110 // Increased breathing room for iPhone between carousel and All Documents
-                            } else {
-                                return 60 // Optimal breathing room for iPad carousel cards
-                            }
-                            #else
-                            return 10 // Keep reduced spacing for other platforms
-                            #endif
-                        }()) // Device-specific spacing between carousel and All Documents
-                        .padding(.horizontal, {
-                            #if os(iOS)
-                            if UIDevice.current.userInterfaceIdiom == .phone {
-                                // iPhone: Calculate padding to center 93% width content
-                                let screenWidth = UIScreen.main.bounds.width
-                                return screenWidth * 0.035 // 3.5% on each side for 93% centered content
-                            } else {
-                                return 10 // iPad: reduced from 20 to 10 to make All Documents wider
-                            }
-                            #else
-                            return 10 // Keep reduced spacing for other platforms
-                            #endif
-                        }())
-                        .padding(.leading, {
-                                    #if os(macOS)
-                                    return 24 // Fixed alignment with carousel sections on macOS
-                                    #else
-                                    #if os(iOS)
-                                    if UIDevice.current.userInterfaceIdiom == .phone {
-                                        return 0 // iPhone: no additional leading padding for centering
-                                    } else {
-                                        // Use the new responsive navPadding for iPad
-                                        return shouldAddNavigationPadding ? navPadding : 10
-                                    }
-                                    #else
-                                    return shouldAddNavigationPadding ? navPadding : 10
-                                    #endif
-                                    #endif
-                                }()) // Platform-specific alignment - iPhone centered, iPad aligned
-                        .animation(.spring(response: 0.6, dampingFraction: 0.75), value: showFloatingSidebar)
-                        
-                    // Remove Spacer to let All Documents fill remaining space
-                    }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if !isPortrait && isIPad {
-                // iPad Landscape: Mirror the portrait layout structure
-                VStack(alignment: .leading, spacing: 0) {
-                    // Header with full width positioning - no longer affected by navigation
-                    iPadLandscapeHeaderView
-                        .padding(.horizontal, 20)
-                        .padding(.top, 65) // Fixed top padding for consistent header positioning
-                        
-                    // iPad Landscape: Use horizontal layout like macOS but with iPad styling
-                    iPadLandscapeSections
-                        .padding(.horizontal, 20)
-                        .padding(.leading, {
-                            // Push cards over when navigation is visible (landscape only)
-                            return shouldAddNavigationPadding ? 165 : 0  // Use fixed value for consistency
-                        }())
-                        .padding(.top, 45) // Increased from 25 to 45 for more breathing room between greeting and cards
-                        .animation(.spring(response: 0.6, dampingFraction: 0.75), value: showFloatingSidebar)
-                        
-                    // Carousel Navigation Pills for Landscape (iPhone only)
+        Group {
+            GeometryReader { geometry in
+                let isPortrait = geometry.size.height > geometry.size.width
+                let isIPad: Bool = {
                     #if os(iOS)
-                    if UIDevice.current.userInterfaceIdiom == .phone {
+                    return UIDevice.current.userInterfaceIdiom == .pad || UIDevice.current.userInterfaceIdiom == .phone // iPhone now uses iPad interface
+                    #else
+                    return false // macOS is never an iPad
+                    #endif
+                }()
+                
+                // Update landscape mode state for carousel sections
+                let _ = DispatchQueue.main.async {
+                    #if os(macOS)
+                    isLandscapeMode = false // macOS doesn't use carousel styling
+                    shouldShowExpandButtons = true // but does show expand buttons
+                    #else
+                    isLandscapeMode = !isPortrait && isIPad // Both iPad and iPhone in landscape
+                    shouldShowExpandButtons = !isPortrait && isIPad // Both iPad and iPhone in landscape
+                    #endif
+                }
+                
+                if isPortrait && isIPad {
+                    // iPad & iPhone Portrait: Special layout that respects navigation
+                        VStack(alignment: .leading, spacing: 0) {
+                        // Header with responsive positioning for navigation
+                        iPadDashboardHeaderView
+                        .padding(.horizontal, 20)
+                            .padding(.top, {
+                                // Responsive header positioning based on percentage of screen height
+                                let screenHeight = geometry.size.height
+                                #if os(iOS)
+                                if UIDevice.current.userInterfaceIdiom == .phone {
+                                    return screenHeight * 0.10 // Slightly less top padding on iPhone (reduced from 12%)
+                                } else {
+                                    return screenHeight * 0.08 // Original iPad padding
+                                }
+                                #else
+                                return screenHeight * 0.08
+                                #endif
+                            }())
+                            
+                            // iPad & iPhone Carousel for sections
+                            iPadSectionCarousel
+                            .padding(.horizontal, {
+                                #if os(iOS)
+                                if UIDevice.current.userInterfaceIdiom == .phone {
+                                    return 20 // iPhone: centered with breathing room
+                                } else {
+                                    return 10 // iPad: reduced from 20 to 10 to make carousel wider
+                                }
+                                #else
+                                return 10
+                                #endif
+                            }())
+                            .padding(.top, {
+                                // Position carousel with comfortable breathing room from greeting
+                                let screenHeight = geometry.size.height
+                                #if os(iOS)
+                                if UIDevice.current.userInterfaceIdiom == .phone {
+                                    // Adjust to keep carousel's absolute position the same after lowering the greeting
+                                    return screenHeight * 0.06
+                                } else {
+                                    return screenHeight * 0.10 // Original iPad padding
+                                }
+                                #else
+                                return screenHeight * 0.10
+                                #endif
+                            }())
+                            
+                            // Carousel Navigation Pills (iPhone and iPad)
+                            #if os(iOS)
+                            carouselNavigationPills
+                            #endif
+                            
+                            allDocumentsSectionView
+                            .padding(.top, {
+                                #if os(iOS)
+                                if UIDevice.current.userInterfaceIdiom == .phone {
+                                    return 110 // Increased breathing room for iPhone between carousel and All Documents
+                                } else {
+                                    return 60 // Optimal breathing room for iPad carousel cards
+                                }
+                                #else
+                                return 10 // Keep reduced spacing for other platforms
+                                #endif
+                            }()) // Device-specific spacing between carousel and All Documents
+                            .padding(.horizontal, {
+                                #if os(iOS)
+                                if UIDevice.current.userInterfaceIdiom == .phone {
+                                    // iPhone: Calculate padding to center 93% width content
+                                    let screenWidth = UIScreen.main.bounds.width
+                                    return screenWidth * 0.035 // 3.5% on each side for 93% centered content
+                                } else {
+                                    return 10 // iPad: reduced from 20 to 10 to make All Documents wider
+                                }
+                                #else
+                                return 10 // Keep reduced spacing for other platforms
+                                #endif
+                            }())
+                            .padding(.leading, {
+                                        #if os(macOS)
+                                        return 24 // Fixed alignment with carousel sections on macOS
+                                        #else
+                                        #if os(iOS)
+                                        if UIDevice.current.userInterfaceIdiom == .phone {
+                                            return 0 // iPhone: no additional leading padding for centering
+                                        } else {
+                                            // Use the new responsive navPadding for iPad
+                                            return shouldAddNavigationPadding ? navPadding : 10
+                                        }
+                                        #else
+                                        return shouldAddNavigationPadding ? navPadding : 10
+                                        #endif
+                                        #endif
+                                    }()) // Platform-specific alignment - iPhone centered, iPad aligned
+                            .animation(.spring(response: 0.6, dampingFraction: 0.75), value: showFloatingSidebar)
+                            
+                        // Remove Spacer to let All Documents fill remaining space
+                        }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if !isPortrait && isIPad {
+                    // iPad Landscape: Mirror the portrait layout structure
+                    VStack(alignment: .leading, spacing: 0) {
+                        // Header with full width positioning - no longer affected by navigation
+                        iPadLandscapeHeaderView
+                            .padding(.horizontal, 20)
+                            .padding(.top, 65) // Fixed top padding for consistent header positioning
+                            
+                        // iPad Landscape: Use horizontal layout like macOS but with iPad styling
+                        iPadLandscapeSections
+                            .padding(.horizontal, 20)
+                            .padding(.leading, {
+                                // Push cards over when navigation is visible (landscape only)
+                                return shouldAddNavigationPadding ? 165 : 0  // Use fixed value for consistency
+                            }())
+                            .padding(.top, 45) // Increased from 25 to 45 for more breathing room between greeting and cards
+                            .animation(.spring(response: 0.6, dampingFraction: 0.75), value: showFloatingSidebar)
+                            
+                        // Carousel Navigation Pills for Landscape (iPhone and iPad)
+                        #if os(iOS)
                         carouselNavigationPills
                             .padding(.horizontal, 20) // Consistent padding for centering in landscape
-                    }
-                    #endif
-                    
-                    // All Documents section - with responsive spacing and height for different iPad sizes
-                    allDocumentsSectionView
-                        .padding(.top, {
-                            #if os(iOS)
-                            if UIDevice.current.userInterfaceIdiom == .phone {
-                                return 110 // Increased breathing room for iPhone between carousel and All Documents in landscape
-                            } else {
-                                return 30 // Reduced space between carousel and All Documents for iPad landscape
-                            }
-                            #else
-                            return 30 // Keep original spacing for other platforms
-                            #endif
-                        }()) // Device-specific spacing between carousel and All Documents
-                        .padding(.trailing, 20) // Match right alignment with cards
-                        .padding(.leading, {
-                            #if os(macOS)
-                            return 44 // Fixed alignment with carousel sections on macOS (24 + 20 base padding)
-                            #else
-                            #if os(iOS)
-                            if UIDevice.current.userInterfaceIdiom == .phone {
-                                // iPhone: Calculate padding to center 93% width content
-                                let screenWidth = UIScreen.main.bounds.width
-                                return screenWidth * 0.035 // 3.5% on each side for 93% centered content
-                            } else {
-                            // Match the cards' padding logic for better alignment - use fixed value for consistency
-                            return shouldAddNavigationPadding ? 185 : 20  // 165 (cards) + 20 (base padding)
-                            }
-                            #else
-                            return shouldAddNavigationPadding ? 185 : 20
-                            #endif
-                            #endif
-                        }()) // Platform-specific alignment - iPhone centered, iPad aligned
-                        .animation(.spring(response: 0.6, dampingFraction: 0.75), value: showFloatingSidebar)
+                        #endif
                         
-                    // Remove Spacer to let All Documents fill remaining space
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                // Non-iPad or other cases: Original layout
-                VStack(alignment: .leading, spacing: 0) {
-                    // Remove top spacing for iPad portrait to bring header to the top
-                    Spacer().frame(minHeight: 0)
-                    
-                    // Use GeometryReader to dynamically center the header
-                    GeometryReader { geometry in
-                        let availableHeight = geometry.size.height
-                        let sectionsHeight: CGFloat = 220 // Height needed for sections
-                        let availableForHeader = availableHeight - sectionsHeight
-                        let centerOffset = availableForHeader * 0.6 // Position at 60% down the available space
-                        
-                        VStack {
-                            Spacer().frame(height: centerOffset)
-                            
-                            macDashboardHeaderView
-                            
-                            Spacer()
-                        }
-                    }
-                    
-                    // Wrap topContainers and allDocumentsSectionView in a ZStack for overlay effect
-                    ZStack(alignment: .top) {
-                        // Layer 0: Click-outside catcher (only active when a section is expanded)
-                        if isPinnedExpanded || isWIPExpanded || isSchedulerExpanded {
-                            Color.clear
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    // Collapse all sections with animation
-                                    withAnimation(.easeInOut(duration: 0.3)) {
-                                        isPinnedExpanded = false
-                                        isWIPExpanded = false
-                                        isSchedulerExpanded = false
-                                    }
-                                }
-                                .zIndex(-1) // Ensure it's behind interactive elements
-                        }
-
-                        // Documents list (bottom layer)
-                        VStack {
-                            Spacer().frame(height: {
-                                #if os(macOS)
-                                return 290 // Reduced by 10 points to bring sections closer to All Documents
-                                #else
-                                // Responsive spacing for iOS/iPad - eliminating spacer for iPad
-                                let screenHeight = UIScreen.main.bounds.height
-                                return screenHeight * 0.01 // Minimal spacing to eliminate gap
-                                #endif
-                            }()) // Platform-specific spacing
-                            HStack {
-                                if shouldAddNavigationPadding {
-                                    Spacer().frame(width: 185) // Fixed spacer width to reserve navigation space
+                        // All Documents section - with responsive spacing and height for different iPad sizes
+                        allDocumentsSectionView
+                            .padding(.top, {
+                                #if os(iOS)
+                                if UIDevice.current.userInterfaceIdiom == .phone {
+                                    return 110 // Increased breathing room for iPhone between carousel and All Documents in landscape
                                 } else {
-                                    #if os(macOS)
-                                    Spacer().frame(width: 0) // Extend to left edge for macOS to align with cards
-                                    #else
-                                    Spacer().frame(width: 20) // Minimal left margin when navigation hidden
-                                    #endif
+                                    return 30 // Reduced space between carousel and All Documents for iPad landscape
                                 }
+                                #else
+                                return 30 // Keep original spacing for other platforms
+                                #endif
+                            }()) // Device-specific spacing between carousel and All Documents
+                            .padding(.trailing, 20) // Match right alignment with cards
+                            .padding(.leading, {
+                                #if os(macOS)
+                                return 44 // Fixed alignment with carousel sections on macOS (24 + 20 base padding)
+                                #else
+                                #if os(iOS)
+                                if UIDevice.current.userInterfaceIdiom == .phone {
+                                    // iPhone: Calculate padding to center 93% width content
+                                    let screenWidth = UIScreen.main.bounds.width
+                                    return screenWidth * 0.035 // 3.5% on each side for 93% centered content
+                                } else {
+                                // Match the cards' padding logic for better alignment - use fixed value for consistency
+                                return shouldAddNavigationPadding ? 185 : 20  // 165 (cards) + 20 (base padding)
+                                }
+                                #else
+                                return shouldAddNavigationPadding ? 185 : 20
+                                #endif
+                                #endif
+                            }()) // Platform-specific alignment - iPhone centered, iPad aligned
+                            .animation(.spring(response: 0.6, dampingFraction: 0.75), value: showFloatingSidebar)
+                            
+                        // Remove Spacer to let All Documents fill remaining space
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    // Non-iPad or other cases: Original layout
+                    VStack(alignment: .leading, spacing: 0) {
+                        // Remove top spacing for iPad portrait to bring header to the top
+                        Spacer().frame(minHeight: 0)
+                        
+                        // Use GeometryReader to dynamically center the header
+                        GeometryReader { geometry in
+                            let availableHeight = geometry.size.height
+                            let sectionsHeight: CGFloat = 220 // Height needed for sections
+                            let availableForHeader = availableHeight - sectionsHeight
+                            let centerOffset = availableForHeader * 0.6 // Position at 60% down the available space
+                            
+                            VStack {
+                                Spacer().frame(height: centerOffset)
                                 
-                            allDocumentsSectionView
-                                    .frame(maxWidth: .infinity, alignment: .trailing) // Align to right edge
+                                macDashboardHeaderView
                                 
-                                    #if os(macOS)
-                                Spacer().frame(width: 0) // Extend to right edge for macOS to align with cards
-                                    #else
-                                Spacer().frame(width: 20) // Fixed right margin
-                                    #endif
+                                Spacer()
                             }
-                                .animation(.spring(response: 0.6, dampingFraction: 0.75), value: showFloatingSidebar)
                         }
+                        
+                        // Wrap topContainers and allDocumentsSectionView in a ZStack for overlay effect
+                        ZStack(alignment: .top) {
+                            // Layer 0: Click-outside catcher (only active when a section is expanded)
+                            if isPinnedExpanded || isWIPExpanded || isSchedulerExpanded {
+                                Color.clear
+                                    .contentShape(Rectangle())
+                                    .onTapGesture {
+                                        // Collapse all sections with animation
+                                        withAnimation(.easeInOut(duration: 0.3)) {
+                                            isPinnedExpanded = false
+                                            isWIPExpanded = false
+                                            isSchedulerExpanded = false
+                                        }
+                                    }
+                                    .zIndex(-1) // Ensure it's behind interactive elements
+                            }
 
-                        // Top containers (top layer)
-                        VStack(spacing: 0) {
-                            topContainers
-                                .padding(.top, {
-                                    #if os(iOS)
-                                    return -10  // Negative padding to bring carousel much closer to greeting
+                            // Documents list (bottom layer)
+                            VStack {
+                                Spacer().frame(height: {
+                                    #if os(macOS)
+                                    return 290 // Reduced by 10 points to bring sections closer to All Documents
                                     #else
-                                    return 30  // Keep original spacing on macOS
+                                    // Responsive spacing for iOS/iPad - eliminating spacer for iPad
+                                    let screenHeight = UIScreen.main.bounds.height
+                                    return screenHeight * 0.01 // Minimal spacing to eliminate gap
                                     #endif
-                                }())
-                            Spacer()
+                                }()) // Platform-specific spacing
+                                HStack {
+                                    if shouldAddNavigationPadding {
+                                        Spacer().frame(width: 185) // Fixed spacer width to reserve navigation space
+                                    } else {
+                                        #if os(macOS)
+                                        Spacer().frame(width: 0) // Extend to left edge for macOS to align with cards
+                                        #else
+                                        Spacer().frame(width: 20) // Minimal left margin when navigation hidden
+                                        #endif
+                                    }
+                                    
+                                allDocumentsSectionView
+                                        .frame(maxWidth: .infinity, alignment: .trailing) // Align to right edge
+                                    
+                                        #if os(macOS)
+                                    Spacer().frame(width: 0) // Extend to right edge for macOS to align with cards
+                                        #else
+                                    Spacer().frame(width: 20) // Fixed right margin
+                                        #endif
+                                }
+                                    .animation(.spring(response: 0.6, dampingFraction: 0.75), value: showFloatingSidebar)
+                            }
+
+                            // Top containers (top layer)
+                            VStack(spacing: 0) {
+                                topContainers
+                                    .padding(.top, {
+                                        #if os(iOS)
+                                        return -10  // Negative padding to bring carousel much closer to greeting
+                                        #else
+                                        return 30  // Keep original spacing on macOS
+                                        #endif
+                                    }())
+                                Spacer()
+                            }
                         }
                     }
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .frame(maxHeight: .infinity, alignment: .top)  // Align content to top
+                    .scrollDismissesKeyboard(.immediately)
+                    .coordinateSpace(name: "dashboard")
+                    .padding(.horizontal, 20)
+                    .padding(.top, 0)
+                    .padding(.bottom, 24)
                 }
-                .frame(maxWidth: .infinity, alignment: .center)
-                .frame(maxHeight: .infinity, alignment: .top)  // Align content to top
-                .scrollDismissesKeyboard(.immediately)
-                .coordinateSpace(name: "dashboard")
-                .padding(.horizontal, 20)
-                .padding(.top, 0)
-                .padding(.bottom, 24)
             }
+            // Pre-initialize All Documents list offscreen to warm up SwiftUI and eliminate first-time lag
+            allDocumentsSectionView
+                .frame(width: 1, height: 1)
+                .opacity(0.01)
+                .allowsHitTesting(false)
+            
+            // Pre-initialize carousel cards at expanded height to eliminate collapse lag
+            iPadSectionCarousel
+                .frame(width: 1, height: 1)
+                .opacity(0.01)
+                .allowsHitTesting(false)
         }
     }
 
@@ -1636,8 +1696,34 @@ struct DashboardView: View {
                 // iPhone: Tall header with stacked rows
                 iPhoneDocumentHeader
             } else {
-                // iPad/macOS: Original horizontal layout
-                iPadMacDocumentHeader
+                // iPad/macOS: Original horizontal layout, but now with matching horizontal padding
+                GeometryReader { geometry in
+                    VStack {
+                        #if os(macOS)
+                        Spacer() // Add spacer above for vertical centering on macOS
+                        #endif
+                        
+                        iPadMacDocumentHeader
+                            .padding(.horizontal, {
+                                #if os(iOS)
+                                let isIPad = UIDevice.current.userInterfaceIdiom == .pad
+                                if isIPad {
+                                    // Match the table's horizontal padding logic
+                                    return showFloatingSidebar ? 24 : 16
+                                } else {
+                                    return 16
+                                }
+                                #else
+                                return 16
+                                #endif
+                            }())
+                        
+                        #if os(macOS)
+                        Spacer() // Add spacer below for vertical centering on macOS
+                        #endif
+                    }
+                }
+                .frame(height: 90) // Approximate header height
             }
         }
     }
@@ -1844,7 +1930,47 @@ struct DashboardView: View {
                         let isIPad = false
                         #endif
                         
-        return HStack(spacing: 6) {
+        return VStack(spacing: 0) {
+            // iPad-specific grab bar at the top of the header
+            if isIPad {
+                GeometryReader { geometry in
+                    HStack {
+                        Spacer()
+                        GrabBar(width: 160) // Pass width directly to GrabBar component
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        // Toggle between default and expanded on tap
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                            if allDocumentsPosition == .expanded {
+                                allDocumentsPosition = .default
+                            } else {
+                                allDocumentsPosition = .expanded
+                            }
+                        }
+                        // Add haptic feedback
+                        HapticFeedback.impact(.light)
+                    }
+                    .padding(.horizontal, {
+                        #if os(iOS)
+                        let isIPad = UIDevice.current.userInterfaceIdiom == .pad
+                        if isIPad {
+                            return showFloatingSidebar ? 24 : 16
+                        } else {
+                            return 16
+                        }
+                        #else
+                        return 16
+                        #endif
+                    }())
+                    .padding(.bottom, 12) // Space between grab bar and header content
+                }
+                .frame(height: 40) // Fixed height for the grab bar area
+            }
+            
+            HStack(spacing: 6) {
             // Left side - Title
             HStack(spacing: 6) {
                 Image(systemName: "doc.text.fill")
@@ -1996,6 +2122,7 @@ struct DashboardView: View {
             }
 
             Spacer()
+            } // Close HStack
         }
         .padding(.horizontal, {
             #if os(macOS)
@@ -2007,6 +2134,8 @@ struct DashboardView: View {
         .padding(.top, isIPad ? 20 : 12)
         .padding(.bottom, isIPad ? 16 : 8)
     }
+    
+
     
     private var topContainers: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -2337,7 +2466,7 @@ struct DashboardView: View {
     
     // Helper method to break down complex DocumentRowView initialization 
     @ViewBuilder
-    private func documentRowForIndex(_ index: Int, document: Letterspace_CanvasDocument) -> some View {
+    private func documentRowForIndex(_ index: Int, document: Letterspace_CanvasDocument, columnWidths: (statusWidth: CGFloat, nameWidth: CGFloat, seriesWidth: CGFloat, locationWidth: CGFloat, dateWidth: CGFloat, createdDateWidth: CGFloat)) -> some View {
         #if os(iOS)
         let isIPad = UIDevice.current.userInterfaceIdiom == .pad
         DashboardDocumentRow(
@@ -2350,6 +2479,7 @@ struct DashboardView: View {
             dateFilterType: dateFilterType,
             isEditMode: isIPad ? isAllDocumentsEditMode : false,
             selectedItems: isIPad ? $selectedAllDocuments : .constant(Set()),
+            columnWidths: columnWidths,
             onTap: {
                 // Ignore tap if we just long pressed
                 if justLongPressed {
@@ -2422,6 +2552,14 @@ struct DashboardView: View {
         return VStack(spacing: 0) {
             // Call the extracted header view - THIS SHOULD STAY FIXED
             documentSectionHeader
+            
+            // Add breathing room between header and table for iPad
+            #if os(iOS)
+            let isIPad = UIDevice.current.userInterfaceIdiom == .pad
+            if isIPad {
+                Spacer().frame(height: 24) // Increased to 24pt breathing room for iPad
+            }
+            #endif
 
             #if os(macOS)
             DocumentTable(
@@ -2467,38 +2605,54 @@ struct DashboardView: View {
                 // iPhone: Table always fills full width, no horizontal scrolling needed
                 VStack(alignment: .leading, spacing: 0) {
                     // Column Header Row
-                    iosColumnHeaderRow
+                    iosColumnHeaderRow(columnWidths: calculateFlexibleColumnWidths())
                     
                     // Document Rows
                     ScrollView(.vertical) {
                         LazyVStack(alignment: .leading, spacing: 0) {
                             ForEach(Array(filteredDocuments.enumerated()), id: \.element.id) { index, document in
-                                documentRowForIndex(index, document: document)
+                                documentRowForIndex(index, document: document, columnWidths: calculateFlexibleColumnWidths())
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.bottom, allDocumentsPosition == .default ? 300 : 0) // Increased padding to 300pt in default state
                     }
                     .frame(height: 435)
                 }
                 .padding(.horizontal, 0) // iPhone: Remove padding to allow table to fill full width
             } else {
                 // iPad: Original layout without horizontal scrolling
-            VStack(spacing: 0) {
-                // Column Header Row
-                iosColumnHeaderRow
-                
-                // Document Rows
-                ScrollView {
-                    LazyVStack(spacing: isIPad ? -4 : 0) {
-                        ForEach(Array(filteredDocuments.enumerated()), id: \.element.id) { index, document in
-                            documentRowForIndex(index, document: document)
+            GeometryReader { geometry in
+                let columnWidths = calculateFlexibleColumnWidths(availableWidth: geometry.size.width)
+                VStack(spacing: 0) {
+                    // Column Header Row
+                    iosColumnHeaderRow(columnWidths: columnWidths)
+                    
+                    // Document Rows
+                    ScrollView {
+                        LazyVStack(spacing: isIPad ? -4 : 0) {
+                            ForEach(Array(filteredDocuments.enumerated()), id: \.element.id) { index, document in
+                                documentRowForIndex(index, document: document, columnWidths: columnWidths)
+                            }
                         }
                     }
+                    .frame(height: isIPad ? nil : 435) // Remove fixed height on iPad to allow expansion
+                    .frame(maxHeight: isIPad ? .infinity : 435) // Allow it to fill available space on iPad
                 }
-                .frame(height: isIPad ? nil : 435) // Remove fixed height on iPad to allow expansion
-                .frame(maxHeight: isIPad ? .infinity : 435) // Allow it to fill available space on iPad
             }
-                .padding(.horizontal, isIPad ? 20 : 16) // iPad: original padding
+                .padding(.horizontal, {
+                    #if os(iOS)
+                    let isIPad = UIDevice.current.userInterfaceIdiom == .pad
+                    if isIPad {
+                        // Adjust padding based on navigation bar state
+                        return showFloatingSidebar ? 24 : 16 // Less padding when nav bar is hidden
+                    } else {
+                        return 16
+                    }
+                    #else
+                    return 16
+                    #endif
+                }())
                 }
             #endif
         }
@@ -2538,10 +2692,10 @@ struct DashboardView: View {
                 }
             }
         }
-        // iPhone-specific sheet behavior
-        .offset(y: isPhone ? allDocumentsPosition.offset + allDocumentsOffset : 0)
+        // iPhone and iPad sheet behavior
+        .offset(y: (isPhone || isIPad) ? allDocumentsPosition.offset + allDocumentsOffset : 0)
         .gesture(
-            isPhone ? DragGesture()
+            (isPhone || isIPad) ? DragGesture()
                 .onChanged { value in
                     // Allow dragging
                     allDocumentsOffset = value.translation.height
@@ -2549,27 +2703,27 @@ struct DashboardView: View {
                 }
                 .onEnded { value in
                     let velocity = value.predictedEndTranslation.height
-                    let dragThreshold: CGFloat = 100
+                    let dragThreshold: CGFloat = 50  // Reduced from 100 to 50 for more responsive swipes
                     
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                         let previousPosition = allDocumentsPosition
                         
                         // Determine final position based on drag distance and velocity
                         if allDocumentsPosition == .default {
-                            if value.translation.height < -dragThreshold || velocity < -200 {
+                            if value.translation.height < -dragThreshold || velocity < -100 {
                                 // Swipe up from default -> expanded
                                 allDocumentsPosition = .expanded
-                            } else if value.translation.height > dragThreshold || velocity > 200 {
+                            } else if value.translation.height > dragThreshold || velocity > 100 {
                                 // Swipe down from default -> collapsed
                                 allDocumentsPosition = .collapsed
                             }
                         } else if allDocumentsPosition == .expanded {
-                            if value.translation.height > dragThreshold || velocity > 200 {
+                            if value.translation.height > dragThreshold || velocity > 100 {
                                 // Swipe down from expanded -> default
                                 allDocumentsPosition = .default
                             }
                         } else if allDocumentsPosition == .collapsed {
-                            if value.translation.height < -dragThreshold || velocity < -200 {
+                            if value.translation.height < -dragThreshold || velocity < -100 {
                                 // Swipe up from collapsed -> default
                                 allDocumentsPosition = .default
                             }
@@ -2591,9 +2745,10 @@ struct DashboardView: View {
 
     // iOS Column Header Row
     #if os(iOS)
-    private var iosColumnHeaderRow: some View {
-        let columnWidths = calculateFlexibleColumnWidths()
-        
+    private func iosColumnHeaderRow(columnWidths: (statusWidth: CGFloat, nameWidth: CGFloat, seriesWidth: CGFloat, locationWidth: CGFloat, dateWidth: CGFloat, createdDateWidth: CGFloat)) -> some View {
+        let columnWidths = columnWidths
+        let effectiveVisibleColumns = visibleColumns.union(["name"])
+        // ... existing code ...
         return HStack(spacing: 0) {
             // Status indicators column (icons)
             Button(action: {}) {
@@ -2601,9 +2756,7 @@ struct DashboardView: View {
                     let useThemeColors = colorScheme == .dark ? 
                         gradientManager.selectedDarkGradientIndex != 0 :
                         gradientManager.selectedLightGradientIndex != 0
-                    
                     let isIPad = UIDevice.current.userInterfaceIdiom == .pad
-                    
                     Image(systemName: "pin.fill")
                         .font(.system(size: isIPad ? 10 : 9))
                         .foregroundColor(useThemeColors ? theme.accent : .orange)
@@ -2616,22 +2769,22 @@ struct DashboardView: View {
                 }
             }
             .buttonStyle(.plain)
-            .frame(width: UIDevice.current.userInterfaceIdiom == .pad ? 30 : columnWidths.statusWidth, alignment: UIDevice.current.userInterfaceIdiom == .pad ? .center : .leading)
+            .frame(width: columnWidths.statusWidth, alignment: .leading)
             .padding(.leading, UIDevice.current.userInterfaceIdiom == .phone ? 10 : 0) // Add breathing room from left edge on iPhone to match document rows
             
             // Add breathing room between status indicators and name column on iPad (to match row)
             #if os(iOS)
             let isIPad = UIDevice.current.userInterfaceIdiom == .pad
             if isIPad {
-                Spacer().frame(width: 24)
+                Spacer().frame(width: 16) // Reduced from 24 to 16 for more compact layout
             } else if UIDevice.current.userInterfaceIdiom == .phone {
                 // iPhone: Reduce spacing between status icons and name column
                 Spacer().frame(width: 2)
             }
             #endif
             
-            // Name column (sortable) - icon should align with document icons in rows
-            if visibleColumns.contains("name") {
+            // Name column (sortable) - should align with document content in rows
+            if effectiveVisibleColumns.contains("name") {
                 Button(action: {
                     if selectedColumn == .name {
                         sortAscending.toggle()
@@ -2644,24 +2797,22 @@ struct DashboardView: View {
                     HStack(spacing: 4) {
                         let isPhone = UIDevice.current.userInterfaceIdiom == .phone
                         Text("Name")
-                            .font(.system(size: isPhone ? 13 : 16, weight: .medium))  // Smaller for iPhone
+                            .font(.system(size: isPhone ? 13 : 16, weight: .medium))
                             .foregroundColor(theme.secondary)
-                        
+                            .frame(width: columnWidths.nameWidth, alignment: .leading)
                         if selectedColumn == .name {
                             Image(systemName: sortAscending ? "chevron.up" : "chevron.down")
-                                .font(.system(size: isPhone ? 10 : 12))  // Smaller for iPhone
+                                .font(.system(size: isPhone ? 10 : 12))
                                 .foregroundColor(theme.secondary)
                         }
-                        
-                        Spacer() // This will push sort indicator to the right side of name column
                     }
                 }
                 .buttonStyle(.plain)
-                .frame(width: UIDevice.current.userInterfaceIdiom == .pad ? nil : columnWidths.nameWidth, alignment: .leading)
+                .frame(width: columnWidths.nameWidth, alignment: .leading)
             }
             
             // Series column (sortable) - if visible
-            if visibleColumns.contains("series") {
+            if effectiveVisibleColumns.contains("series") {
                 Button(action: {
                     if selectedColumn == .series {
                         sortAscending.toggle()
@@ -2676,6 +2827,7 @@ struct DashboardView: View {
                         Text("Series")
                             .font(.system(size: isPhone ? 13 : 16, weight: .medium))  // Smaller for iPhone
                             .foregroundColor(theme.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading) // Ensure text fills full width
                         
                         if selectedColumn == .series {
                             Image(systemName: sortAscending ? "chevron.up" : "chevron.down")
@@ -2685,11 +2837,11 @@ struct DashboardView: View {
                     }
                 }
                 .buttonStyle(.plain)
-                .frame(width: UIDevice.current.userInterfaceIdiom == .pad ? 100 : columnWidths.seriesWidth, alignment: .leading)
+                .frame(width: columnWidths.seriesWidth, alignment: .leading)
             }
             
             // Location column (sortable) - if visible
-            if visibleColumns.contains("location") {
+            if effectiveVisibleColumns.contains("location") {
                 Button(action: {
                     if selectedColumn == .location {
                         sortAscending.toggle()
@@ -2704,6 +2856,7 @@ struct DashboardView: View {
                         Text("Location")
                             .font(.system(size: isPhone ? 13 : 16, weight: .medium))  // Smaller for iPhone
                             .foregroundColor(theme.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading) // Ensure text fills full width
                         
                         if selectedColumn == .location {
                             Image(systemName: sortAscending ? "chevron.up" : "chevron.down")
@@ -2713,11 +2866,11 @@ struct DashboardView: View {
                     }
                 }
                 .buttonStyle(.plain)
-                .frame(width: UIDevice.current.userInterfaceIdiom == .pad ? 120 : columnWidths.locationWidth, alignment: .leading)
+                .frame(width: columnWidths.locationWidth, alignment: .leading)
             }
             
             // Date column (sortable) - if visible (moved after location)
-            if visibleColumns.contains("date") {
+            if effectiveVisibleColumns.contains("date") {
                 Button(action: {
                     if selectedColumn == .date {
                         sortAscending.toggle()
@@ -2732,6 +2885,7 @@ struct DashboardView: View {
                         Text("Modified")
                             .font(.system(size: isPhone ? 13 : 16, weight: .medium))  // Smaller for iPhone
                             .foregroundColor(theme.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading) // Ensure text fills full width
                         
                         if selectedColumn == .date {
                             Image(systemName: sortAscending ? "chevron.up" : "chevron.down")
@@ -2741,11 +2895,11 @@ struct DashboardView: View {
                     }
                 }
                 .buttonStyle(.plain)
-                .frame(width: UIDevice.current.userInterfaceIdiom == .pad ? 90 : columnWidths.dateWidth, alignment: .leading)
+                .frame(width: columnWidths.dateWidth, alignment: .leading)
             }
             
             // Created date column - if visible
-            if visibleColumns.contains("createdDate") {
+            if effectiveVisibleColumns.contains("createdDate") {
                 Button(action: {
                     if selectedColumn == .createdDate {
                         sortAscending.toggle()
@@ -2760,6 +2914,7 @@ struct DashboardView: View {
                         Text("Created")
                             .font(.system(size: isPhone ? 13 : 16, weight: .medium))  // Smaller for iPhone
                             .foregroundColor(theme.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading) // Ensure text fills full width
                         
                         if selectedColumn == .createdDate {
                             Image(systemName: sortAscending ? "chevron.up" : "chevron.down")
@@ -2769,22 +2924,28 @@ struct DashboardView: View {
                     }
                 }
                 .buttonStyle(.plain)
-                .frame(width: UIDevice.current.userInterfaceIdiom == .pad ? 80 : columnWidths.createdDateWidth, alignment: .leading)
+                .frame(width: columnWidths.createdDateWidth, alignment: .leading)
             }
             
             // Add spacing before Actions column (iPad only)
             let isPhone = UIDevice.current.userInterfaceIdiom == .phone
             if !isPhone {
-            Spacer().frame(width: 16)
+            Spacer().frame(width: 12) // Reduced from 16 to 12 for more compact layout
             
-                // Actions column (iPad only)
-            Text("Actions")
-                    .font(.system(size: 16, weight: .medium))
-                .foregroundColor(theme.secondary)
-                    .frame(width: 80, alignment: .center)
+                // Actions column (iPad only) - structured like other columns
+                Button(action: {}) {
+                    HStack(spacing: 4) {
+                        Text("Actions")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(theme.secondary)
+                            .frame(maxWidth: .infinity, alignment: .center) // Center text over action buttons
+                    }
+                }
+                .buttonStyle(.plain)
+                .frame(width: UIDevice.current.userInterfaceIdiom == .pad ? 80 : 80, alignment: .center)
             }
         }
-        .padding(.horizontal, 0) // iPhone: Remove padding to match table content
+        .padding(.horizontal, UIDevice.current.userInterfaceIdiom == .phone ? 0 : (UIScreen.main.bounds.height > UIScreen.main.bounds.width && UIDevice.current.userInterfaceIdiom == .pad ? 16 : 16)) // Match row padding
         .padding(.vertical, 8)
         .overlay(
             Rectangle()
@@ -2897,11 +3058,12 @@ struct DashboardView: View {
         .frame(height: {
             #if os(iOS)
             let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-            if isPhone {
-                // Use dynamic height based on All Documents position
+            let isIPad = UIDevice.current.userInterfaceIdiom == .pad
+            if isPhone || isIPad {
+                // Use dynamic height based on All Documents position for both iPhone and iPad
                 return allDocumentsPosition.carouselHeight
             } else {
-                return 380 // iPad keeps fixed height
+                return 380 // Fallback for other devices
             }
             #else
             return 380
@@ -2965,11 +3127,12 @@ struct DashboardView: View {
                     y: {
                         #if os(iOS)
                         let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-                        if isPhone {
-                            // Use half of dynamic height
+                        let isIPad = UIDevice.current.userInterfaceIdiom == .pad
+                        if isPhone || isIPad {
+                            // Use half of dynamic height for both iPhone and iPad
                             return (allDocumentsPosition.carouselHeight / 2) + draggedCardOffset.height * 0.2
                         } else {
-                            return 190 + draggedCardOffset.height * 0.2 // iPad keeps fixed position
+                            return 190 + draggedCardOffset.height * 0.2 // Fallback for other devices
                         }
                         #else
                         return 190 + draggedCardOffset.height * 0.2
@@ -2985,11 +3148,12 @@ struct DashboardView: View {
                     y: {
                         #if os(iOS)
                         let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-                        if isPhone {
-                            // Use half of dynamic height
+                        let isIPad = UIDevice.current.userInterfaceIdiom == .pad
+                        if isPhone || isIPad {
+                            // Use half of dynamic height for both iPhone and iPad
                             return allDocumentsPosition.carouselHeight / 2
                         } else {
-                            return 190 // iPad keeps fixed position
+                            return 190 // Fallback for other devices
                         }
                         #else
                         return 190
@@ -3037,11 +3201,12 @@ struct DashboardView: View {
                 y: {
                     #if os(iOS)
                     let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-                    if isPhone {
-                        // Use half of dynamic height
+                    let isIPad = UIDevice.current.userInterfaceIdiom == .pad
+                    if isPhone || isIPad {
+                        // Use half of dynamic height for both iPhone and iPad
                         return allDocumentsPosition.carouselHeight / 2
                     } else {
-                        return 190 // iPad keeps fixed position
+                        return 190 // Fallback for other devices
                     }
                     #else
                     return 190
@@ -3069,11 +3234,12 @@ struct DashboardView: View {
                 .frame(width: adjustedCardWidth, height: {
                     #if os(iOS)
                     let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-                    if isPhone {
-                        // Use dynamic height based on All Documents position
+                    let isIPad = UIDevice.current.userInterfaceIdiom == .pad
+                    if isPhone || isIPad {
+                        // Use dynamic height based on All Documents position for both iPhone and iPad
                         return allDocumentsPosition.carouselHeight
                     } else {
-                        return 380 // iPad keeps fixed height
+                        return 380 // Fallback for other devices
                     }
                     #else
                     return 380
@@ -3088,11 +3254,12 @@ struct DashboardView: View {
                     .frame(width: adjustedCardWidth, height: {
                         #if os(iOS)
                         let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-                        if isPhone {
-                            // Use dynamic height based on All Documents position
+                        let isIPad = UIDevice.current.userInterfaceIdiom == .pad
+                        if isPhone || isIPad {
+                            // Use dynamic height based on All Documents position for both iPhone and iPad
                             return allDocumentsPosition.carouselHeight
                         } else {
-                            return 380 // iPad keeps fixed height
+                            return 380 // Fallback for other devices
                         }
                         #else
                         return 380
@@ -3441,7 +3608,13 @@ struct DashboardView: View {
 
     // NEW: Carousel Navigation Pills
     private var carouselNavigationPills: some View {
-        HStack(spacing: 6) {
+        #if os(iOS)
+        let isIPad = UIDevice.current.userInterfaceIdiom == .pad
+        #else
+        let isIPad = false
+        #endif
+        
+        return HStack(spacing: isIPad ? 12 : 6) {
             ForEach(0..<carouselSections.count, id: \.self) { index in
                 Button(action: {
                     withAnimation(.spring(response: 0.6, dampingFraction: 0.75)) {
@@ -3449,7 +3622,7 @@ struct DashboardView: View {
                         saveCarouselPosition()
                     }
                 }) {
-                    HStack(spacing: 5) {
+                    HStack(spacing: isIPad ? 8 : 5) {
                         // Icon for each section
                         Image(systemName: {
                             switch index {
@@ -3459,7 +3632,7 @@ struct DashboardView: View {
                             default: return "doc.text"
                             }
                         }())
-                        .font(.system(size: 11, weight: .medium)) // Slightly smaller icon
+                        .font(.system(size: isIPad ? 14 : 11, weight: .medium)) // Larger icon for iPad
                         
                         // Title for each section
                         Text({
@@ -3470,13 +3643,13 @@ struct DashboardView: View {
                             default: return "Section"
                             }
                         }())
-                        .font(.custom("InterTight-Medium", size: 12)) // Slightly smaller text
+                        .font(.custom("InterTight-Medium", size: isIPad ? 15 : 12)) // Larger text for iPad
                     }
                     .foregroundStyle(selectedCarouselIndex == index ? .white : theme.primary)
-                    .padding(.horizontal, 10) // Slightly smaller horizontal padding
-                    .padding(.vertical, 7) // Slightly smaller vertical padding
+                    .padding(.horizontal, isIPad ? 16 : 10) // More horizontal padding for iPad
+                    .padding(.vertical, isIPad ? 10 : 7) // More vertical padding for iPad
                     .background(
-                        RoundedRectangle(cornerRadius: 14) // Slightly smaller corner radius
+                        RoundedRectangle(cornerRadius: isIPad ? 18 : 14) // Larger corner radius for iPad
                             .fill(selectedCarouselIndex == index ? theme.accent : theme.accent.opacity(0.1))
                     )
                 }
@@ -3484,10 +3657,13 @@ struct DashboardView: View {
             }
         }
         .frame(maxWidth: .infinity) // Center the pills in the available space
-        .padding(.horizontal, 20) // Consistent horizontal padding for centering
-        .padding(.vertical, 12)
+        .padding(.horizontal, isIPad ? 40 : 20) // More horizontal padding for iPad centering
+        .padding(.vertical, isIPad ? 16 : 12) // More vertical padding for iPad
         .animation(.spring(response: 0.6, dampingFraction: 0.75), value: showFloatingSidebar)
     }
+
+    @State private var cachedFilteredDocuments: [Letterspace_CanvasDocument] = []
+    @State private var cachedSortedFilteredDocuments: [Letterspace_CanvasDocument] = []
 }
 
 // Add this helper view for the button background

@@ -145,6 +145,7 @@ struct FoldersPopupContent: View {
                     }
                     .padding(.vertical, 8)
                 }
+                .frame(minHeight: 200) // Ensure minimum height for folder list visibility
                 
                 if currentFolder == nil {
                     stickyFooter
@@ -518,6 +519,11 @@ struct FoldersPopupContent: View {
     // Computed property for the main folder content
     private var folderContent: some View {
         VStack(alignment: .leading, spacing: 8) {
+            // Debug: Log the current state
+            let _ = print("📁 DEBUG: sortedFolders count: \(sortedFolders.count)")
+            let _ = print("📁 DEBUG: folders array: \(folders.map { $0.name })")
+            let _ = print("📁 DEBUG: currentFolder: \(currentFolder?.name ?? "nil")")
+            
             // Navigation header
             if let currentFolder = currentFolder {
                 HStack(spacing: 8) {
@@ -1255,62 +1261,8 @@ struct FoldersView: View {
         Group {
             #if os(iOS)
             if isPhone {
-                // iPhone: Sticky header/footer layout with scrollable content
-                VStack(spacing: 0) {
-                    // Sticky header - match Bible Reader style
-                    VStack(spacing: 12) {
-                        // Title section
-                        HStack {
-                            Text("Folders")
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundStyle(theme.primary)
-                            
-                            Spacer()
-                            
-                            // Close button - only show on iPad/macOS, not iPhone
-                            #if os(iOS)
-                            if UIDevice.current.userInterfaceIdiom != .phone {
-                                Button(action: onDismiss) {
-                                    Image(systemName: "xmark")
-                                        .font(.system(size: 12, weight: .bold))
-                                        .foregroundColor(.white)
-                                        .frame(width: 28, height: 28)
-                                        .background(Circle().fill(Color.gray.opacity(0.5)))
-                                        .contentShape(Circle())
-                                }
-                                .buttonStyle(.plain)
-                                .onHover { hovering in
-                                    isHoveringClose = hovering
-                                }
-                            }
-                            #else
-                            // macOS - always show close button
-                            Button(action: onDismiss) {
-                                Image(systemName: "xmark")
-                                    .font(.system(size: 12, weight: .bold))
-                                    .foregroundColor(.white)
-                                    .frame(width: 28, height: 28)
-                                    .background(Circle().fill(Color.gray.opacity(0.5)))
-                                    .contentShape(Circle())
-                            }
-                            .buttonStyle(.plain)
-                            .onHover { hovering in
-                                isHoveringClose = hovering
-                            }
-                            #endif
-                        }
-                        .padding(.horizontal, 20) // Content padding
-                    }
-                    .padding(.vertical, 2) // Reduced from 4 to 2 to match Bible Reader spacing
-                    .padding(.bottom, 7) // Reduced from 8 to 7 for 1 point less space before separator
-                    .padding(.top, -12) // Adjusted from -14 to -12 for perfect spacing
-                    .padding(.horizontal, -20) // Extend to full width by negating modal padding
-                    .background(colorScheme == .dark ? Color(.sRGB, white: 0.15) : .white)
-                    
-                    Divider()
-                        .padding(.horizontal, -20) // Extend divider to full width
-                    
-                    // Scrollable content area
+                // iPhone: Use NavigationView like Bible Reader search modal
+                NavigationView {
                     FoldersPopupContent(
                         activePopup: $activePopup,
                         folders: $folders,
@@ -1318,8 +1270,11 @@ struct FoldersView: View {
                         sidebarMode: $sidebarMode,
                         isRightSidebarVisible: $isRightSidebarVisible,
                         onAddFolder: addFolder,
-                        showHeader: false // Don't show header since we have sticky header
+                        showHeader: false // Don't show header since we have navigation title
                     )
+                    .navigationTitle("Folders")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .navigationBarItems(trailing: Button("Done", action: onDismiss))
                 }
             } else {
                 // iPad: Use regular VStack
@@ -1334,24 +1289,7 @@ struct FoldersView: View {
             }
             #endif
         }
-        .frame(width: {
-            #if os(iOS)
-            let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-            return isPhone ? 340 : 500  // Smaller for iPhone, larger for iPad
-            #else
-            return 400 // macOS default
-            #endif
-        }(), height: {
-            #if os(iOS)
-            let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-            return isPhone ? 500 : 700  // Reduced height for iPhone to better fit content
-            #else
-            return 700 // macOS default
-            #endif
-        }())
-        .padding(20)
-        .background(colorScheme == .dark ? Color(.sRGB, white: 0.15) : .white)
-        .cornerRadius(16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
             loadFolders()
         }

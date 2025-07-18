@@ -1,7 +1,9 @@
-#if os(macOS)
 import SwiftUI
+#if os(macOS)
 import AppKit
+#endif
 
+#if os(macOS)
 // Define a direct NSTextField representable right here in the file
 struct BibleSearchTextField: NSViewRepresentable {
     @Binding var text: String
@@ -61,6 +63,7 @@ struct BibleSearchTextField: NSViewRepresentable {
         }
     }
 }
+#endif
 
 struct BibleSearchView: View {
     @State private var searchText = ""
@@ -80,6 +83,7 @@ struct BibleSearchView: View {
             headerView
             resultsSection
         }
+        #if os(macOS)
         .frame(width: 600)
         .preferredColorScheme(.light)
         .background(Color.white)
@@ -99,6 +103,16 @@ struct BibleSearchView: View {
                 }
             }
         }
+        #else
+        .background(Color(.systemBackground))
+        .onAppear {
+            searchText = ""
+            searchResults = []
+            totalResults = 0
+            hasMoreResults = false
+            currentPage = 1
+        }
+        #endif
     }
     
     private var headerView: some View {
@@ -106,7 +120,7 @@ struct BibleSearchView: View {
             HStack(alignment: .center, spacing: 16) {
                 Text("Scripture")
                     .font(.system(size: 32, weight: .bold))
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
                 
                 HStack(spacing: 8) {
                     searchBar
@@ -122,7 +136,11 @@ struct BibleSearchView: View {
             Divider()
                 .background(Color.gray.opacity(0.2))
         }
-        .background(Color.white)
+        #if os(iOS)
+        .background(Color(.systemBackground))
+        #else
+        .background(Color(NSColor.windowBackgroundColor))
+        #endif
     }
     
     private var searchBar: some View {
@@ -131,7 +149,11 @@ struct BibleSearchView: View {
             searchField
         }
         .padding(6)
-        .background(Color(.white))
+        #if os(iOS)
+        .background(Color(.systemBackground))
+        #else
+        .background(Color(NSColor.windowBackgroundColor))
+        #endif
         .cornerRadius(6)
         .overlay(
             RoundedRectangle(cornerRadius: 6)
@@ -185,15 +207,22 @@ struct BibleSearchView: View {
     
     private var searchField: some View {
         HStack(spacing: 8) {
-            searchModeButtons
-            
+            #if os(macOS)
             BibleSearchTextField(
                 text: $searchText,
                 placeholder: getPlaceholderText(),
                 onAction: { searchBibleVerses(query: searchText) }
             )
             .id(activeMode)
-            
+            #else
+            TextField(getPlaceholderText(), text: $searchText, onCommit: {
+                searchBibleVerses(query: searchText)
+            })
+            .textFieldStyle(RoundedBorderTextFieldStyle())
+            .autocapitalization(.none)
+            .disableAutocorrection(true)
+            .frame(height: 36)
+            #endif
             Button(action: {
                 searchBibleVerses(query: searchText)
             }) {
@@ -285,7 +314,15 @@ struct BibleSearchView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(Color(.textBackgroundColor))
+            .background(
+                {
+                    #if os(macOS)
+                    Color(NSColor.textBackgroundColor)
+                    #else
+                    Color(.secondarySystemBackground)
+                    #endif
+                }()
+            )
             .cornerRadius(6)
             
             Spacer()
@@ -514,5 +551,4 @@ struct PillButtonStyle: ButtonStyle {
             .clipShape(Capsule())
             .opacity(configuration.isPressed ? 0.8 : 1.0)
     }
-}
-#endif 
+} 

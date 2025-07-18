@@ -132,6 +132,10 @@ struct RecentlyDeletedView: View {
     private let maxDaysInTrash = 30
     
     var body: some View {
+        #if os(iOS)
+        let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+        #endif
+        
         ZStack {
             // Dismiss layer
             Color.clear
@@ -301,34 +305,42 @@ struct RecentlyDeletedView: View {
                 }
             }
             .padding(24)
-            .frame(width: {
+            .applyIf(!({
                 #if os(iOS)
-                let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-                return isPhone ? 340 : 500  // Smaller for iPhone, larger for iPad
+                UIDevice.current.userInterfaceIdiom == .phone
                 #else
-                return 500 // macOS default
+                false
                 #endif
-            }(), height: {
-                #if os(iOS)
-                let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-                return isPhone ? 600 : 700  // Constrain height for iPhone
-                #else
-                return 600 // macOS default
-                #endif
-            }())
-            .background({
-                #if os(macOS)
-                colorScheme == .dark ? Color(.controlBackgroundColor) : Color.white
-                #elseif os(iOS)
-                colorScheme == .dark ? Color(.systemBackground) : Color.white
-                #endif
-            }())
-            .cornerRadius(12)
-            .shadow(color: Color.black.opacity(0.25), radius: 25, x: 0, y: 10)
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(theme.secondary.opacity(0.1), lineWidth: 1)
-            )
+            }()), {
+                $0.frame(width: {
+                    #if os(iOS)
+                    let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                    return isPhone ? 340 : 500  // Smaller for iPhone, larger for iPad
+                    #else
+                    return 500 // macOS default
+                    #endif
+                }(), height: {
+                    #if os(iOS)
+                    let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                    return isPhone ? 600 : 700  // Constrain height for iPhone
+                    #else
+                    return 600 // macOS default
+                    #endif
+                }())
+                .background({
+                    #if os(macOS)
+                    colorScheme == .dark ? Color(.controlBackgroundColor) : Color.white
+                    #elseif os(iOS)
+                    colorScheme == .dark ? Color(.systemBackground) : Color.white
+                    #endif
+                }())
+                .cornerRadius(12)
+                .shadow(color: Color.black.opacity(0.25), radius: 25, x: 0, y: 10)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(theme.secondary.opacity(0.1), lineWidth: 1)
+                )
+            })
             .opacity(appearanceOpacity)
             .scaleEffect(appearanceOpacity * 0.05 + 0.95, anchor: .center)
         }

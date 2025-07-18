@@ -148,6 +148,7 @@ struct WIPSection: View {
                 }
                 .padding(.horizontal, 4)
                 .padding(.top, -2)  // Negative padding to exactly match PinnedSection
+                // Blue background removed after debugging
             }
             #if os(macOS)
             .customScroll(shouldFlash: false)  // Added customScroll to match PinnedSection
