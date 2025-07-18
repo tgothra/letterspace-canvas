@@ -706,7 +706,12 @@ struct DashboardView: View {
             .opacity(isModalPresented || showPinnedModal || showWIPModal || showSchedulerModal ? 0.7 : 1.0)
             .overlay { modalOverlayView } // Apply overlay first
             .animation(.easeInOut(duration: 0.2), value: isModalPresented || showPinnedModal || showWIPModal || showSchedulerModal)
-            .ignoresSafeArea(isIPad ? .all : [], edges: isIPad ? .top : [])
+            // BREAK UP THE COMPLEX EXPRESSION:
+            #if os(iOS)
+            .modifier(IgnoresSafeAreaModifier(isIPad: isIPad))
+            #else
+            .ignoresSafeArea()
+            #endif
         }
         .onAppear {
             // Only do essential initialization - like Apple Notes and Craft
@@ -3852,3 +3857,17 @@ struct AnyShape: Shape {
         return _path(rect)
     }
 }
+
+// Add this at the bottom of the file:
+#if os(iOS)
+private struct IgnoresSafeAreaModifier: ViewModifier {
+    let isIPad: Bool
+    func body(content: Content) -> some View {
+        if isIPad {
+            content.ignoresSafeArea(.all, edges: .top)
+        } else {
+            content
+        }
+    }
+}
+#endif
