@@ -868,6 +868,9 @@ struct SearchPopupContent: View {
     var onDismiss: (() -> Void)? = nil
     @Environment(\.themeColors) var theme
     
+    // Lazy initialization flag to prevent heavy work on first load
+    @State private var isSearchSystemInitialized = false
+    
     private func getMatchContext(content: String, searchText: String) -> (String, Range<String.Index>?) {
         guard let range = content.range(of: searchText, options: .caseInsensitive) else {
             return (content, nil)
@@ -894,6 +897,12 @@ struct SearchPopupContent: View {
                 searchResults = []
             }
             return
+        }
+        
+        // Initialize search system lazily only when first search is performed
+        if !isSearchSystemInitialized {
+            print("🔍 First search - initializing search system")
+            isSearchSystemInitialized = true
         }
         
         // Perform search on background thread to avoid blocking UI
@@ -1052,6 +1061,9 @@ struct SearchView: View {
     // Track if view has been initialized to avoid multiple onAppear calls
     @State private var hasInitialized = false
     
+    // Optimized loading: delay heavy content until after initial render
+    @State private var contentReady = false
+    
     // Add focus state at SearchView level for more direct control
     #if os(iOS)
     @FocusState private var isSearchFocused: Bool
@@ -1067,13 +1079,49 @@ struct SearchView: View {
             if isPhone {
                 // iPhone: Use NavigationView like Bible Reader search modal
                 NavigationView {
-                    SearchPopupContent(
-                        activePopup: $activePopup,
-                        document: $document,
-                        sidebarMode: $sidebarMode,
-                        isRightSidebarVisible: $isRightSidebarVisible,
-                        onDismiss: onDismiss
-                    )
+                    if contentReady {
+                        SearchPopupContent(
+                            activePopup: $activePopup,
+                            document: $document,
+                            sidebarMode: $sidebarMode,
+                            isRightSidebarVisible: $isRightSidebarVisible,
+                            onDismiss: onDismiss
+                        )
+                    } else {
+                        // Minimal loading view with immediate search field
+                        VStack(spacing: 20) {
+                            // Immediate search field for instant keyboard focus
+                            HStack(spacing: 8) {
+                                Image(systemName: "magnifyingglass")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(theme.secondary)
+                                TextField("Search documents...", text: .constant(""))
+                                    .textFieldStyle(.plain)
+                                    .font(.system(size: 14))
+                                    #if os(iOS)
+                                    .focused($isSearchFocused)
+                                    #endif
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 6)
+                            .background(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(theme.surface)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 6)
+                                            .stroke(theme.secondary.opacity(0.2), lineWidth: 1)
+                                    )
+                            )
+                            
+                            Text("Loading search...")
+                                .font(.system(size: 12))
+                                .foregroundStyle(theme.secondary)
+                            
+                            Spacer()
+                        }
+                        .padding(16)
+                        .background(theme.surface)
+                    }
                     .navigationTitle("Search Documents")
                     .navigationBarTitleDisplayMode(.inline)
                     .navigationBarItems(trailing: 
@@ -1107,12 +1155,12 @@ struct SearchView: View {
             
             #if os(iOS)
             if UIDevice.current.userInterfaceIdiom == .phone {
-                print("🔍 SearchView appeared on iPhone - forcing immediate keyboard focus")
+                print("🔍 SearchView appeared on iPhone - immediate keyboard focus and delayed content loading")
                 
-                // Multiple aggressive attempts to focus immediately
+                // Immediate keyboard focus attempts on loading view
                 isSearchFocused = true
                 
-                // Force keyboard appearance at UIKit level
+                // Force keyboard appearance at UIKit level - immediate
                 DispatchQueue.main.async {
                     // Find and focus the first text field in the hierarchy
                     if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
@@ -1122,6 +1170,7 @@ struct SearchView: View {
                     print("🔍 SearchView - UIKit focus attempt")
                 }
                 
+                // Quick focus backups
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
                     isSearchFocused = true
                     print("🔍 SearchView - 10ms focus attempt")
@@ -1130,6 +1179,14 @@ struct SearchView: View {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) {
                     isSearchFocused = true
                     print("🔍 SearchView - 20ms focus attempt")
+                }
+                
+                // Load heavy content after keyboard is focused and view is rendered
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    print("🔍 SearchView - loading full search content")
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        contentReady = true
+                    }
                 }
             }
             #endif
