@@ -252,40 +252,53 @@ struct MainLayout: View {
     
     var body: some View {
         content
-            // iPhone-only sheets
-            #if os(iOS)
-            .applyIf(UIDevice.current.userInterfaceIdiom == .phone, { view in
-                view
-                .sheet(isPresented: $showBibleReaderModal) {
-                    BibleReaderView(onDismiss: {
-                        showBibleReaderModal = false
-                    })
+            .sheet(isPresented: Binding(
+                get: { 
+                    #if os(iOS)
+                    return showBibleReaderModal && UIDevice.current.userInterfaceIdiom == .phone
+                    #else
+                    return showBibleReaderModal
+                    #endif
+                },
+                set: { showBibleReaderModal = $0 }
+            )) {
+                BibleReaderView(onDismiss: {
+                    showBibleReaderModal = false
+                })
+                .presentationBackground(.ultraThinMaterial)
+            }
+            .sheet(isPresented: $showFoldersModal) {
+                FoldersView(onDismiss: {
+                    showFoldersModal = false
+                })
+                .presentationBackground(.ultraThinMaterial)
+            }
+            .sheet(isPresented: $showSearchModal) {
+                SearchView(onDismiss: {
+                    showSearchModal = false
+                })
+                .presentationBackground(.ultraThinMaterial)
+            }
+            .sheet(isPresented: Binding(
+                get: { 
+                    #if os(iOS)
+                    return showSmartStudyModal && UIDevice.current.userInterfaceIdiom == .phone
+                    #else
+                    return showSmartStudyModal
+                    #endif
+                },
+                set: { showSmartStudyModal = $0 }
+            )) {
+                SmartStudyView(onDismiss: {
+                    showSmartStudyModal = false
+                })
+                .presentationBackground(.ultraThinMaterial)
+            }
+
+            .sheet(isPresented: $showRecentlyDeletedModal) {
+                RecentlyDeletedView(isPresented: $showRecentlyDeletedModal)
                     .presentationBackground(.ultraThinMaterial)
-                }
-                .sheet(isPresented: $showFoldersModal) {
-                    FoldersView(onDismiss: {
-                        showFoldersModal = false
-                    })
-                    .presentationBackground(.ultraThinMaterial)
-                }
-                .sheet(isPresented: $showSearchModal) {
-                    SearchView(onDismiss: {
-                        showSearchModal = false
-                    })
-                    .presentationBackground(.ultraThinMaterial)
-                }
-                .sheet(isPresented: $showSmartStudyModal) {
-                    SmartStudyView(onDismiss: {
-                        showSmartStudyModal = false
-                    })
-                    .presentationBackground(.ultraThinMaterial)
-                }
-                .sheet(isPresented: $showRecentlyDeletedModal) {
-                    RecentlyDeletedView(isPresented: $showRecentlyDeletedModal)
-                        .presentationBackground(.ultraThinMaterial)
-                }
-            })
-            #endif
+            }
             .overlay {
                 #if os(macOS)
                 if showBibleReaderModal {
@@ -312,87 +325,6 @@ struct MainLayout: View {
                             insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .center)),
                             removal: .opacity.combined(with: .scale(scale: 0.95, anchor: .center))
                         ))
-                    }
-                }
-                #else
-                // iPad custom modal overlays (to replace iPhone sheets)
-                if UIDevice.current.userInterfaceIdiom != .phone {
-                    if showBibleReaderModal {
-                        ZStack {
-                            Color.clear
-                                .contentShape(Rectangle())
-                                .ignoresSafeArea()
-                                .onTapGesture {
-                                    withAnimation(.easeInOut(duration: 0.2)) {
-                                        showBibleReaderModal = false
-                                    }
-                                }
-                            LazyModalContainer {
-                                BibleReaderView(onDismiss: {
-                                    withAnimation(.easeInOut(duration: 0.2)) {
-                                        showBibleReaderModal = false
-                                    }
-                                })
-                            }
-                            .fixedSize()
-                            .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 10)
-                            .transition(.asymmetric(
-                                insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .center)),
-                                removal: .opacity.combined(with: .scale(scale: 0.95, anchor: .center))
-                            ))
-                        }
-                    }
-                    
-                    if showFoldersModal {
-                        ZStack {
-                            Color.clear
-                                .contentShape(Rectangle())
-                                .ignoresSafeArea()
-                                .onTapGesture {
-                                    withAnimation(.easeInOut(duration: 0.2)) {
-                                        showFoldersModal = false
-                                    }
-                                }
-                            LazyModalContainer {
-                                FoldersView(onDismiss: {
-                                    withAnimation(.easeInOut(duration: 0.2)) {
-                                        showFoldersModal = false
-                                    }
-                                })
-                            }
-                            .fixedSize()
-                            .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 10)
-                            .transition(.asymmetric(
-                                insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .center)),
-                                removal: .opacity.combined(with: .scale(scale: 0.95, anchor: .center))
-                            ))
-                        }
-                    }
-                    
-                    if showSearchModal {
-                        ZStack {
-                            Color.clear
-                                .contentShape(Rectangle())
-                                .ignoresSafeArea()
-                                .onTapGesture {
-                                    withAnimation(.easeInOut(duration: 0.2)) {
-                                        showSearchModal = false
-                                    }
-                                }
-                            LazyModalContainer {
-                                SearchView(onDismiss: {
-                                    withAnimation(.easeInOut(duration: 0.2)) {
-                                        showSearchModal = false
-                                    }
-                                })
-                            }
-                            .fixedSize()
-                            .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 10)
-                            .transition(.asymmetric(
-                                insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .center)),
-                                removal: .opacity.combined(with: .scale(scale: 0.95, anchor: .center))
-                            ))
-                        }
                     }
                 }
                 #endif
