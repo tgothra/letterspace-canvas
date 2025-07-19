@@ -1740,21 +1740,10 @@ private func deleteSelectedDocuments() {
                             // Haptic feedback
                             HapticFeedback.impact(.light)
                         }) {
-                            HStack(spacing: 4) {
                             Text("Tags")
                                 .font(.custom("InterTight-Medium", size: 11))
                                 .foregroundStyle(selectedFilterCategory == "Tags" ? .white : theme.primary)
-                            
-                            Button(action: {
-                                showTagManager = true
-                            }) {
-                                Image(systemName: "info.circle")
-                                    .font(.system(size: 10))
-                                    .foregroundStyle(selectedFilterCategory == "Tags" ? .white : theme.primary)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                        .frame(width: 56, height: 28)
+                                .frame(width: 56, height: 28)
                         }
                         .buttonStyle(.plain)
                         .opacity(allTags.isEmpty ? 0.4 : 1.0) // Dim if no tags available
@@ -1762,6 +1751,19 @@ private func deleteSelectedDocuments() {
                     }
                 }
                 .frame(width: 120, height: 32)
+                
+                // Info button for tag management (between Tags button and filter area)
+                if selectedFilterCategory == "Tags" && !allTags.isEmpty {
+                    Button(action: {
+                        showTagManager = true
+                    }) {
+                        Image(systemName: "info.circle")
+                            .font(.system(size: 12))
+                            .foregroundStyle(theme.primary)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, 8)
+                }
                 
                 // Single scrollable filter area (right side)
                 ScrollView(.horizontal, showsIndicators: false) {
