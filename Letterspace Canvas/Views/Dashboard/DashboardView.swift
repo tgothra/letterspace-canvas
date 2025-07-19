@@ -1740,10 +1740,21 @@ private func deleteSelectedDocuments() {
                             // Haptic feedback
                             HapticFeedback.impact(.light)
                         }) {
+                            HStack(spacing: 4) {
                             Text("Tags")
                                 .font(.custom("InterTight-Medium", size: 11))
                                 .foregroundStyle(selectedFilterCategory == "Tags" ? .white : theme.primary)
-                                .frame(width: 56, height: 28)
+                            
+                            Button(action: {
+                                showTagManager = true
+                            }) {
+                                Image(systemName: "info.circle")
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(selectedFilterCategory == "Tags" ? .white : theme.primary)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .frame(width: 56, height: 28)
                         }
                         .buttonStyle(.plain)
                         .opacity(allTags.isEmpty ? 0.4 : 1.0) // Dim if no tags available
@@ -1846,6 +1857,15 @@ private func deleteSelectedDocuments() {
         .onAppear {
             // Default to Filter category
             selectedFilterCategory = "Filter"
+        }
+        .popover(isPresented: $showTagManager, arrowEdge: .bottom) {
+            TagManager(allTags: allTags)
+                .frame(width: 280)
+                #if os(macOS)
+                .background(Color(.windowBackgroundColor))
+                #elseif os(iOS)
+                .background(Color(UIColor.systemBackground))
+                #endif
         }
     }
     
