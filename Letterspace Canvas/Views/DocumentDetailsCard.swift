@@ -623,26 +623,32 @@ struct DocumentDetailsCard: View {
             
     // MARK: - Tab Bar and Content
     private var tabsAndContentSection: some View {
+        VStack(spacing: 0) {
+            // Tab headers
+            tabsView
+            
+            // Tab content
             ZStack(alignment: .top) {
                 if selectedTab == .info {
                     ScrollView {
-                    VStack(spacing: 24) { infoTabView }
-                        .padding(.horizontal, 8).padding(.bottom, 16)
-                }.frame(maxWidth: .infinity)
+                        VStack(spacing: 24) { infoTabView }
+                            .padding(.horizontal, 8).padding(.bottom, 16)
+                    }.frame(maxWidth: .infinity)
                 } else if selectedTab == .variations {
                     ScrollView {
-                    VStack(spacing: 24) { variationsTabView }
-                        .padding(.horizontal, 8).padding(.bottom, 16)
-                }.frame(maxWidth: .infinity)
+                        VStack(spacing: 24) { variationsTabView }
+                            .padding(.horizontal, 8).padding(.bottom, 16)
+                    }.frame(maxWidth: .infinity)
                 } else if selectedTab == .links {
                     ScrollView {
-                    VStack(spacing: 16) { linksTabView }
-                        .padding(.horizontal, 8).padding(.bottom, 16)
-                }.frame(maxWidth: .infinity)
+                        VStack(spacing: 16) { linksTabView }
+                            .padding(.horizontal, 8).padding(.bottom, 16)
+                    }.frame(maxWidth: .infinity)
                 } else if selectedTab == .smartStudies {
-                VStack(spacing: 24) { clipsTabView } // Renamed from smartStudiesTabView for consistency with original code snippet
-                    .frame(maxWidth: .infinity)
-                    .onAppear { loadNotesFromDocument() }
+                    VStack(spacing: 24) { clipsTabView } // Renamed from smartStudiesTabView for consistency with original code snippet
+                        .frame(maxWidth: .infinity)
+                        .onAppear { loadNotesFromDocument() }
+                }
             }
         }
         // Apply gestures also to the content area for consistency
@@ -1412,18 +1418,16 @@ struct DocumentDetailsCard: View {
             HStack(spacing: 0) {
                 ForEach(Tab.allCases, id: \.self) { tab in
                     Button(action: { switchTab(to: tab) }) {
-                        VStack(spacing: 4) {
-                            Text(tab.rawValue)
-                                .font(.system(size: 13))
-                                .foregroundStyle(selectedTab == tab ? theme.primary : theme.secondary)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 8)
-                        }
+                        Text(tab.rawValue)
+                            .font(.system(size: 14, weight: selectedTab == tab ? .medium : .regular))
+                            .foregroundStyle(selectedTab == tab ? theme.primary : theme.secondary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
                     }
                     .buttonStyle(.plain)
                     .background(
                         hoveredTab == tab && selectedTab != tab ?
-                        (colorScheme == .dark ? Color(.sRGB, white: 0.2) : Color(.sRGB, white: 0.97)) :
+                        (colorScheme == .dark ? Color(.sRGB, white: 0.1) : Color(.sRGB, white: 0.95)) :
                             Color.clear
                     )
                     .onHover { hovering in
@@ -1433,6 +1437,12 @@ struct DocumentDetailsCard: View {
                     }
                 }
             }
+            .frame(maxWidth: .infinity)
+            
+            // Separator line
+            Rectangle()
+                .fill(colorScheme == .dark ? Color(.sRGB, white: 0.2) : Color(.sRGB, white: 0.9))
+                .frame(height: 1)
             
             // Animated indicator
             GeometryReader { geometry in
@@ -1440,8 +1450,8 @@ struct DocumentDetailsCard: View {
                 let indicatorPosition = tabWidth * CGFloat(Tab.allCases.firstIndex(of: selectedTab) ?? 0)
                 
                 Rectangle()
-                    .fill(Color.blue)
-                    .frame(width: tabWidth, height: 2)
+                    .fill(theme.accent)
+                    .frame(width: tabWidth, height: 3)
                     .offset(x: indicatorPosition)
                     .animation(
                         .spring(
@@ -1452,9 +1462,10 @@ struct DocumentDetailsCard: View {
                         value: selectedTab
                     )
             }
-            .frame(height: 2)
+            .frame(height: 3)
         }
-        .padding(.horizontal, 8)
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
     }
     
     private var infoTabView: some View {

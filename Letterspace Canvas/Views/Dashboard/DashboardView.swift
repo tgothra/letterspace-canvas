@@ -953,6 +953,35 @@ struct DashboardView: View {
                 }
             }
         )
+        // iPhone: Use sheet for Document Details
+        #if os(iOS)
+        .sheet(isPresented: Binding(
+            get: { UIDevice.current.userInterfaceIdiom == .phone && showDetailsCard && selectedDetailsDocument != nil },
+            set: { show in
+                if !show {
+                    showDetailsCard = false
+                    selectedDetailsDocument = nil
+                }
+            }
+        )) {
+            if let selectedDoc = selectedDetailsDocument,
+               let currentIndex = documents.firstIndex(where: { $0.id == selectedDoc.id }) {
+                DocumentDetailsCard(
+                    document: $documents[currentIndex],
+                    allLocations: allLocations,
+                    onNext: navigateToNextDocument,
+                    onPrevious: navigateToPreviousDocument,
+                    canNavigateNext: canNavigateNext,
+                    canNavigatePrevious: canNavigatePrevious,
+                    onDismiss: {
+                        showDetailsCard = false
+                        selectedDetailsDocument = nil
+                    }
+                )
+                .id(selectedDoc.id)
+            }
+        }
+        #endif
     }
     
     // iPad Modal Overlay Helper
@@ -1311,8 +1340,16 @@ struct DashboardView: View {
     // NEW: Extracted computed property for modal overlays
     @ViewBuilder
     private var modalOverlayView: some View {
-        // Overlay for DocumentDetailsCard
-        if showDetailsCard, let selectedDoc = selectedDetailsDocument,
+        // Overlay for DocumentDetailsCard (iPad and macOS only, iPhone uses sheet)
+        let shouldShowModal: Bool = {
+            #if os(iOS)
+            return UIDevice.current.userInterfaceIdiom == .pad && showDetailsCard
+            #else
+            return showDetailsCard
+            #endif
+        }()
+        
+        if shouldShowModal, let selectedDoc = selectedDetailsDocument,
            let currentIndex = documents.firstIndex(where: { $0.id == selectedDoc.id }) {
             // Dismiss layer
             Color.clear
