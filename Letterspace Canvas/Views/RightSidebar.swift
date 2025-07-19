@@ -1697,42 +1697,49 @@ struct RightSidebar: View {
                 ForEach(Array(bookmarkedMarkers.enumerated()), id: \.element.id) { index, bookmark in
                     let bookmark = bookmarkedMarkers[index]
                     if let originalIndex = document.markers.firstIndex(where: { $0.id == bookmark.id }) {
-                        HStack(spacing: 8) {
-                            Circle()
-                                .fill(markerColor(for: bookmark.type))
-                                .frame(width: 6, height: 6)
-                            
-                            // Make this section clickable
+                        HStack(spacing: 12) {
+                            // Navigate to bookmark button - larger and more obvious
                             Button(action: {
                                 scrollToBookmark(position: bookmark.position)
                             }) {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    TextField("Bookmark Title", text: Binding(
-                                        get: { 
-                                            // Safe access to bookmark title
-                                            guard document.markers.indices.contains(originalIndex) else { return "" } 
-                                            return document.markers[originalIndex].title 
-                                        },
-                                        set: { newValue in
-                                            // Update the original marker in the document
-                                            // Check index validity before accessing
-                                            if document.markers.indices.contains(originalIndex) {
-                                                document.markers[originalIndex].title = newValue
-                                                document.save()
-                                            }
-                                        }
-                                    ))
-                                    .font(.custom("Inter-Medium", size: 12))
-                                    .foregroundColor(theme.primary)
-                                    .textFieldStyle(.plain)
-                                    
-                                    // Show bookmark line number
-                                    Text("Line \(bookmark.position)") // Changed to show Line number
-                                        .font(.custom("Inter-Regular", size: 10))
-                                        .foregroundColor(theme.secondary)
-                                }
+                                Image(systemName: "location.fill")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(.white)
+                                    .frame(width: 24, height: 24)
+                                    .background(
+                                        Circle()
+                                            .fill(Color(hex: "#007AFF"))
+                                    )
                             }
                             .buttonStyle(.plain)
+                            .help("Go to bookmark")
+                            
+                            // Make this section clickable for editing  
+                            VStack(alignment: .leading, spacing: 2) {
+                                TextField("Bookmark Title", text: Binding(
+                                    get: { 
+                                        // Safe access to bookmark title
+                                        guard document.markers.indices.contains(originalIndex) else { return "" } 
+                                        return document.markers[originalIndex].title 
+                                    },
+                                    set: { newValue in
+                                        // Update the original marker in the document
+                                        // Check index validity before accessing
+                                        if document.markers.indices.contains(originalIndex) {
+                                            document.markers[originalIndex].title = newValue
+                                            document.save()
+                                        }
+                                    }
+                                ))
+                                .font(.custom("Inter-Regular", size: 13))
+                                .foregroundColor(theme.primary)
+                                .textFieldStyle(.plain)
+                                
+                                // Show bookmark line number
+                                Text("Line \(bookmark.position)") // Changed to show Line number
+                                    .font(.custom("Inter-Regular", size: 10))
+                                    .foregroundColor(theme.secondary)
+                            }
                             
                             Spacer()
                             

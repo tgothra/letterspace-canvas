@@ -1977,30 +1977,41 @@ struct FloatingContextualToolbar: View {
                         .foregroundColor(theme.secondary)
                     
                     ForEach(bookmarks.prefix(5), id: \.id) { bookmark in
-                        HStack {
-                            Circle()
-                                .fill(Color.blue)
-                                .frame(width: 6, height: 6)
+                        HStack(spacing: 12) {
+                            // Navigate to bookmark button - blue button with icon
+                            Button(action: {
+                                scrollToBookmark(bookmark: bookmark)
+                            }) {
+                                Image(systemName: "location.fill")
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundColor(.white)
+                                    .frame(width: 20, height: 20)
+                                    .background(
+                                        Circle()
+                                            .fill(Color(hex: "#007AFF"))
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                            .help("Go to bookmark")
                             
-                            Text(bookmark.title.isEmpty ? "Bookmark" : bookmark.title)
-                                .font(.system(size: 13))
-                                .foregroundColor(theme.primary)
-                                .lineLimit(1)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(bookmark.title.isEmpty ? "Bookmark" : bookmark.title)
+                                    .font(.system(size: 13))
+                                    .foregroundColor(theme.primary)
+                                    .lineLimit(1)
+                                
+                                Text("Line \(bookmark.position)")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(theme.secondary)
+                            }
                             
                             Spacer()
-                            
-                            Text("Line \(bookmark.position)")
-                                .font(.system(size: 11))
-                                .foregroundColor(theme.secondary)
                         }
                         .padding(8)
                         .background(
                             RoundedRectangle(cornerRadius: 6)
                                 .fill(theme.secondary.opacity(0.05))
                         )
-                        .onTapGesture {
-                            // Could implement bookmark navigation here
-                        }
                     }
                     
                     if bookmarks.count > 5 {
@@ -2037,6 +2048,28 @@ struct FloatingContextualToolbar: View {
     @State private var showRenameAlert = false
     @State private var renameText = ""
     @State private var activeVariationMenuId: String?
+    
+    // Helper function to scroll to bookmark
+    private func scrollToBookmark(bookmark: DocumentMarker) {
+        // Create navigation notification with bookmark data
+        var userInfo: [String: Any] = ["lineNumber": bookmark.position]
+        
+        // Add character position metadata if available
+        if let metadata = bookmark.metadata {
+            if let charPosition = metadata["charPosition"], 
+               let charLength = metadata["charLength"] {
+                userInfo["charPosition"] = Int(charPosition)
+                userInfo["charLength"] = Int(charLength)
+            }
+        }
+        
+        // Post notification to navigate to this bookmark
+        NotificationCenter.default.post(
+            name: NSNotification.Name("ScrollToBookmark"), 
+            object: nil, 
+            userInfo: userInfo
+        )
+    }
     
     private var searchContent: some View {
         VStack(alignment: .leading, spacing: 16) {

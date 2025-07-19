@@ -1707,7 +1707,6 @@ struct DocumentArea: View {
                 #if os(macOS)
                 // Using DocumentEditorView for the main content area on macOS
                 DocumentEditorView(document: $document, selectedBlock: .constant(nil))
-                    .allowsHitTesting(!isAnimatingHeaderCollapse)
                     .overlay(
                         GeometryReader { geometry in
                             Color.clear // Use Color.clear for geometry reading
@@ -2295,36 +2294,73 @@ struct VerticalBookmarkDot: View {
     @Environment(\.colorScheme) var colorScheme
     
     var body: some View {
-        HStack(spacing: 8) { // Increased spacing between dot and text
-            // Bookmark dot (moved to left side)
-            Circle()
-                .fill(Color.blue)
-                .frame(width: isHovered ? 8 : 6, height: isHovered ? 8 : 6)
-                .shadow(color: Color.black.opacity(0.2), radius: 1, x: 0, y: 1)
-                .animation(.easeInOut(duration: 0.2), value: isHovered)
+        HStack(spacing: 12) { // Increased spacing for larger button
+            // Navigate to bookmark button - larger blue button with icon
+            Button(action: {
+                scrollToBookmark(bookmark)
+            }) {
+                Image(systemName: "location.fill")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.white)
+                    .frame(width: 22, height: 22)
+                    .background(
+                        Circle()
+                            .fill(Color(hex: "#007AFF"))
+                    )
+            }
+            .buttonStyle(.plain)
+            .help("Go to bookmark")
             
-            // Bookmark name with left alignment
-            Text(bookmark.title.isEmpty ? "Bookmark" : bookmark.title)
-                .font(.system(size: 11)) // Reduced from 12 to 11
-                .foregroundColor(colorScheme == .dark ? .white.opacity(0.8) : .black.opacity(0.8))
-                .truncationMode(.tail)
-                .lineLimit(2) // Limit to 2 lines maximum
-                .multilineTextAlignment(.leading) // Left align the text
-                .fixedSize(horizontal: false, vertical: true) // Allow vertical expansion
-                .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading) // Full width with leading alignment
+            // Bookmark name with left alignment - larger text
+            VStack(alignment: .leading, spacing: 2) {
+                Text(bookmark.title.isEmpty ? "Bookmark" : bookmark.title)
+                    .font(.system(size: 13, weight: .regular)) // Increased from 11 to 13, using regular weight
+                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.9) : .black.opacity(0.9))
+                    .truncationMode(.tail)
+                    .lineLimit(2) // Limit to 2 lines maximum
+                    .multilineTextAlignment(.leading) // Left align the text
+                    .fixedSize(horizontal: false, vertical: true) // Allow vertical expansion
+                    .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading) // Full width with leading alignment
+                
+                // Line number
+                Text("Line \(bookmark.position)")
+                    .font(.system(size: 11, weight: .regular))
+                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.6) : .black.opacity(0.6))
+            }
         }
-        .padding(.vertical, 4)
-        .padding(.horizontal, 8) // Slightly increased horizontal padding
+        .padding(.vertical, 6) // Increased padding for larger overall size
+        .padding(.horizontal, 10) // Slightly increased horizontal padding
         .background(
-            RoundedRectangle(cornerRadius: 4)
+            RoundedRectangle(cornerRadius: 6) // Slightly larger corner radius
                 .fill(colorScheme == .dark ?
                       Color.black.opacity(isHovered ? 0.5 : 0.25) :
-                      Color.white.opacity(isHovered ? 0.7 : 0.5))
-                .shadow(color: Color.black.opacity(0.1), radius: 1, x: 0, y: 1)
+                      Color.white.opacity(isHovered ? 0.8 : 0.6))
+                .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
         )
-        .scaleEffect(isHovered ? 1.05 : 1.0)
-        .opacity(isHovered ? 1.0 : 0.9)
+        .scaleEffect(isHovered ? 1.03 : 1.0) // Slightly less scale effect
+        .opacity(isHovered ? 1.0 : 0.95)
         .animation(.easeInOut(duration: 0.2), value: isHovered)
+    }
+    
+    private func scrollToBookmark(_ bookmark: DocumentMarker) {
+        // Create navigation notification with bookmark data
+        var userInfo: [String: Any] = ["lineNumber": bookmark.position]
+        
+        // Add character position metadata if available
+        if let metadata = bookmark.metadata {
+            if let charPosition = metadata["charPosition"], 
+               let charLength = metadata["charLength"] {
+                userInfo["charPosition"] = Int(charPosition)
+                userInfo["charLength"] = Int(charLength)
+            }
+        }
+        
+        // Post notification to navigate to this bookmark
+        NotificationCenter.default.post(
+            name: NSNotification.Name("ScrollToBookmark"), 
+            object: nil, 
+            userInfo: userInfo
+        )
     }
 }
 
