@@ -937,7 +937,7 @@ struct MainLayout: View {
                                 activePopup = .none
                             }
                         )
-                        .frame(width: 350, height: 500)
+                        .frame(width: 400, height: 600)
                         .background(theme.surface)
                         .clipShape(RoundedRectangle(cornerRadius: 10))
                     }
@@ -1085,9 +1085,10 @@ struct MainLayout: View {
                             onAddFolder: addFolder,
                             showHeader: true // Show header for iPad popover
                         )
-                        .frame(width: 320, height: 420)
+                        .frame(width: 400, height: 500)
                         .background(theme.surface)
                         .clipShape(RoundedRectangle(cornerRadius: 10))
+
                     }
                     #endif
                     
@@ -2708,6 +2709,7 @@ private func mainContentView(availableWidth: CGFloat) -> some View {
                     .frame(width: 350, height: 500)
                     .background(theme.surface)
                     .clipShape(RoundedRectangle(cornerRadius: 10))
+
                 }
                 #endif
                 
@@ -2849,7 +2851,7 @@ private func mainContentView(availableWidth: CGFloat) -> some View {
                         onAddFolder: addFolder,
                         showHeader: true // Show header for iPad popover
                     )
-                    .frame(width: 320, height: 420)
+                    .frame(width: 400, height: 500)
                     .background(theme.surface)
                     .clipShape(RoundedRectangle(cornerRadius: 10))
                 }

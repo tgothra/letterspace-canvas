@@ -507,6 +507,9 @@ struct SimpleIOSTextView: UIViewRepresentable {
             attributedTextSaveTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: false) { _ in
                 let attributedText = NSAttributedString(attributedString: textView.attributedText)
                 self.onAttributedTextChange?(textView.text, attributedText)
+                
+                // Validate bookmarks after text change
+                self.validateAndCleanupBookmarks(textView: textView)
             }
         }
         
@@ -1154,6 +1157,69 @@ struct SimpleIOSTextView: UIViewRepresentable {
             self.text = textView.text
             
             print("🔖 Bookmark toggled - final markers count: \(document.markers.count)")
+        }
+        
+        // Validate and cleanup orphaned bookmarks for iOS
+        private func validateAndCleanupBookmarks(textView: UITextView) {
+            guard let attributedText = textView.attributedText else {
+                print("🔖⚠️ iOS: No attributed text available for bookmark validation")
+                return
+            }
+            
+            var bookmarksToRemove: [UUID] = []
+            
+            // Get all bookmarks from the document
+            let currentBookmarks = document.markers.filter { $0.type == "bookmark" }
+            
+            for bookmark in currentBookmarks {
+                // Get stored character position and length from metadata
+                guard let charPositionString = bookmark.metadata?["charPosition"],
+                      let charPosition = Int(charPositionString),
+                      let charLengthString = bookmark.metadata?["charLength"],
+                      let charLength = Int(charLengthString) else {
+                    print("🔖⚠️ iOS: Bookmark \(bookmark.id) has invalid metadata, marking for removal")
+                    bookmarksToRemove.append(bookmark.id)
+                    continue
+                }
+                
+                let bookmarkRange = NSRange(location: charPosition, length: charLength)
+                
+                // Check if the range is still valid in the current text
+                if bookmarkRange.location >= attributedText.length || 
+                   bookmarkRange.location + bookmarkRange.length > attributedText.length {
+                    print("🔖⚠️ iOS: Bookmark \(bookmark.id) has invalid range (\(bookmarkRange)), marking for removal")
+                    bookmarksToRemove.append(bookmark.id)
+                    continue
+                }
+                
+                // Check if the text still has the bookmark attribute at this range
+                var hasBookmarkAttribute = false
+                attributedText.enumerateAttribute(.isBookmark, in: bookmarkRange, options: []) { (value, range, stop) in
+                    if let bookmarkIDString = value as? String, UUID(uuidString: bookmarkIDString) == bookmark.id {
+                        hasBookmarkAttribute = true
+                        stop.pointee = true
+                    }
+                }
+                
+                if !hasBookmarkAttribute {
+                    print("🔖⚠️ iOS: Bookmark \(bookmark.id) no longer has attribute in text, marking for removal")
+                    bookmarksToRemove.append(bookmark.id)
+                }
+            }
+            
+            // Remove orphaned bookmarks
+            if !bookmarksToRemove.isEmpty {
+                for bookmarkId in bookmarksToRemove {
+                    document.removeMarker(id: bookmarkId)
+                    print("🔖🗑️ iOS: Removed orphaned bookmark: \(bookmarkId)")
+                }
+                
+                // Save the document with cleaned bookmarks
+                DispatchQueue.main.async {
+                    self.document.save()
+                    print("💾 iOS: Document saved after bookmark cleanup - removed \(bookmarksToRemove.count) orphaned bookmarks")
+                }
+            }
         }
     }
 }

@@ -16,9 +16,9 @@ struct SidebarPopupCard: View {
     
     private var verticalOffset: CGFloat {
         switch title {
-        case "Search Documents": return 20
+        case "Search Documents": return 100 // Adjusted to +100 for better vertical positioning
         case "Create New Document": return -160
-        case "View Folders": return -55
+        case "Folders": return -35 // Positioned higher above the button
         case "Settings": return -140
         default: return -100
         }
@@ -48,10 +48,17 @@ struct SidebarPopupCard: View {
             content
                 .padding(12)
         }
-        .frame(width: 240, height: {
-            // Set specific height for search popup on macOS
-            if title == "Search Documents" {
-                return 320
+        .frame(width: {
+            // Match search and folders popup sizes
+            if title == "Search Documents" || title == "Folders" {
+                return 400 // Both search and folders use 400px width
+            } else {
+                return 240
+            }
+        }(), height: {
+            // Match search and folders popup heights
+            if title == "Search Documents" || title == "Folders" {
+                return 500 // Both search and folders use 500px height
             } else {
                 return nil // Use automatic height for other popups
             }
@@ -63,7 +70,15 @@ struct SidebarPopupCard: View {
                 .stroke(theme.secondary.opacity(0.1), lineWidth: 1)
         )
         .shadow(color: Color.black.opacity(0.15), radius: 15, x: 0, y: 2)
-        .position(x: position.x + 140, y: position.y + (title == "View Folders" && currentFolder != nil ? 40 : verticalOffset))
+        .position(x: {
+            // Adjust horizontal positioning based on popup type
+            if title == "Search Documents" || title == "Folders" {
+                // Consistent horizontal positioning for search and folders popups
+                return position.x + 215 // Both use 215px offset for optimal positioning
+            } else {
+                return position.x + 140 // Keep original positioning for other popups
+            }
+        }(), y: position.y + (title == "Folders" && currentFolder != nil ? 40 : verticalOffset))
         .opacity(isAnimating ? 1 : 0)
         .scaleEffect(isAnimating ? 1 : 0.95, anchor: .topLeading)
         .offset(x: isAnimating ? 0 : -10)
@@ -76,7 +91,25 @@ struct SidebarPopupCard: View {
         .onDisappear {
             isAnimating = false
         }
-        .zIndex(100) // Ensure popup is above all other elements
+                .zIndex(100) // Ensure popup is above all other elements
+        #if os(macOS)
+        .background(
+            // Invisible background that captures scroll events
+            Rectangle()
+                .fill(Color.clear)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    // Capture taps to prevent them from going through
+                }
+                .gesture(
+                    DragGesture()
+                        .onChanged { _ in
+                            // Capture scroll gestures to prevent them from going through
+                        }
+                )
+        )
+        #endif
+ 
     }
 }
 
@@ -99,6 +132,7 @@ struct SidebarButton: View {
     @Environment(\.horizontalSizeClass) var horizontalSizeClass // For iPadOS adaptation
     @State private var hoverDebounceTask: Task<Void, Never>?
     @State private var profileImageVersion: UUID = UUID() // Force refresh when image changes
+    @State private var isDocumentSelectionActive = false // Track if document selection sheet is open
     
     private var shouldShowPopupOnTap: Bool { // For iOS tap behavior
         #if os(iOS)
@@ -225,6 +259,14 @@ struct SidebarButton: View {
                 sidebarMode: $sidebarMode,
                 isRightSidebarVisible: $isRightSidebarVisible
             )
+            .onAppear {
+                // Disable document scroll monitoring when search popup appears
+                NotificationCenter.default.post(name: NSNotification.Name("DisableDocumentScrollMonitor"), object: nil)
+            }
+            .onDisappear {
+                // Re-enable document scroll monitoring when search popup disappears
+                NotificationCenter.default.post(name: NSNotification.Name("EnableDocumentScrollMonitor"), object: nil)
+            }
         case "square.and.pencil":
             NewDocumentPopupContent(
                 showTemplateBrowser: $showTemplateBrowser,
@@ -243,6 +285,14 @@ struct SidebarButton: View {
                 onAddFolder: onAddFolder!,
                 showHeader: true // Show header for popover
             )
+            .onAppear {
+                // Disable document scroll monitoring when folders popup appears
+                NotificationCenter.default.post(name: NSNotification.Name("DisableDocumentScrollMonitor"), object: nil)
+            }
+            .onDisappear {
+                // Re-enable document scroll monitoring when folders popup disappears
+                NotificationCenter.default.post(name: NSNotification.Name("EnableDocumentScrollMonitor"), object: nil)
+            }
         case "person.crop.circle.fill":
             // This will only be used for hovering - modal is handled separately
             EmptyView()
@@ -300,8 +350,8 @@ struct SidebarButton: View {
                                     if hovering {
                                         activePopup = popupType
                                     } else {
-                                        // Only close if we're not hovering over the popup
-                                        if !isHoveringPopup {
+                                        // Only close if we're not hovering over the popup AND document selection is not active
+                                        if !isHoveringPopup && !isDocumentSelectionActive {
                                             activePopup = .none
                                         }
                                     }
@@ -316,6 +366,12 @@ struct SidebarButton: View {
                     // Force view to refresh when profile image changes
                     profileImageVersion = UUID()
                 }
+                .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("DocumentSelectionSheetOpened"))) { _ in
+                    isDocumentSelectionActive = true
+                }
+                .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("DocumentSelectionSheetClosed"))) { _ in
+                    isDocumentSelectionActive = false
+                }
                 #if os(iOS) // iOS uses .popover - attach to Button
                 .popover(
                     isPresented: Binding(
@@ -329,7 +385,7 @@ struct SidebarButton: View {
                         popupContent()
                             .padding()
                     }
-                    .frame(idealWidth: 350, minHeight: 200, maxHeight: 600)
+                    .frame(idealWidth: 400, minHeight: 200, maxHeight: 700)
                     .background(theme.surface)
                     .clipShape(RoundedRectangle(cornerRadius: 10))
                     .onHover { hovering in
@@ -378,8 +434,8 @@ struct SidebarButton: View {
                                                 withAnimation(.easeOut(duration: 0.15)) {
                                                     isHoveringPopup = false
                                                 }
-                                                // Only close popup if we're not hovering over the button
-                                                if !isHovering {
+                                                // Only close popup if we're not hovering over the button AND document selection is not active
+                                                if !isHovering && !isDocumentSelectionActive {
                                                     if activePopup != .organizeDocuments || icon != "folder" {
                                                         activePopup = .none
                                                     }
@@ -419,12 +475,12 @@ struct SidebarButton: View {
                                             withAnimation(.easeOut(duration: 0.15)) {
                                                 isHoveringPopup = false
                                             }
-                                            // Only close popup if we're not hovering over the button
-                                            if !isHovering {
-                                                if activePopup != .organizeDocuments || icon != "folder" {
-                                                    activePopup = .none
-                                                }
-                                            }
+                                                                        // Only close popup if we're not hovering over the button AND document selection is not active
+                            if !isHovering && !isDocumentSelectionActive {
+                                if activePopup != .organizeDocuments || icon != "folder" {
+                                    activePopup = .none
+                                }
+                            }
                                         }
                                     }
                                 }

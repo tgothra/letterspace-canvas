@@ -154,6 +154,61 @@ struct DocumentEditorView: NSViewRepresentable {
         // Force apply text color to ensure uniform appearance
         textView.forceTextColorForCurrentAppearance()
         
+        // CRITICAL: Load initial document content immediately
+        if let textElement = document.elements.first(where: { $0.type == .textBlock }) {
+            if let attributedContent = textElement.attributedContent {
+                // Use attributed content if available
+                let mutableContent = NSMutableAttributedString(attributedString: attributedContent)
+                
+                // Apply scripture ranges if present in the textElement
+                if !textElement.scriptureRanges.isEmpty {
+                    for rangeArray in textElement.scriptureRanges {
+                        if rangeArray.count == 2 {
+                            let location = rangeArray[0]
+                            let length = rangeArray[1]
+                            let scriptureRange = NSRange(location: location, length: length)
+                            if location + length <= mutableContent.length {
+                                mutableContent.addAttribute(DocumentTextView.nonEditableAttribute, value: true, range: scriptureRange)
+                                mutableContent.addAttribute(DocumentTextView.isScriptureBlockQuote, value: true, range: scriptureRange)
+                            }
+                        }
+                    }
+                }
+                
+                // Set the text storage to the initial content
+                textView.textStorage?.setAttributedString(mutableContent)
+                print("🏗️ Loaded initial attributed document content in makeNSView")
+            } else if !textElement.content.isEmpty {
+                // Fallback to plain text content with proper formatting
+                let plainContent = NSMutableAttributedString(string: textElement.content)
+                
+                // Apply default formatting
+                let fullRange = NSRange(location: 0, length: plainContent.length)
+                plainContent.addAttributes(textView.typingAttributes, range: fullRange)
+                
+                textView.textStorage?.setAttributedString(plainContent)
+                print("🏗️ Loaded initial plain text document content in makeNSView")
+            }
+            
+            // Force text view to update display and layout immediately
+            DispatchQueue.main.async {
+                // Ensure proper text color for visibility
+                textView.forceTextColorForCurrentAppearance()
+                
+                // Force layout and display updates
+                textView.needsDisplay = true
+                textView.needsLayout = true
+                layoutManager.ensureLayout(for: textContainer)
+                textView.sizeToFit()
+                
+                // Make sure the text view is ready for display
+                scrollView.needsDisplay = true
+                
+                // Force the text view to invalidate its entire visible rect
+                textView.setNeedsDisplay(textView.visibleRect)
+            }
+        }
+        
         // IMPORTANT: Explicitly restore scripture attributes when first creating the view
         // This ensures scripture blocks are properly protected from the start
         print("🏗️ Initial restoration of scripture attributes during view creation")
@@ -203,11 +258,14 @@ struct DocumentEditorView: NSViewRepresentable {
         
         // Track if document ID changed to ensure complete reset
         let documentChanged = textView.document?.id != document.id
+        
+        // Check if text view is currently empty (initial state)
+        let isTextViewEmpty = textView.string.isEmpty && !document.elements.filter({ $0.type == .textBlock && !$0.content.isEmpty }).isEmpty
 
-        // CRITICAL: Update content if document changed OR if not actively editing
+        // CRITICAL: Update content if document changed OR if text view is empty but document has content
         // This prevents losing unsaved scripture when focus changes but ensures new documents start fresh
-        if documentChanged {
-            print("📄 Document ID changed in DocumentEditorView updateNSView: Clearing and reloading content for new document.")
+        if documentChanged || isTextViewEmpty {
+            print("📄 Document changed or text view empty - loading content for document.")
             
             // Store current scroll position
             let scrollPosition = scrollView.contentView.bounds.origin
@@ -252,10 +310,10 @@ struct DocumentEditorView: NSViewRepresentable {
             // Restore scroll position
             scrollView.contentView.bounds.origin = scrollPosition
             
-        } else if textView.window?.firstResponder !== textView {
-            // This part handles updates when not actively editing (e.g., focus changes)
+        } else if textView.window?.firstResponder !== textView || isTextViewEmpty {
+            // This part handles updates when not actively editing (e.g., focus changes) or when text view is empty
             // It should preserve existing content unless it's a completely different document (handled above)
-            print("🔄 DocumentEditorView updateNSView: Updating content while not actively editing.")
+            print("🔄 DocumentEditorView updateNSView: Updating content while not actively editing or loading initial content.")
 
             // Store current scroll position
             let scrollPosition = scrollView.contentView.bounds.origin
@@ -436,6 +494,9 @@ struct DocumentEditorView: NSViewRepresentable {
                     updatedDocument.save()
                     print("💾 Document Saved (Text Did Change)")
                     
+                    // Validate bookmarks after text change to cleanup orphaned bookmarks
+                    self.validateAndCleanupBookmarks(textView: textView)
+                    
                     // Update content size to ensure bottom padding is maintained
                     self.updateTextViewContentSize()
                 }
@@ -458,6 +519,68 @@ struct DocumentEditorView: NSViewRepresentable {
         
         func textViewDidChangeSelection(_ notification: Notification) {
             print("📍 Selection changed")
+        }
+        
+        // Validate and cleanup orphaned bookmarks
+        func validateAndCleanupBookmarks(textView: NSTextView) {
+            guard let textStorage = textView.textStorage else { return }
+            
+            var bookmarksToRemove: [UUID] = []
+            
+            // Get all bookmarks from the document
+            let currentBookmarks = parent.document.markers.filter { $0.type == "bookmark" }
+            
+            for bookmark in currentBookmarks {
+                // Get stored character position and length from metadata
+                guard let charPositionString = bookmark.metadata?["charPosition"],
+                      let charPosition = Int(charPositionString),
+                      let charLengthString = bookmark.metadata?["charLength"],
+                      let charLength = Int(charLengthString) else {
+                    print("🔖⚠️ Bookmark \(bookmark.id) has invalid metadata, marking for removal")
+                    bookmarksToRemove.append(bookmark.id)
+                    continue
+                }
+                
+                let bookmarkRange = NSRange(location: charPosition, length: charLength)
+                
+                // Check if the range is still valid in the current text
+                if bookmarkRange.location >= textStorage.length || 
+                   bookmarkRange.location + bookmarkRange.length > textStorage.length {
+                    print("🔖⚠️ Bookmark \(bookmark.id) has invalid range (\(bookmarkRange)), marking for removal")
+                    bookmarksToRemove.append(bookmark.id)
+                    continue
+                }
+                
+                // Check if the text still has the bookmark attribute at this range
+                var hasBookmarkAttribute = false
+                textStorage.enumerateAttribute(.isBookmark, in: bookmarkRange, options: []) { (value, range, stop) in
+                    if let bookmarkIDString = value as? String, UUID(uuidString: bookmarkIDString) == bookmark.id {
+                        hasBookmarkAttribute = true
+                        stop.pointee = true
+                    }
+                }
+                
+                if !hasBookmarkAttribute {
+                    print("🔖⚠️ Bookmark \(bookmark.id) no longer has attribute in text, marking for removal")
+                    bookmarksToRemove.append(bookmark.id)
+                }
+            }
+            
+            // Remove orphaned bookmarks
+            if !bookmarksToRemove.isEmpty {
+                var doc = parent.document
+                for bookmarkId in bookmarksToRemove {
+                    doc.removeMarker(id: bookmarkId)
+                    print("🔖🗑️ Removed orphaned bookmark: \(bookmarkId)")
+                }
+                parent.document = doc
+                
+                // Save the document with cleaned bookmarks
+                DispatchQueue.global(qos: .userInitiated).async {
+                    doc.save()
+                    print("💾 Document saved after bookmark cleanup - removed \(bookmarksToRemove.count) orphaned bookmarks")
+                }
+            }
         }
         
         // Update text view content size to ensure bottom padding with dynamic top padding
@@ -496,10 +619,16 @@ struct DocumentEditorView: NSViewRepresentable {
             // Remove any existing monitor first
             if let existingMonitor = globalScrollMonitor {
                 NSEvent.removeMonitor(existingMonitor)
+                globalScrollMonitor = nil
             }
             
             // Add global scroll event monitor that works across the entire document area
             globalScrollMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak scrollView] event in
+                // Check if scroll monitoring is disabled (e.g., when a popover is open)
+                if UserDefaults.standard.bool(forKey: "DocumentScrollMonitorDisabled") {
+                    return event // Pass through without processing
+                }
+                
                 guard let scrollView = scrollView,
                       let window = scrollView.window else { return event }
                 
@@ -533,6 +662,25 @@ struct DocumentEditorView: NSViewRepresentable {
                 
                 return event
             }
+            
+            // Add notification observers to enable/disable scroll monitoring
+            NotificationCenter.default.addObserver(
+                forName: NSNotification.Name("DisableDocumentScrollMonitor"),
+                object: nil,
+                queue: .main
+            ) { _ in
+                UserDefaults.standard.set(true, forKey: "DocumentScrollMonitorDisabled")
+                print("🚫 Document scroll monitor disabled for popover")
+            }
+            
+            NotificationCenter.default.addObserver(
+                forName: NSNotification.Name("EnableDocumentScrollMonitor"),
+                object: nil,
+                queue: .main
+            ) { _ in
+                UserDefaults.standard.set(false, forKey: "DocumentScrollMonitorDisabled")
+                print("✅ Document scroll monitor re-enabled")
+            }
         }
         
         // Store the global scroll monitor reference for cleanup
@@ -541,25 +689,24 @@ struct DocumentEditorView: NSViewRepresentable {
         // MARK: - NSTextViewDelegate conformance
         
         func textView(_ textView: NSTextView, shouldChangeTextIn affectedCharRange: NSRange, replacementString: String?) -> Bool {
-            // --- Bookmark Deletion Logic ---
-            // Check if this change is a deletion
-            if (replacementString == nil || replacementString!.isEmpty) && affectedCharRange.length > 0 {
+            // --- Enhanced Bookmark Deletion Logic ---
+            // Check if this change affects bookmarked text (deletion or replacement)
+            if affectedCharRange.length > 0 {
                 if let textStorage = textView.textStorage {
-                    // Enumerate the .isBookmark attribute over the range being deleted
+                    // Enumerate the .isBookmark attribute over the range being changed
                     textStorage.enumerateAttribute(.isBookmark, in: affectedCharRange, options: []) { (value, range, stop) in
                         if let bookmarkIDString = value as? String, let bookmarkUUID = UUID(uuidString: bookmarkIDString) {
-                            // Found a bookmark in the range to be deleted
-                            print("🔖 Deleting bookmark with ID: \\(bookmarkUUID) because its text is being removed at range: \\(range)")
+                            // Found a bookmark in the range to be changed
+                            print("🔖 Deleting bookmark with ID: \\(bookmarkUUID) because its text is being modified at range: \\(range)")
                             var doc = parent.document // Access the document through the parent coordinator
                             doc.removeMarker(id: bookmarkUUID)
                             parent.document = doc // Update the document binding
-                            // No need to explicitly remove the attribute from textStorage,
-                            // as the text itself is being deleted.
+                            // The bookmark attribute will be removed when the text is changed
                         }
                     }
                 }
             }
-            // --- End Bookmark Deletion Logic ---
+            // --- End Enhanced Bookmark Deletion Logic ---
 
             // --- List Breaking Logic ---
             if replacementString == "\n", let textStorage = textView.textStorage {

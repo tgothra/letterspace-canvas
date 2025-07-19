@@ -77,9 +77,11 @@ struct SearchContentView: View {
                 )
                 .onAppear {
                     print("🔍 Showing results view with \(searchResults.count) results for search: '\(searchText)'")
+                    print("🔍 Search results: \(searchResults.map { $0.title })")
                 }
             }
         }
+
     }
 }
 
@@ -122,8 +124,12 @@ struct SearchFieldView: View {
                     searchTask?.cancel()
                     searchTask = Task {
                         try? await Task.sleep(nanoseconds: 300_000_000)
-                        print("🔍 SearchFieldView: About to perform search for '\(newValue)'")
-                        await performSearch()
+                        if !Task.isCancelled {
+                            print("🔍 SearchFieldView: About to perform search for '\(newValue)'")
+                            await performSearch()
+                        } else {
+                            print("🔍 SearchFieldView: Search task was cancelled for '\(newValue)'")
+                        }
                     }
                 }
                 .onAppear {
@@ -245,6 +251,53 @@ struct SearchResultsView: View {
     }
     
     var body: some View {
+        #if os(macOS)
+        // macOS: Temporarily use normal ScrollView to test if IsolatedScrollViewWrapper is the issue
+        ScrollView {
+            VStack(spacing: 20) {
+                if searchResults.isEmpty {
+                    Text("No results found")
+                        .font(.custom("InterTight-Regular", size: 13))
+                        .foregroundColor(theme.secondary)
+                        .padding(.vertical, 8)
+                        .onAppear {
+                            print("🔍 Showing 'No results found' - searchResults.count: \(searchResults.count), searchText: '\(searchText)'")
+                        }
+                } else {
+                    // Section 1: Documents with thumbnails/icons
+                    DocumentsSection(
+                        searchText: searchText,
+                        documents: searchResults,
+                        document: $document,
+                        sidebarMode: $sidebarMode,
+                        activePopup: $activePopup,
+                        onDismiss: onDismiss
+                    )
+                    
+                    // Separator line between sections
+                    if !allContentMatches.isEmpty {
+                        Divider()
+                            .background(theme.secondary.opacity(0.3))
+                            .padding(.horizontal, 8)
+                    }
+                    
+                    // Section 2: Content matches with larger snippets
+                    if !allContentMatches.isEmpty {
+                        ContentMatchesSection(
+                            searchText: searchText,
+                            contentMatches: allContentMatches,
+                            document: $document,
+                            sidebarMode: $sidebarMode,
+                            activePopup: $activePopup,
+                            onDismiss: onDismiss
+                        )
+                    }
+                }
+            }
+            .padding(.bottom, 16)
+        }
+        #else
+        // iOS: Use normal scroll view
         ScrollView {
             VStack(spacing: 20) {
                 if searchResults.isEmpty {
@@ -285,6 +338,7 @@ struct SearchResultsView: View {
             }
             .padding(.bottom, 16)
         }
+        #endif
     }
 }
 

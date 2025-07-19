@@ -19,6 +19,9 @@ struct FoldersPopupContent: View {
     @State private var showDocumentSelection = false
     @State private var selectedDocuments: Set<String> = []
     @State private var searchText = ""
+    
+    // State to track when document selection is active for macOS popover management
+    @State private var isDocumentSelectionActive = false
     var onAddFolder: (Folder, UUID?) -> Void
     var showHeader: Bool = true // Add parameter to control header visibility
     
@@ -139,6 +142,8 @@ struct FoldersPopupContent: View {
             #else
             // macOS: Original layout with footer below scroll
             VStack(spacing: 0) {
+                #if os(macOS)
+                // macOS: Use normal scroll view to fix folder display issue
                 ScrollView {
                     VStack(alignment: .leading, spacing: 8) {
                         folderContent
@@ -146,6 +151,16 @@ struct FoldersPopupContent: View {
                     .padding(.vertical, 8)
                 }
                 .frame(minHeight: 200) // Ensure minimum height for folder list visibility
+                #else
+                // iOS: Use normal scroll view
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 8) {
+                        folderContent
+                    }
+                    .padding(.vertical, 8)
+                }
+                .frame(minHeight: 200) // Ensure minimum height for folder list visibility
+                #endif
                 
                 if currentFolder == nil {
                     stickyFooter
@@ -205,6 +220,20 @@ struct FoldersPopupContent: View {
         }
         .sheet(isPresented: $showDocumentSelection) {
             documentSelectionSheet
+                .onAppear {
+                    isDocumentSelectionActive = true
+                    #if os(macOS)
+                    // Notify that document selection is active to prevent popover dismissal
+                    NotificationCenter.default.post(name: NSNotification.Name("DocumentSelectionSheetOpened"), object: nil)
+                    #endif
+                }
+                .onDisappear {
+                    isDocumentSelectionActive = false
+                    #if os(macOS)
+                    // Notify that document selection is closed
+                    NotificationCenter.default.post(name: NSNotification.Name("DocumentSelectionSheetClosed"), object: nil)
+                    #endif
+                }
         }
     }
     
@@ -279,6 +308,101 @@ struct FoldersPopupContent: View {
     
     // Document selection sheet
     private var documentSelectionSheet: some View {
+        #if os(macOS)
+        // macOS: Optimized layout for popover/modal context
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                Text("Add Documents")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(theme.primary)
+                Spacer()
+                Button(action: {
+                    showDocumentSelection = false
+                    selectedDocuments.removeAll()
+                }) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(theme.secondary)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            
+            Divider()
+            
+            // Search bar
+            HStack {
+                Image(systemName: "magnifyingglass")
+                    .foregroundColor(theme.secondary)
+                TextField("Search documents...", text: $searchText)
+                    .textFieldStyle(.plain)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(theme.secondary.opacity(0.1))
+            .cornerRadius(8)
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
+            
+            // Documents list
+            ScrollView {
+                LazyVStack(spacing: 4) {
+                    ForEach(filteredDocuments) { doc in
+                        DocumentSelectionRow(
+                            document: doc,
+                            isSelected: selectedDocuments.contains(doc.id),
+                            theme: theme
+                        ) {
+                            toggleDocumentSelection(doc.id)
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+            }
+            .frame(maxHeight: 300) // Constrain height for modal context
+            
+            Divider()
+            
+            // Bottom action bar
+            HStack(spacing: 12) {
+                Button(action: {
+                    showDocumentSelection = false
+                    selectedDocuments.removeAll()
+                }) {
+                    Text("Cancel")
+                        .foregroundColor(theme.secondary)
+                        .frame(height: 36)
+                        .frame(maxWidth: .infinity)
+                        .background(theme.secondary.opacity(0.1))
+                        .cornerRadius(6)
+                }
+                .buttonStyle(.plain)
+                
+                Button(action: {
+                    addSelectedDocumentsToFolder()
+                }) {
+                    Text("Add \(selectedDocuments.count) Documents")
+                        .foregroundColor(.white)
+                        .frame(height: 36)
+                        .frame(maxWidth: .infinity)
+                        .background(selectedDocuments.isEmpty ? theme.secondary : theme.accent)
+                        .cornerRadius(6)
+                }
+                .buttonStyle(.plain)
+                .disabled(selectedDocuments.isEmpty)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+        }
+        .frame(width: 450, height: 500) // Fixed size for macOS modal
+        .background(theme.background)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 10)
+        #else
+        // iOS: Use NavigationView as before
         NavigationView {
             VStack(spacing: 0) {
                 // Search bar
@@ -337,10 +461,9 @@ struct FoldersPopupContent: View {
                 .background(theme.surface)
             }
             .navigationTitle("Add Documents")
-            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
-            #endif
         }
+        #endif
     }
     
     private var filteredDocuments: [Letterspace_CanvasDocument] {
@@ -373,12 +496,26 @@ struct FoldersPopupContent: View {
             // Update current folder reference
             self.currentFolder = folders[folderIndex]
             
-            // Save to UserDefaults
+            // Save folders to UserDefaults with proper persistence
             if let encoded = try? JSONEncoder().encode(folders) {
                 UserDefaults.standard.set(encoded, forKey: "SavedFolders")
+                UserDefaults.standard.synchronize() // Force immediate write to disk
+            }
+            
+            // Also save folder documents mapping for compatibility with other parts of the app
+            let folderDocuments = folders.reduce(into: [String: Set<String>]()) { result, folder in
+                result[folder.id.uuidString] = folder.documentIds
+            }
+            if let encodedDocs = try? JSONEncoder().encode(folderDocuments) {
+                UserDefaults.standard.set(encodedDocs, forKey: "FolderDocuments")
+                UserDefaults.standard.synchronize() // Force immediate write to disk
             }
             
             print("📂 Added \(selectedDocuments.count) documents to folder '\(currentFolder.name)'")
+            print("📂 Folder now contains \(folders[folderIndex].documentIds.count) documents")
+            
+            // Notify other parts of the app that folders have been updated
+            NotificationCenter.default.post(name: NSNotification.Name("FoldersDidUpdate"), object: nil)
         }
         
         // Close the sheet and reset selection
@@ -478,11 +615,25 @@ struct FoldersPopupContent: View {
                 print("🗑️ Updated current folder")
             }
             
-            // Save to UserDefaults
+            // Save folders to UserDefaults with proper persistence
             if let encoded = try? JSONEncoder().encode(folders) {
                 UserDefaults.standard.set(encoded, forKey: "SavedFolders")
-                print("🗑️ Saved updated folders to UserDefaults")
+                UserDefaults.standard.synchronize() // Force immediate write to disk
             }
+            
+            // Also save folder documents mapping for compatibility
+            let folderDocuments = folders.reduce(into: [String: Set<String>]()) { result, folder in
+                result[folder.id.uuidString] = folder.documentIds
+            }
+            if let encodedDocs = try? JSONEncoder().encode(folderDocuments) {
+                UserDefaults.standard.set(encodedDocs, forKey: "FolderDocuments")
+                UserDefaults.standard.synchronize() // Force immediate write to disk
+            }
+            
+            print("🗑️ Saved updated folders to UserDefaults")
+            
+            // Notify other parts of the app that folders have been updated
+            NotificationCenter.default.post(name: NSNotification.Name("FoldersDidUpdate"), object: nil)
             
             print("📂 Removed document '\(document.title)' from folder '\(folder.name)'")
         } else {
@@ -889,12 +1040,14 @@ struct FolderDocumentRow: View {
     let onRemove: () -> Void
     let onOpen: () -> Void
     @State private var swipeOffset: CGFloat = 0
+    @State private var isHovered = false
     
     var body: some View {
         ZStack {
             // Main document content
             Button(action: {
                 if swipeOffset == 0 {
+                    print("📄 Opening document: \(document.title)")
                     onOpen()
                 }
             }) {
@@ -910,11 +1063,24 @@ struct FolderDocumentRow: View {
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 10)
-                .background(Color.clear)
+                .background(isHovered ? theme.secondary.opacity(0.1) : Color.clear)
                 .cornerRadius(4)
             }
             .buttonStyle(.plain)
             .offset(x: swipeOffset)
+            .onHover { hovering in
+                if swipeOffset == 0 {
+                    #if os(macOS)
+                    // Instant hover on macOS
+                    isHovered = hovering
+                    #else
+                    // Smooth animation on iOS
+                    withAnimation(.easeInOut(duration: 0.15)) {
+                        isHovered = hovering
+                    }
+                    #endif
+                }
+            }
             .zIndex(1)
             
             // Delete button that appears on swipe
@@ -966,6 +1132,12 @@ struct FolderDocumentRow: View {
                 }
             }
         }
+        .onChange(of: swipeOffset) { _, newValue in
+            // Clear hover state when swipe offset changes
+            if newValue != 0 && isHovered {
+                isHovered = false
+            }
+        }
     }
 }
 
@@ -996,12 +1168,11 @@ extension FoldersPopupContent {
             return
         }
         
-        guard let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+        guard let appDirectory = Letterspace_CanvasDocument.getAppDocumentsDirectory() else {
             print("❌ Could not access documents directory")
             return
         }
         
-        let appDirectory = documentsPath.appendingPathComponent("Letterspace Canvas")
         let fileURL = appDirectory.appendingPathComponent("\(id).canvas")
         print("📂 Looking for file at: \(fileURL.path)")
         
