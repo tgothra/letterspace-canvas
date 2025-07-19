@@ -1990,10 +1990,12 @@ private func deleteSelectedDocuments() {
                             .foregroundStyle(theme.primary)
                     }
                     .buttonStyle(.plain)
+                    #if os(macOS)
                     .opacity(isHoveringInfo ? 0.6 : 1.0)
                     .onHover { hovering in
                         isHoveringInfo = hovering
                     }
+                    #endif
                     .popover(isPresented: $showTagManager, arrowEdge: .bottom) {
                         TagManager(allTags: allTags)
                             .frame(width: 280)
