@@ -192,11 +192,12 @@ struct PinnedSection: View {
                 if isIPad || isCarouselMode || hideHeader {
                     Color.clear
                 } else {
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(colorScheme == .dark ? Color(.sRGB, white: 0.12) : .white)
+                    // Use theme-aware background like All Documents section
+                    Color.clear
                 }
             }
         )
+        .glassmorphismBackground(cornerRadius: 12)
         .modifier(CarouselClipModifier(isCarouselMode: isCarouselMode))
         .shadow(
             color: (isCarouselMode || hideHeader) ? .clear : (colorScheme == .dark ? .black.opacity(isExpanded ? 0.25 : 0.17) : .black.opacity(isExpanded ? 0.12 : 0.07)),

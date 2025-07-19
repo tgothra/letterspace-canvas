@@ -10,33 +10,8 @@ struct NewDocumentPopupContent: View {
     @Binding var isRightSidebarVisible: Bool
     
     var body: some View {
-        VStack(spacing: 0) {
-            #if os(iOS)
-            // Header - Only show on iPad, macOS uses system popup title
-            HStack {
-                Text("Create New Document")
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(theme.primary)
-                Spacer()
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, -8)
-            .padding(.bottom, 20)
-            .background(theme.surface)
-            
-            Divider()
-                .foregroundStyle(theme.secondary.opacity(0.2))
-                .offset(y: -8)
-            #endif
-            
-            // Content
-        VStack(alignment: .leading, spacing: {
-            #if os(macOS)
-            return 8 // Tighter spacing for macOS
-            #else
-            return 12 // More spacious for iPad
-            #endif
-        }()) {
+        // Content (no header since it's added by the popover)
+        VStack(alignment: .leading, spacing: 12) {
             Button(action: {
                 print("Creating new blank document")
                 // Create document with a stable ID
@@ -79,43 +54,21 @@ struct NewDocumentPopupContent: View {
                     }
                 }
             }) {
-                HStack {
+                HStack(spacing: 12) {
                     Image(systemName: "doc")
-                        .font(.system(size: {
-                            #if os(macOS)
-                            return 13 // Smaller icon for macOS
-                            #else
-                            return 15 // Larger icon for iPad
-                            #endif
-                        }()))
+                        .font(.system(size: 16))
+                        .foregroundStyle(theme.primary)
                     Text("Blank Document")
-                        .font(.system(size: {
-                            #if os(macOS)
-                            return 13 // Smaller text for macOS
-                            #else
-                            return 15 // Larger text for iPad
-                            #endif
-                        }()))
+                        .font(.system(size: 15))
+                        .foregroundStyle(theme.primary)
+                    Spacer()
                 }
-                .foregroundStyle(theme.primary)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, {
-                    #if os(macOS)
-                    return 6 // Tighter horizontal padding for macOS
-                    #else
-                    return 8 // More padding for iPad
-                    #endif
-                }())
-                .padding(.vertical, {
-                    #if os(macOS)
-                    return 6 // Smaller vertical padding for macOS
-                    #else
-                    return 9 // More padding for iPad touch targets
-                    #endif
-                }())
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
                 .background(
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(theme.primary.opacity(hoveredItem == "blank" ? 0.05 : 0))
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(theme.primary.opacity(hoveredItem == "blank" ? 0.08 : 0))
                 )
             }
             .buttonStyle(.plain)
@@ -123,62 +76,26 @@ struct NewDocumentPopupContent: View {
                 hoveredItem = isHovered ? "blank" : nil
             }
             
-            HStack {
+            HStack(spacing: 12) {
                 Image(systemName: "doc.text")
-                    .font(.system(size: {
-                        #if os(macOS)
-                        return 13 // Smaller icon for macOS
-                        #else
-                        return 15 // Larger icon for iPad
-                        #endif
-                    }()))
-                Text("Templates")
-                    .font(.system(size: {
-                        #if os(macOS)
-                        return 13 // Smaller text for macOS
-                        #else
-                        return 15 // Larger text for iPad
-                        #endif
-                    }()))
-                Text("(Coming Soon)")
-                    .font(.system(size: {
-                        #if os(macOS)
-                        return 13 // Smaller text for macOS
-                        #else
-                        return 15 // Larger text for iPad
-                        #endif
-                    }()))
+                    .font(.system(size: 16))
                     .foregroundStyle(theme.secondary)
+                Text("Templates")
+                    .font(.system(size: 15))
+                    .foregroundStyle(theme.secondary)
+                Text("(Coming Soon)")
+                    .font(.system(size: 13))
+                    .foregroundStyle(theme.secondary.opacity(0.7))
+                Spacer()
             }
-            .foregroundStyle(theme.secondary)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, {
-                #if os(macOS)
-                return 6 // Tighter horizontal padding for macOS
-                #else
-                return 8 // More padding for iPad
-                #endif
-            }())
-            .padding(.vertical, {
-                #if os(macOS)
-                return 4 // Smaller vertical padding for macOS
-                #else
-                return 6 // More padding for iPad
-                #endif
-            }())
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
             .background(
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(theme.primary.opacity(0.05))
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(theme.secondary.opacity(0.05))
             )
         }
-            .padding({
-                #if os(macOS)
-                return 12 // Tighter overall padding for macOS compact design
-                #else
-                return 16 // More spacious padding for iPad
-                #endif
-            }())
-        }
-        .offset(y: -10)
+        .padding(16) // Reduced padding to fit better with header
     }
 }

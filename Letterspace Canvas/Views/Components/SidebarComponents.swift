@@ -17,7 +17,7 @@ struct SidebarPopupCard: View {
     private var verticalOffset: CGFloat {
         switch title {
         case "Search Documents": return 100 // Adjusted to +100 for better vertical positioning
-        case "Create New Document": return -160
+        case "Create New Document": return -130
         case "Folders": return -35 // Positioned higher above the button
         case "Settings": return -140
         default: return -100
@@ -52,6 +52,8 @@ struct SidebarPopupCard: View {
             // Match search and folders popup sizes
             if title == "Search Documents" || title == "Folders" {
                 return 400 // Both search and folders use 400px width
+            } else if title == "Create New Document" {
+                return 300 // Balanced width for New Document
             } else {
                 return 240
             }
@@ -59,6 +61,8 @@ struct SidebarPopupCard: View {
             // Match search and folders popup heights
             if title == "Search Documents" || title == "Folders" {
                 return 500 // Both search and folders use 500px height
+            } else if title == "Create New Document" {
+                return 190 // Increased height to accommodate header + content
             } else {
                 return nil // Use automatic height for other popups
             }
@@ -75,6 +79,8 @@ struct SidebarPopupCard: View {
             if title == "Search Documents" || title == "Folders" {
                 // Consistent horizontal positioning for search and folders popups
                 return position.x + 215 // Both use 215px offset for optimal positioning
+            } else if title == "Create New Document" {
+                return position.x + 165 // Custom positioning for new document popup
             } else {
                 return position.x + 140 // Keep original positioning for other popups
             }

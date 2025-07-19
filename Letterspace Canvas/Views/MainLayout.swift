@@ -1033,7 +1033,7 @@ struct MainLayout: View {
                             sidebarMode: $sidebarMode,
                             isRightSidebarVisible: $isRightSidebarVisible
                         )
-                        .frame(width: 320, height: 200)
+                        .frame(width: 350, height: 120)
                         .background(theme.surface)
                         .clipShape(RoundedRectangle(cornerRadius: 10))
                     }
@@ -1773,7 +1773,7 @@ private func mainContentView(availableWidth: CGFloat) -> some View {
                 if isLeftSidebarActuallyVisible {
                     leftSidebarContent
                         .frame(width: 72)
-                        .background(colorScheme == .light ? Color.white : Color.clear)
+                        .background(Color.clear)
                         .zIndex(1)
                         .transition(.move(edge: .leading))
                 }

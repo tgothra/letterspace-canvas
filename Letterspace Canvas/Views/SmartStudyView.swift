@@ -1438,11 +1438,16 @@ struct SmartStudyView: View {
             #else
             // macOS: Use regular VStack
             VStack(spacing: 0) {
-                // Top row with title and close button
+                // Top row with title, library button, and close button
                 HStack {
                     Text("Smart Study")
                         .font(.system(size: 24, weight: .semibold))
+                    
                     Spacer()
+                    
+                    // Library button for macOS
+                    libraryButton
+                    
                     closeButton
                 }
                 .padding(.horizontal, 20)

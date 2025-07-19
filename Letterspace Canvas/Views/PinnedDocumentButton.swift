@@ -191,7 +191,6 @@ struct PinnedDocumentButton: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, isIPad ? 14 : 10) // Increased from 10 to 14 for iPad
             .padding(.horizontal, 10)
-            .glassmorphismBackground(cornerRadius: 8, isActive: shouldShowButtons || (isEditMode && isSelectedForRemoval), carouselMode: isIPad)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

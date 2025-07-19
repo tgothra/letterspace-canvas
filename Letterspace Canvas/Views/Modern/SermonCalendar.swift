@@ -531,10 +531,12 @@ internal struct SermonCalendar: View {
                 if isIPad || isCarouselMode || hideHeader {
                     Color.clear
                 } else {
-                    colorScheme == .dark ? Color(.sRGB, white: 0.12) : .white
+                    // Use theme-aware background like All Documents section
+                    Color.clear
                 }
             }
         )
+        .glassmorphismBackground(cornerRadius: 12)
         .modifier(CarouselClipModifier(isCarouselMode: isCarouselMode))
         .zIndex(isCarouselMode ? 0 : (isExpanded ? 10 : 0)) // Keep zIndex for expansion overlap (only if not in carousel mode)
         .scaleEffect(isCarouselMode ? 1.0 : (isExpanded ? 1.02 : 1.0)) // Keep scale effect (only if not in carousel mode)

@@ -1,6 +1,33 @@
 #if os(macOS)
 import SwiftUI
 import AppKit 
+
+// Custom header view that doesn't draw background but shows column titles
+class ClearBackgroundHeaderView: NSTableHeaderView {
+    override func draw(_ dirtyRect: NSRect) {
+        // Clear the background but draw the column headers
+        NSColor.clear.setFill()
+        dirtyRect.fill()
+        
+        // Draw each column header manually
+        guard let tableView = tableView else { return }
+        
+        for column in tableView.tableColumns {
+            let headerCell = column.headerCell
+            let columnIndex = tableView.tableColumns.firstIndex(of: column) ?? 0
+            let headerRect = headerRect(ofColumn: columnIndex)
+            
+            if headerRect.intersects(dirtyRect) {
+                headerCell.draw(withFrame: headerRect, in: self)
+            }
+        }
+    }
+    
+    override var isOpaque: Bool {
+        return false
+    }
+}
+
 struct DocumentTable: NSViewRepresentable {
     // Add defaultColumnOrder at the top of DocumentTable
     private let defaultColumnOrder = ["status", "name", "series", "location", "date", "createdDate", "presentedDate"]
@@ -182,6 +209,10 @@ struct DocumentTable: NSViewRepresentable {
         customTableView.headerView?.wantsLayer = true
         customTableView.headerView?.layer?.backgroundColor = NSColor.clear.cgColor
         
+        // Create a custom header view that doesn't draw background
+        let customHeaderView = ClearBackgroundHeaderView()
+        customTableView.headerView = customHeaderView
+        
         // Set up context menu handlers
         customTableView.onPin = onPin
         customTableView.onWIP = onWIP
@@ -355,6 +386,12 @@ struct DocumentTable: NSViewRepresentable {
         if context.coordinator.colorScheme != colorScheme {
             context.coordinator.colorScheme = colorScheme
             (tableView as? TrackingTableView)?.isDarkMode = (colorScheme == .dark)
+            
+            // Ensure header view maintains clear background
+            if let headerView = tableView.headerView {
+                headerView.layer?.backgroundColor = NSColor.clear.cgColor
+            }
+            
             needsReload = true
         }
 
