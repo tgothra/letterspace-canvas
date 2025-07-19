@@ -13,6 +13,7 @@ struct PinnedSection: View {
     var onShowModal: (() -> Void)? = nil  // Callback for showing modal on iPad
     var hideHeader: Bool = false // New parameter to hide header in modals
     var allDocumentsPosition: DashboardView.AllDocumentsPosition = .default // For iPhone dynamic heights
+    var isLoadingDocuments: Bool = false // New parameter to track loading state
     @State private var scrollOffset: CGFloat = 0
     @State private var shouldFlashScroll = false
     @State private var isHoveringButton = false
@@ -108,10 +109,23 @@ struct PinnedSection: View {
                             return false
                             #endif
                         }()
-                        Text("No pinned documents")
-                            .font(.system(size: isIPadLocal ? 18 : 13))
-                            .foregroundColor(theme.secondary)
+                        
+                        if isLoadingDocuments {
+                            // Show loading indicator instead of empty state
+                            HStack(spacing: 8) {
+                                ProgressView()
+                                    .scaleEffect(0.8)
+                                Text("Loading...")
+                                    .font(.system(size: isIPadLocal ? 18 : 13))
+                                    .foregroundColor(theme.secondary)
+                            }
                             .padding(.horizontal, 4)
+                        } else {
+                            Text("No pinned documents")
+                                .font(.system(size: isIPadLocal ? 18 : 13))
+                                .foregroundColor(theme.secondary)
+                                .padding(.horizontal, 4)
+                        }
                     } else {
                         ForEach(pinnedDocs, id: \.id) { doc in
                             PinnedDocumentButton(

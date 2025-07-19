@@ -53,6 +53,10 @@ struct DashboardView: View {
     @State private var refreshTrigger: Bool = false
     // Add state variable for table refresh ID
     @State private var tableRefreshID = UUID()
+    // Add state to track loading status
+    @State private var isLoadingDocuments: Bool = true
+    // Add state to track if this is a swipe-down navigation
+    @State private var isSwipeDownNavigation: Bool = false
     
     // Add state variables for Presentation Manager sheet
     @State private var documentToShowInSheet: Letterspace_CanvasDocument?
@@ -298,7 +302,8 @@ struct DashboardView: View {
             onShowModal: {
                 showPinnedModal = true
             },
-            allDocumentsPosition: allDocumentsPosition // Pass the position for iPhone dynamic heights
+            allDocumentsPosition: allDocumentsPosition, // Pass the position for iPhone dynamic heights
+            isLoadingDocuments: isLoadingDocuments // Pass loading state
         )
         .modifier(CarouselHeaderStyling())
     }
@@ -316,7 +321,8 @@ struct DashboardView: View {
             onShowModal: {
                 showWIPModal = true
             },
-            allDocumentsPosition: allDocumentsPosition // Pass the position for iPhone dynamic heights
+            allDocumentsPosition: allDocumentsPosition, // Pass the position for iPhone dynamic heights
+            isLoadingDocuments: isLoadingDocuments // Pass loading state
         )
         .modifier(CarouselHeaderStyling())
     }
@@ -751,6 +757,20 @@ struct DashboardView: View {
                     
             // Set up notification observers (fast operation)
             setupNotificationObservers()
+            
+            // Listen for swipe-down navigation
+            NotificationCenter.default.addObserver(
+                forName: NSNotification.Name("SwipeDownDismissStarted"),
+                object: nil,
+                queue: .main
+            ) { _ in
+                isSwipeDownNavigation = true
+                // Don't reload documents, just show loading placeholders briefly
+                // Reset after animation should be complete
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    isSwipeDownNavigation = false
+                }
+            }
             }
             .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("DocumentListDidUpdate"))) { _ in
                 loadDocuments()
@@ -1435,8 +1455,14 @@ struct DashboardView: View {
     }
     
     private func loadDocuments() {
+        // Only set loading state if this isn't a swipe-down navigation
+        if !isSwipeDownNavigation {
+            isLoadingDocuments = true
+        }
+        
         guard let appDirectory = Letterspace_CanvasDocument.getAppDocumentsDirectory() else {
             print("❌ Could not find documents directory")
+            isLoadingDocuments = false
             return
         }
         
@@ -1477,6 +1503,8 @@ struct DashboardView: View {
                 self.tableRefreshID = UUID()
                 // Refresh carousel sections after documents are loaded
                 self.initializeCarouselSections()
+                // Set loading complete
+                self.isLoadingDocuments = false
             }
             
         } catch {
@@ -1488,6 +1516,8 @@ struct DashboardView: View {
                 self.tableRefreshID = UUID()
                 // Refresh carousel sections even on error to show empty state
                 self.initializeCarouselSections()
+                // Set loading complete even on error
+                self.isLoadingDocuments = false
             }
         }
     }
@@ -3095,22 +3125,39 @@ struct DashboardView: View {
         
         ZStack(alignment: .topTrailing) {
             // Main card content
-            carouselSections[index].view
-                .frame(width: adjustedCardWidth, height: {
-                    #if os(iOS)
-                    let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-                    let isIPad = UIDevice.current.userInterfaceIdiom == .pad
-                    if isPhone || isIPad {
-                        // Use dynamic height based on All Documents position for both iPhone and iPad
-                        return allDocumentsPosition.carouselHeight
-                    } else {
-                        return 380 // Fallback for other devices
+            Group {
+                if isSwipeDownNavigation && isLoadingDocuments {
+                    // Show loading placeholder during swipe-down navigation
+                    VStack {
+                        Spacer()
+                        HStack(spacing: 8) {
+                            ProgressView()
+                                .scaleEffect(0.8)
+                            Text("Loading...")
+                                .font(.system(size: 16))
+                                .foregroundColor(theme.secondary)
+                        }
+                        Spacer()
                     }
-                    #else
-                    return 380
-                    #endif
-                }(), alignment: .top)
-                .clipped()  // Clip content that overflows the frame
+                } else {
+                    carouselSections[index].view
+                }
+            }
+            .frame(width: adjustedCardWidth, height: {
+                #if os(iOS)
+                let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                let isIPad = UIDevice.current.userInterfaceIdiom == .pad
+                if isPhone || isIPad {
+                    // Use dynamic height based on All Documents position for both iPhone and iPad
+                    return allDocumentsPosition.carouselHeight
+                } else {
+                    return 380 // Fallback for other devices
+                }
+                #else
+                return 380
+                #endif
+            }(), alignment: .top)
+            .clipped()  // Clip content that overflows the frame
             
             // Reorder mode overlay
             if reorderMode && !isDragged {

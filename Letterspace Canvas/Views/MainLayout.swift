@@ -209,6 +209,9 @@ struct MainLayout: View {
     // Circular Menu State
     @State private var isCircularMenuOpen: Bool = false
     
+    // Swipe-down dismiss tracking
+    @State private var isSwipeDownDismissing: Bool = false
+    
     // Gradient wallpaper manager
     @StateObject private var gradientManager = GradientWallpaperManager.shared
     
@@ -351,6 +354,15 @@ struct MainLayout: View {
                     UserDefaults.standard.set(false, forKey: "navigationIsCollapsed")
                 }
                 #endif
+                
+                // Listen for swipe-down dismiss notifications
+                NotificationCenter.default.addObserver(
+                    forName: NSNotification.Name("SwipeDownDismissStarted"),
+                    object: nil,
+                    queue: .main
+                ) { _ in
+                    isSwipeDownDismissing = true
+                }
             }
             .onChange(of: sidebarMode) { _ in
                 // If switching to the dashboard view, refresh document list
@@ -1626,20 +1638,33 @@ private func mainContentView(availableWidth: CGFloat) -> some View {
                                     isSearchActive: $isSearchActive,
                                     shouldPauseHover: isSearchActive,
                                     onNavigateBack: {
-                                        // Navigate back to dashboard on swipe with smooth slide animation
-                                        withAnimation(.easeOut(duration: 0.3)) {
+                                        // Check if this is a swipe-down dismiss vs regular navigation
+                                        if isSwipeDownDismissing {
+                                            // No animation for swipe-down dismiss
                                             sidebarMode = .allDocuments
                                             isRightSidebarVisible = false
                                             viewMode = .normal
+                                            
+                                            // Reset flag after brief delay
+                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                                isSwipeDownDismissing = false
+                                            }
+                                        } else {
+                                            // Navigate back to dashboard on swipe with smooth slide animation
+                                            withAnimation(.easeOut(duration: 0.3)) {
+                                                sidebarMode = .allDocuments
+                                                isRightSidebarVisible = false
+                                                viewMode = .normal
+                                            }
                                         }
                                     }
                                 )
                                 .id(document.id)
                                 .transition(.asymmetric(
                                     insertion: .opacity,
-                                    removal: .move(edge: .trailing)
+                                    removal: isSwipeDownDismissing ? .opacity : .move(edge: .trailing)
                                 ))
-                                .animation(.easeOut(duration: 0.3), value: sidebarMode)
+                                .animation(isSwipeDownDismissing ? .none : .easeOut(duration: 0.3), value: sidebarMode)
                             }
     }
     

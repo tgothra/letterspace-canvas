@@ -243,6 +243,9 @@ struct DocumentArea: View {
     @State private var smoothedHeaderProgress: CGFloat = 0.0 // Smoothed version for ultra-smooth slow scrolling
     @State private var isKeyboardVisible: Bool = false // Track keyboard visibility for iOS
     @State private var dragOffset: CGFloat = 0 // Track real-time drag offset for interactive swipe
+    @State private var swipeDownProgress: CGFloat = 0.0 // Track swipe-down progress for iPhone dismiss gesture
+    @State private var slideDownOffset: CGFloat = 0 // Track slide-down dismiss animation
+    @State private var showPresentationLabel: Bool = false // Track presentation view label display
     
     // Ultra-smooth easing function for buttery navigation
     private func easeOutCubic(_ t: CGFloat) -> CGFloat {
@@ -313,51 +316,84 @@ struct DocumentArea: View {
             // Main container for all document UI
             documentContainer(geo: geo)
         }
-        // Add full-screen swipe gesture for iPhone navigation (preserves scrolling with smart detection)
+        // Add full-screen swipe gesture for iOS navigation (preserves scrolling with smart detection)
         #if os(iOS)
-        .offset(x: dragOffset) // Apply real-time drag offset with ultra-smooth animation
+        .offset(x: dragOffset, y: slideDownOffset) // Apply both horizontal and vertical offsets
         .simultaneousGesture(
-            UIDevice.current.userInterfaceIdiom == .phone && !isKeyboardVisible ?
+            !isKeyboardVisible ?
             DragGesture(minimumDistance: 0, coordinateSpace: .global)
                 .onChanged { value in
-                    // Only track rightward swipes that are clearly horizontal
                     let translation = value.translation
-                    let velocity = value.predictedEndTranslation
+                    let startLocation = value.startLocation
                     
-                    // Smart gesture detection: horizontal movement must dominate
-                    if translation.width > 0 && abs(translation.width) > abs(translation.height) * 1.2 {
-                        // Ultra-smooth, direct tracking with no easing resistance
+                    // Check if swipe started in the header area (top 300pt of screen)
+                    let isInHeaderArea = startLocation.y < 300
+                    
+                    if isInHeaderArea && translation.height > 0 {
+                        // Swipe down in header area - handle dismiss gesture
+                        let progress = min(translation.height / 150, 1.0) // 150pt for full progress
+                        withAnimation(.easeOut(duration: 0.1)) {
+                            swipeDownProgress = progress
+                        }
+                    } else if !isInHeaderArea && translation.width > 0 && abs(translation.width) > abs(translation.height) * 1.2 && swipeDownProgress == 0 {
+                        // Horizontal swipe outside header area - handle right swipe navigation
                         let maxDrag = UIScreen.main.bounds.width * 0.9
                         let rawOffset = translation.width
-                        
-                        // Apply smooth, responsive tracking
                         dragOffset = min(rawOffset, maxDrag)
                     }
                 }
                 .onEnded { value in
-                    // Check if swipe was sufficient for navigation
-                    if value.translation.width > 100 && abs(value.translation.height) < 120 {
-                        // Provide immediate feedback
+                    let translation = value.translation
+                    let velocity = value.predictedEndTranslation
+                    let startLocation = value.startLocation
+                    let isInHeaderArea = startLocation.y < 300
+                    
+                    if isInHeaderArea && translation.height > 100 && swipeDownProgress > 0 {
+                        // Swipe down dismiss from header area
                         HapticFeedback.impact(.medium)
                         
-                        // Smooth completion animation
+                        // Trigger swipe-down dismiss
+                        NotificationCenter.default.post(
+                            name: NSNotification.Name("SwipeDownDismissStarted"),
+                            object: nil
+                        )
+                        
+                        // Animate document sliding down off screen
+                        withAnimation(.easeInOut(duration: 0.4)) {
+                            slideDownOffset = UIScreen.main.bounds.height
+                        }
+                        
+                        // Navigate back to dashboard after slide-down completes
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+                            onNavigateBack?()
+                            
+                            // Reset offsets after navigation completes
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                slideDownOffset = 0
+                                dragOffset = 0
+                                swipeDownProgress = 0
+                            }
+                        }
+                    } else if !isInHeaderArea && translation.width > 100 && abs(translation.height) < 120 {
+                        // Right swipe navigation outside header area
+                        HapticFeedback.impact(.medium)
+                        
                         withAnimation(.easeOut(duration: 0.3)) {
                             dragOffset = UIScreen.main.bounds.width
                         }
                         
-                        // Navigate after brief delay to sync with animation
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                             onNavigateBack?()
                         }
                         
-                        // Reset offset after navigation completes
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                             dragOffset = 0
                         }
                     } else {
-                        // Smooth snap-back animation
+                        // Reset any partial gestures
                         withAnimation(.easeOut(duration: 0.25)) {
                             dragOffset = 0
+                            swipeDownProgress = 0
                         }
                     }
                 } : nil
@@ -416,7 +452,82 @@ struct DocumentArea: View {
             // Main document content
             documentHStack(geo: geo)
             
+            // iOS swipe-to-close label overlay (no full-screen blur)
+            #if os(iOS)
+            if swipeDownProgress > 0 {
+                GeometryReader { geometry in
+                    VStack {
+                        Spacer()
+                        
+                        HStack {
+                            Spacer()
+                            
+                            VStack(spacing: 12) {
+                                Image(systemName: "chevron.down")
+                                    .font(.system(size: 24, weight: .medium))
+                                    .foregroundColor(.secondary)
+                                    .scaleEffect(1 + swipeDownProgress * 0.2) // Slight scale animation
+                                
+                                Text("Swipe to close")
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(20)
+                            .background(.ultraThinMaterial) // Blurred background for just the label
+                            .cornerRadius(16)
+                            .scaleEffect(0.8 + swipeDownProgress * 0.2) // Scale up as swipe progresses
+                            .shadow(color: .black.opacity(0.1), radius: 8, x: 0, y: 4)
+                            .opacity(swipeDownProgress)
+                            
+                            Spacer()
+                        }
+                        
+                        Spacer()
+                    }
+                    .frame(width: geometry.size.width, height: geometry.size.height)
+                }
+                .allowsHitTesting(false) // Don't interfere with gestures
+                .ignoresSafeArea()
+            }
             
+            // iOS presentation view label overlay (for distraction-free mode)
+            if showPresentationLabel {
+                GeometryReader { geometry in
+                    VStack {
+                        Spacer()
+                        
+                        HStack {
+                            Spacer()
+                            
+                            VStack(spacing: 12) {
+                                Image(systemName: "rectangle.inset.filled")
+                                    .font(.system(size: 24, weight: .medium))
+                                    .foregroundColor(.secondary)
+                                
+                                Text("Presentation View")
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(20)
+                            .background(.ultraThinMaterial) // Blurred background for just the label
+                            .cornerRadius(16)
+                            .shadow(color: .black.opacity(0.1), radius: 8, x: 0, y: 4)
+                            .transition(.asymmetric(
+                                insertion: .opacity.combined(with: .scale(scale: 0.8)),
+                                removal: .opacity.combined(with: .scale(scale: 0.8))
+                            ))
+                            
+                            Spacer()
+                        }
+                        
+                        Spacer()
+                    }
+                    .frame(width: geometry.size.width, height: geometry.size.height)
+                }
+                .allowsHitTesting(false) // Don't interfere with gestures
+                .ignoresSafeArea()
+            }
+            #endif
             
             // "Tap again to edit" popup overlay - only show on macOS
             #if os(macOS)
@@ -457,6 +568,23 @@ struct DocumentArea: View {
         .onAppear { setupEventObservers() }
         .onChange(of: document.id) { oldValue, newValue in
             handleDocumentIdChange(oldValue: oldValue, newValue: newValue) 
+        }
+        .onChange(of: viewMode) { oldValue, newValue in
+            // Show presentation label when entering distraction-free mode on iOS
+            #if os(iOS)
+            if newValue == .distractionFree && oldValue != .distractionFree {
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    showPresentationLabel = true
+                }
+                
+                // Hide label after 2 seconds
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        showPresentationLabel = false
+                    }
+                }
+            }
+            #endif
         }
     }
     
@@ -1509,7 +1637,38 @@ struct DocumentArea: View {
                         // No longer needed - header images don't collapse on tap
                     },
                     headerCollapseProgress: smoothedHeaderProgress, // Pass smoothed scaling progress for ultra-smooth slow scrolling
-                    isTitleVisible: $isTitleVisible
+                    isTitleVisible: $isTitleVisible,
+                    onDismiss: {
+                        // iPhone swipe-to-dismiss callback with slide-down animation
+                        #if os(iOS)
+                        if UIDevice.current.userInterfaceIdiom == .phone {
+                            // Notify MainLayout that swipe-down dismiss is starting
+                            NotificationCenter.default.post(
+                                name: NSNotification.Name("SwipeDownDismissStarted"),
+                                object: nil
+                            )
+                            
+                            // Animate document sliding down off screen
+                            withAnimation(.easeInOut(duration: 0.4)) {
+                                slideDownOffset = UIScreen.main.bounds.height // Slide down off screen
+                            }
+                            
+                            // Navigate back to dashboard after slide-down completes
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+                                // Use MainLayout's navigation logic directly
+                                onNavigateBack?()
+                                
+                                // Reset offsets after a brief delay to allow navigation to complete
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                    slideDownOffset = 0
+                                    dragOffset = 0
+                                    swipeDownProgress = 0
+                                }
+                            }
+                        }
+                        #endif
+                    },
+                    swipeDownProgress: $swipeDownProgress
                 )
                 .buttonStyle(.plain)
                 .padding(.top, 24)

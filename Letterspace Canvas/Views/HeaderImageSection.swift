@@ -56,6 +56,10 @@ struct HeaderImageSection: View {
     // New state to control visibility timing
     @State private var isVisible: Bool = false
     
+    // iPhone swipe-to-dismiss state variables
+    @State private var isDismissing: Bool = false
+    let onDismiss: (() -> Void)?
+    @Binding var swipeDownProgress: CGFloat
 
     
     // iOS-specific state for action sheet
@@ -252,6 +256,8 @@ struct HeaderImageSection: View {
                 }
                 .frame(maxWidth: paperWidth, maxHeight: .infinity) // Allow content to expand to full size
                 
+
+                
                 // Loading indicator (remains the same)
                 if isImageLoading {
                     ProgressView()
@@ -263,6 +269,7 @@ struct HeaderImageSection: View {
                 }
             }
             .frame(maxWidth: paperWidth, maxHeight: .infinity) // Allow ZStack to expand to content size
+
             .onAppear {
                 loadHeaderImageIfNeeded()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
