@@ -1758,11 +1758,11 @@ private func deleteSelectedDocuments() {
                         showTagManager = true
                     }) {
                         Image(systemName: "info.circle")
-                            .font(.system(size: 12))
+                            .font(.system(size: 16))
                             .foregroundStyle(theme.primary)
                     }
                     .buttonStyle(.plain)
-                    .padding(.horizontal, 8)
+                    .padding(.horizontal, 4)
                 }
                 
                 // Single scrollable filter area (right side)
@@ -1862,7 +1862,6 @@ private func deleteSelectedDocuments() {
         }
         .popover(isPresented: $showTagManager, arrowEdge: .bottom) {
             TagManager(allTags: allTags)
-                .frame(width: 280)
                 #if os(macOS)
                 .background(Color(.windowBackgroundColor))
                 #elseif os(iOS)
