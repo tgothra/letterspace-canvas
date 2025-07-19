@@ -1860,14 +1860,17 @@ private func deleteSelectedDocuments() {
             // Default to Filter category
             selectedFilterCategory = "Filter"
         }
+        #if os(iOS)
+        .sheet(isPresented: $showTagManager) {
+            TagManager(allTags: allTags)
+                .background(Color(UIColor.systemBackground))
+        }
+        #else
         .popover(isPresented: $showTagManager, arrowEdge: .bottom) {
             TagManager(allTags: allTags)
-                #if os(macOS)
                 .background(Color(.windowBackgroundColor))
-                #elseif os(iOS)
-                .background(Color(UIColor.systemBackground))
-                #endif
         }
+        #endif
     }
     
     // iPad/macOS header (original layout)
@@ -2019,7 +2022,6 @@ private func deleteSelectedDocuments() {
                     #endif
                     .popover(isPresented: $showTagManager, arrowEdge: .bottom) {
                         TagManager(allTags: allTags)
-                            .frame(width: 280)
                             #if os(macOS)
                             .background(Color(.windowBackgroundColor))
                             #elseif os(iOS)
