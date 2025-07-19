@@ -233,7 +233,18 @@ struct TagManager: View {
                 }
                 .padding(.vertical, 6)
             }
-            .frame(height: 250) // Fixed height for the scrollable list
+            .frame(height: {
+                #if os(iOS)
+                if UIDevice.current.userInterfaceIdiom == .phone {
+                    // iPhone: Use most of the screen height, accounting for header, divider, and info message
+                    return UIScreen.main.bounds.height * 0.6 // 60% of screen height for scrollable content
+                } else {
+                    return 250 // iPad: Keep fixed height for popover
+                }
+                #else
+                return 250 // macOS: Keep fixed height for popover
+                #endif
+            }()) // Responsive height for the scrollable list
 
             Divider()
 
