@@ -105,8 +105,11 @@ struct DocumentTable: NSViewRepresentable {
     private func deleteSelectedDocuments() {
         print("deleteSelectedDocuments called")
         let fileManager = FileManager.default
-        let documentsURL = fileManager.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let appDirectory = documentsURL.appendingPathComponent("Letterspace Canvas")
+        // Use the same directory resolution as the rest of the app (iCloud-aware)
+        guard let appDirectory = Letterspace_CanvasDocument.getAppDocumentsDirectory() else {
+            print("🗑️ ERROR: Could not determine app documents directory")
+            return
+        }
         let trashURL = appDirectory.appendingPathComponent(".trash", isDirectory: true)
         
         // Create trash directory if it doesn't exist

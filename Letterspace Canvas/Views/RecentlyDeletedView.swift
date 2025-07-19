@@ -389,8 +389,11 @@ struct RecentlyDeletedView: View {
         
         await Task.detached(priority: .userInitiated) {
             let fileManager = FileManager.default
-            let documentsURL = fileManager.urls(for: .documentDirectory, in: .userDomainMask)[0]
-            let appDirectory = documentsURL.appendingPathComponent("Letterspace Canvas")
+            // Use the same directory resolution as the rest of the app (iCloud-aware)
+        guard let appDirectory = Letterspace_CanvasDocument.getAppDocumentsDirectory() else {
+            print("🗑️ ERROR: Could not determine app documents directory")
+            return
+        }
             let trashURL = appDirectory.appendingPathComponent(".trash", isDirectory: true)
             
             // Create trash directory if needed
@@ -503,8 +506,11 @@ struct RecentlyDeletedView: View {
     
     private func restoreDocument(_ deletedDoc: DeletedDocument) {
         let fileManager = FileManager.default
-        let documentsURL = fileManager.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let appDirectory = documentsURL.appendingPathComponent("Letterspace Canvas")
+        // Use the same directory resolution as the rest of the app (iCloud-aware)
+        guard let appDirectory = Letterspace_CanvasDocument.getAppDocumentsDirectory() else {
+            print("🗑️ ERROR: Could not determine app documents directory")
+            return
+        }
         let trashURL = appDirectory.appendingPathComponent(".trash", isDirectory: true)
         
         let sourceURL = trashURL.appendingPathComponent("\(deletedDoc.document.id).canvas")
@@ -534,7 +540,10 @@ struct RecentlyDeletedView: View {
     
     private func deleteSelectedPermanently() {
         let fileManager = FileManager.default
-        let documentsURL = fileManager.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        guard let documentsURL = Letterspace_CanvasDocument.getDocumentsDirectory() else {
+            print("🗑️ ERROR: Could not determine documents directory")
+            return
+        }
         let trashURL = documentsURL.appendingPathComponent(".trash", isDirectory: true)
         
         for documentId in selectedDocuments {
@@ -572,8 +581,11 @@ struct RecentlyDeletedView: View {
     
     private func performDeleteAll() {
         let fileManager = FileManager.default
-        let documentsURL = fileManager.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let appDirectory = documentsURL.appendingPathComponent("Letterspace Canvas")
+        // Use the same directory resolution as the rest of the app (iCloud-aware)
+        guard let appDirectory = Letterspace_CanvasDocument.getAppDocumentsDirectory() else {
+            print("🗑️ ERROR: Could not determine app documents directory")
+            return
+        }
         let trashURL = appDirectory.appendingPathComponent(".trash", isDirectory: true)
         
         do {
@@ -593,7 +605,10 @@ struct RecentlyDeletedView: View {
     
     private func deletePermanently(_ deletedDoc: DeletedDocument) {
         let fileManager = FileManager.default
-        let documentsURL = fileManager.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        guard let documentsURL = Letterspace_CanvasDocument.getDocumentsDirectory() else {
+            print("🗑️ ERROR: Could not determine documents directory")
+            return
+        }
         let trashURL = documentsURL.appendingPathComponent("Letterspace Canvas/.trash")
         let fileURL = trashURL.appendingPathComponent("\(deletedDoc.document.id).canvas")
         

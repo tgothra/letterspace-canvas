@@ -417,36 +417,85 @@ struct DashboardView: View {
         saveDocumentState()
     }
     
-    private func deleteSelectedDocuments() {
-        print("deleteSelectedDocuments called")
-        let fileManager = FileManager.default
-        let documentsURL = fileManager.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let appDirectory = documentsURL.appendingPathComponent("Letterspace Canvas")
+private func deleteSelectedDocuments() {
+        print("🗑️ deleteSelectedDocuments called with \(selectedDocuments.count) documents")
+        print("🗑️ Selected document IDs: \(Array(selectedDocuments))")
         
-        print("Attempting to delete \(selectedDocuments.count) documents from: \(appDirectory.path)")
+        let fileManager = FileManager.default
+        
+        // Use the same directory resolution as the rest of the app (iCloud-aware)
+        guard let appDirectory = Letterspace_CanvasDocument.getAppDocumentsDirectory() else {
+            print("🗑️ ERROR: Could not determine app documents directory")
+            return
+        }
+        
+        let trashURL = appDirectory.appendingPathComponent(".trash", isDirectory: true)
+        
+        print("🗑️ App directory: \(appDirectory.path)")
+        print("🗑️ Trash directory: \(trashURL.path)")
+        
+        // Create trash directory if it doesn't exist
+        do {
+            try fileManager.createDirectory(at: appDirectory, withIntermediateDirectories: true, attributes: nil)
+            try fileManager.createDirectory(at: trashURL, withIntermediateDirectories: true, attributes: nil)
+            print("🗑️ Created or verified trash directory")
+        } catch {
+            print("🗑️ ERROR: Error creating trash directory: \(error)")
+            return
+        }
+        
+        print("🗑️ Attempting to move \(selectedDocuments.count) documents to trash at: \(trashURL.path)")
+        print("🗑️ Available documents in documents array: \(documents.count)")
+        
+        var successCount = 0
+        var failureCount = 0
         
         for docId in selectedDocuments {
-            print("Processing document ID: \(docId)")
+            print("🗑️ Processing document ID: \(docId)")
             if let document = documents.first(where: { $0.id == docId }) {
-                let fileURL = appDirectory.appendingPathComponent("\(document.id).canvas")
-                print("Deleting document at: \(fileURL.path)")
+                let sourceURL = appDirectory.appendingPathComponent("\(document.id).canvas")
+                let destinationURL = trashURL.appendingPathComponent("\(document.id).canvas")
+                print("🗑️ Moving document to trash: \(document.title) (\(document.id))")
+                print("🗑️ From: \(sourceURL.path)")
+                print("🗑️ To: \(destinationURL.path)")
+                
+                // Check if source file exists
+                if !fileManager.fileExists(atPath: sourceURL.path) {
+                    print("🗑️ ERROR: Source file does not exist at \(sourceURL.path)")
+                    failureCount += 1
+                    continue
+                }
+                
                 do {
-                    try fileManager.removeItem(at: fileURL)
-                    print("Successfully deleted document: \(document.title)")
+                    // If destination file exists, remove it first
+                    if fileManager.fileExists(atPath: destinationURL.path) {
+                        try fileManager.removeItem(at: destinationURL)
+                        print("🗑️ Removed existing file at destination")
+                    }
+                    try fileManager.moveItem(at: sourceURL, to: destinationURL)
+                    // Set the modification date to track when it was moved to trash
+                    try fileManager.setAttributes([.modificationDate: Date()], ofItemAtPath: destinationURL.path)
+                    print("🗑️ SUCCESS: Successfully moved document to trash")
+                    successCount += 1
                 } catch {
-                    print("Error deleting document: \(error)")
+                    print("🗑️ ERROR: Error moving document to trash: \(error)")
+                    failureCount += 1
                 }
             } else {
-                print("Could not find document with ID: \(docId)")
+                print("🗑️ ERROR: Could not find document with ID: \(docId) in documents array")
+                failureCount += 1
             }
         }
         
+        print("🗑️ Delete operation completed. Success: \(successCount), Failures: \(failureCount)")
+        
         // Clear selection
         selectedDocuments.removeAll()
+        print("🗑️ Cleared selectedDocuments - now contains \(selectedDocuments.count) items")
         
         // Post notification that documents have been updated
         NotificationCenter.default.post(name: NSNotification.Name("DocumentListDidUpdate"), object: nil)
-        print("Posted DocumentListDidUpdate notification")
+        print("🗑️ Posted DocumentListDidUpdate notification")
     }
     
     private func saveDocumentState() {
