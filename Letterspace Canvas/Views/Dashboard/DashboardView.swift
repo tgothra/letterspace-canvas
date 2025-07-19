@@ -99,8 +99,7 @@ struct DashboardView: View {
     @State private var selectedAllDocuments: Set<String> = []
     @State private var justLongPressed: Bool = false
     
-    // NEW: State for All Documents sheet behavior (iPhone only)
-    @State private var allDocumentsOffset: CGFloat = 0
+    // NEW: State for All Documents sheet behavior (iPhone and iPad)
     @State private var isDraggingAllDocuments: Bool = false
     @State private var allDocumentsPosition: AllDocumentsPosition = .default
     
@@ -109,18 +108,6 @@ struct DashboardView: View {
         case collapsed  // Minimum height, carousel expanded
         case `default`  // Current default position
         case expanded   // Full screen like iOS sheet
-        
-        var offset: CGFloat {
-            switch self {
-            case .collapsed:
-                // No offset - All Documents section stays at same position as default
-                return 0  // No spacing change from carousel buttons
-            case .default:
-                return 0    // No offset
-            case .expanded:
-                return 0    // No offset - we now use frame height instead
-            }
-        }
         
         var carouselHeight: CGFloat {
             #if os(iOS)
@@ -143,7 +130,7 @@ struct DashboardView: View {
                 case .default:
                     return 200  // Default carousel height
                 case .expanded:
-                    return 140  // Minimized carousel height
+                    return 5    // Essentially hidden - just enough to maintain layout structure
                 }
             }
             #else
@@ -716,42 +703,42 @@ struct DashboardView: View {
         .onAppear {
             // Only do essential initialization - like Apple Notes and Craft
             // Load basic UserDefaults data (fast operations)
-            if let pinnedArray = UserDefaults.standard.array(forKey: "PinnedDocuments") as? [String] {
-                pinnedDocuments = Set(pinnedArray)
-            }
-            if let wipArray = UserDefaults.standard.array(forKey: "WIPDocuments") as? [String] {
-                wipDocuments = Set(wipArray)
-            }
-            if let calendarArray = UserDefaults.standard.array(forKey: "CalendarDocuments") as? [String] {
-                calendarDocuments = Set(calendarArray)
-            }
-            
-            // Load visible columns (fast operation)
-            if let savedColumns = UserDefaults.standard.array(forKey: "VisibleColumns") as? [String] {
-                visibleColumns = Set(savedColumns)
-            } else {
-                // Set default visible columns
-                visibleColumns = Set(["name"])
-            }
-            
-            // Load carousel position (fast operation)
-            if !isFirstLaunch {
-                selectedCarouselIndex = UserDefaults.standard.integer(forKey: "SelectedCarouselIndex")
-            } else {
-                let savedIndex = UserDefaults.standard.integer(forKey: "SelectedCarouselIndex")
-                if UserDefaults.standard.object(forKey: "SelectedCarouselIndex") == nil {
-                    selectedCarouselIndex = 0
-                } else {
-                    selectedCarouselIndex = savedIndex
+                if let pinnedArray = UserDefaults.standard.array(forKey: "PinnedDocuments") as? [String] {
+                    pinnedDocuments = Set(pinnedArray)
                 }
+                if let wipArray = UserDefaults.standard.array(forKey: "WIPDocuments") as? [String] {
+                    wipDocuments = Set(wipArray)
+                }
+                if let calendarArray = UserDefaults.standard.array(forKey: "CalendarDocuments") as? [String] {
+                    calendarDocuments = Set(calendarArray)
+                }
+                
+            // Load visible columns (fast operation)
+                if let savedColumns = UserDefaults.standard.array(forKey: "VisibleColumns") as? [String] {
+                    visibleColumns = Set(savedColumns)
+                } else {
+                // Set default visible columns
+                        visibleColumns = Set(["name"])
+                }
+                
+            // Load carousel position (fast operation)
+                if !isFirstLaunch {
+                    selectedCarouselIndex = UserDefaults.standard.integer(forKey: "SelectedCarouselIndex")
+                } else {
+                    let savedIndex = UserDefaults.standard.integer(forKey: "SelectedCarouselIndex")
+                    if UserDefaults.standard.object(forKey: "SelectedCarouselIndex") == nil {
+                    selectedCarouselIndex = 0
+                    } else {
+                    selectedCarouselIndex = savedIndex
+                    }
                 isFirstLaunch = false
-            }
-            
+                }
+                
             // Load documents in background (heavy operation)
             Task.detached(priority: .utility) {
                 await MainActor.run {
-                    loadDocuments()
-                    initializeCarouselSections()
+                loadDocuments()
+                initializeCarouselSections()
                 }
             }
             
@@ -759,76 +746,76 @@ struct DashboardView: View {
             Task.detached(priority: .utility) {
                 await MainActor.run {
                     loadFolders()
-                }
-            }
-            
+                        }
+                    }
+                    
             // Set up notification observers (fast operation)
             setupNotificationObservers()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("DocumentListDidUpdate"))) { _ in
-            loadDocuments()
-            // Refresh carousel sections when document list updates
-            initializeCarouselSections()
-        }
-        .overlay( // Keep the MultiSelectionActionBar overlay here
-            Group {
-                if selectedDocuments.count >= 2 {
-                    VStack {
-                        Spacer()
-                        MultiSelectionActionBar(
-                            selectedCount: selectedDocuments.count,
-                            onPin: {
-                                // Check if all selected documents are already pinned
-                                let allPinned = selectedDocuments.allSatisfy { pinnedDocuments.contains($0) }
-                                
-                                if allPinned {
-                                    // If all are pinned, unpin all of them
-                                    for docId in selectedDocuments {
-                                        pinnedDocuments.remove(docId)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("DocumentListDidUpdate"))) { _ in
+                loadDocuments()
+                // Refresh carousel sections when document list updates
+                initializeCarouselSections()
+            }
+            .overlay( // Keep the MultiSelectionActionBar overlay here
+                Group {
+                    if selectedDocuments.count >= 2 {
+                        VStack {
+                            Spacer()
+                            MultiSelectionActionBar(
+                                selectedCount: selectedDocuments.count,
+                                onPin: {
+                                    // Check if all selected documents are already pinned
+                                    let allPinned = selectedDocuments.allSatisfy { pinnedDocuments.contains($0) }
+                                    
+                                    if allPinned {
+                                        // If all are pinned, unpin all of them
+                                        for docId in selectedDocuments {
+                                            pinnedDocuments.remove(docId)
+                                        }
+                                    } else {
+                                        // Otherwise, pin any that aren't pinned yet
+                                        for docId in selectedDocuments {
+                                            pinnedDocuments.insert(docId)
+                                        }
                                     }
-                                } else {
-                                    // Otherwise, pin any that aren't pinned yet
-                                    for docId in selectedDocuments {
-                                        pinnedDocuments.insert(docId)
+                                    saveDocumentState()
+                                },
+                                onWIP: {
+                                    // Check if all selected documents are already WIP
+                                    let allWIP = selectedDocuments.allSatisfy { wipDocuments.contains($0) }
+                                    
+                                    if allWIP {
+                                        // If all are WIP, remove all of them
+                                        for docId in selectedDocuments {
+                                            wipDocuments.remove(docId)
+                                        }
+                                    } else {
+                                        // Otherwise, add any that aren't WIP yet
+                                        for docId in selectedDocuments {
+                                            wipDocuments.insert(docId)
+                                        }
                                     }
-                                }
-                                saveDocumentState()
-                            },
-                            onWIP: {
-                                // Check if all selected documents are already WIP
-                                let allWIP = selectedDocuments.allSatisfy { wipDocuments.contains($0) }
-                                
-                                if allWIP {
-                                    // If all are WIP, remove all of them
-                                    for docId in selectedDocuments {
-                                        wipDocuments.remove(docId)
-                                    }
-                                } else {
-                                    // Otherwise, add any that aren't WIP yet
-                                    for docId in selectedDocuments {
-                                        wipDocuments.insert(docId)
-                                    }
-                                }
-                                saveDocumentState()
-                            },
-                            onDelete: deleteSelectedDocuments
-                        )
-                        .padding(.bottom, 24)
-                        .transition(
-                            .asymmetric(
-                                insertion: .scale(scale: 0.8)
-                                    .combined(with: .offset(y: 50))
-                                    .combined(with: .opacity),
-                                removal: .scale(scale: 0.8)
-                                    .combined(with: .offset(y: 50))
-                                    .combined(with: .opacity)
+                                    saveDocumentState()
+                                },
+                                onDelete: deleteSelectedDocuments
                             )
-                        )
+                            .padding(.bottom, 24)
+                            .transition(
+                                .asymmetric(
+                                    insertion: .scale(scale: 0.8)
+                                        .combined(with: .offset(y: 50))
+                                        .combined(with: .opacity),
+                                    removal: .scale(scale: 0.8)
+                                        .combined(with: .offset(y: 50))
+                                        .combined(with: .opacity)
+                                )
+                            )
+                        }
                     }
                 }
-            }
-            .animation(.spring(response: 0.3, dampingFraction: 0.7, blendDuration: 0), value: selectedDocuments.count > 1)
-        )
+                .animation(.spring(response: 0.3, dampingFraction: 0.7, blendDuration: 0), value: selectedDocuments.count > 1)
+            )
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("DocumentScheduledUpdate"))) { notification in
             guard let userInfo = notification.userInfo,
                   let documentId = userInfo["documentId"] as? String else {
@@ -1062,81 +1049,78 @@ struct DashboardView: View {
                                 #endif
                             }())
                             
-                            // iPad & iPhone Carousel for sections
-                            iPadSectionCarousel
-                            .padding(.horizontal, {
-                                #if os(iOS)
-                                if UIDevice.current.userInterfaceIdiom == .phone {
-                                    return 20 // iPhone: centered with breathing room
-                                } else {
-                                    return 10 // iPad: reduced from 20 to 10 to make carousel wider
-                                }
-                                #else
-                                return 10
-                                #endif
-                            }())
-                            .padding(.top, {
-                                // Position carousel with comfortable breathing room from greeting
-                                let screenHeight = geometry.size.height
-                                #if os(iOS)
-                                if UIDevice.current.userInterfaceIdiom == .phone {
-                                    // Adjust to keep carousel's absolute position the same after lowering the greeting
-                                    return screenHeight * 0.06
-                                } else {
-                                    return screenHeight * 0.10 // Original iPad padding
-                                }
-                                #else
-                                return screenHeight * 0.10
-                                #endif
-                            }())
-                            
-                            // Carousel Navigation Pills (iPhone and iPad)
-                            #if os(iOS)
-                            carouselNavigationPills
-                            #endif
-                            
-                            allDocumentsSectionView
-                            .padding(.top, {
-                                #if os(iOS)
-                                if UIDevice.current.userInterfaceIdiom == .phone {
-                                    return 110 // Increased breathing room for iPhone between carousel and All Documents
-                                } else {
-                                    return 60 // Optimal breathing room for iPad carousel cards
-                                }
-                                #else
-                                return 10 // Keep reduced spacing for other platforms
-                                #endif
-                            }()) // Device-specific spacing between carousel and All Documents
-                            .padding(.horizontal, {
-                                #if os(iOS)
-                                if UIDevice.current.userInterfaceIdiom == .phone {
-                                    // iPhone: Calculate padding to center 93% width content
-                                    let screenWidth = UIScreen.main.bounds.width
-                                    return screenWidth * 0.035 // 3.5% on each side for 93% centered content
-                                } else {
-                                    return 10 // iPad: reduced from 20 to 10 to make All Documents wider
-                                }
-                                #else
-                                return 10 // Keep reduced spacing for other platforms
-                                #endif
-                            }())
-                            .padding(.leading, {
-                                        #if os(macOS)
-                                        return 24 // Fixed alignment with carousel sections on macOS
-                                        #else
+                            // iPad & iPhone Carousel for sections - hide when All Documents is expanded
+                            if allDocumentsPosition != .expanded {
+                                iPadSectionCarousel
+                                    .padding(.horizontal, {
                                         #if os(iOS)
                                         if UIDevice.current.userInterfaceIdiom == .phone {
-                                            return 0 // iPhone: no additional leading padding for centering
+                                            return 20 // iPhone: centered with breathing room
                                         } else {
-                                            // Use the new responsive navPadding for iPad
-                                            return shouldAddNavigationPadding ? navPadding : 10
+                                            return 10 // iPad: reduced from 20 to 10 to make carousel wider
                                         }
                                         #else
+                                        return 10
+                                        #endif
+                                    }())
+                                    .padding(.top, {
+                                        // Position carousel with comfortable breathing room from greeting
+                                        let screenHeight = geometry.size.height
+                                        #if os(iOS)
+                                        if UIDevice.current.userInterfaceIdiom == .phone {
+                                            // Adjust to keep carousel's absolute position the same after lowering the greeting
+                                            return screenHeight * 0.06
+                                        } else {
+                                            return screenHeight * 0.10 // Original iPad padding
+                                        }
+                                        #else
+                                        return screenHeight * 0.10
+                                        #endif
+                                    }())
+                            }
+                            
+                            // Carousel Navigation Pills (iPhone and iPad) - hide when All Documents is expanded
+                            #if os(iOS)
+                            if allDocumentsPosition != .expanded {
+                                carouselNavigationPills
+                            }
+                            #endif
+                            
+                                                        // Spacer to push All Documents to bottom
+                            Spacer()
+                            
+                            // All Documents section - positioned at bottom
+                            allDocumentsSectionView
+                                .padding(.horizontal, {
+                                    #if os(iOS)
+                                    if UIDevice.current.userInterfaceIdiom == .phone {
+                                        // iPhone: Calculate padding to center 93% width content
+                                        let screenWidth = UIScreen.main.bounds.width
+                                        return screenWidth * 0.035 // 3.5% on each side for 93% centered content
+                                    } else {
+                                        return 10 // iPad: reduced from 20 to 10 to make All Documents wider
+                                    }
+                                    #else
+                                    return 10 // Keep reduced spacing for other platforms
+                                    #endif
+                                }())
+                                .padding(.leading, {
+                                    #if os(macOS)
+                                    return 24 // Fixed alignment with carousel sections on macOS
+                                    #else
+                                    #if os(iOS)
+                                    if UIDevice.current.userInterfaceIdiom == .phone {
+                                        return 0 // iPhone: no additional leading padding for centering
+                                    } else {
+                                        // Use the new responsive navPadding for iPad
                                         return shouldAddNavigationPadding ? navPadding : 10
-                                        #endif
-                                        #endif
-                                    }()) // Platform-specific alignment - iPhone centered, iPad aligned
-                            .animation(.spring(response: 0.6, dampingFraction: 0.75), value: showFloatingSidebar)
+                                    }
+                                    #else
+                                    return shouldAddNavigationPadding ? navPadding : 10
+                                    #endif
+                                    #endif
+                                }()) // Platform-specific alignment - iPhone centered, iPad aligned
+                                .animation(.spring(response: 0.6, dampingFraction: 0.75), value: showFloatingSidebar)
                             
                         // Remove Spacer to let All Documents fill remaining space
                         }
@@ -1149,35 +1133,31 @@ struct DashboardView: View {
                             .padding(.horizontal, 20)
                             .padding(.top, 65) // Fixed top padding for consistent header positioning
                             
-                        // iPad Landscape: Use horizontal layout like macOS but with iPad styling
-                        iPadLandscapeSections
-                            .padding(.horizontal, 20)
-                            .padding(.leading, {
-                                // Push cards over when navigation is visible (landscape only)
-                                return shouldAddNavigationPadding ? 165 : 0  // Use fixed value for consistency
-                            }())
-                            .padding(.top, 45) // Increased from 25 to 45 for more breathing room between greeting and cards
-                            .animation(.spring(response: 0.6, dampingFraction: 0.75), value: showFloatingSidebar)
+                        // iPad Landscape: Use horizontal layout like macOS but with iPad styling - hide when All Documents is expanded
+                        if allDocumentsPosition != .expanded {
+                            iPadLandscapeSections
+                                .padding(.horizontal, 20)
+                                .padding(.leading, {
+                                    // Push cards over when navigation is visible (landscape only)
+                                    return shouldAddNavigationPadding ? 165 : 0  // Use fixed value for consistency
+                                }())
+                                .padding(.top, 45) // Increased from 25 to 45 for more breathing room between greeting and cards
+                                .animation(.spring(response: 0.6, dampingFraction: 0.75), value: showFloatingSidebar)
+                        }
                             
-                        // Carousel Navigation Pills for Landscape (iPhone and iPad)
+                        // Carousel Navigation Pills for Landscape (iPhone and iPad) - hide when All Documents is expanded
                         #if os(iOS)
-                        carouselNavigationPills
-                            .padding(.horizontal, 20) // Consistent padding for centering in landscape
+                        if allDocumentsPosition != .expanded {
+                            carouselNavigationPills
+                                .padding(.horizontal, 20) // Consistent padding for centering in landscape
+                        }
                         #endif
                         
-                        // All Documents section - with responsive spacing and height for different iPad sizes
+                                                // Spacer to push All Documents to bottom
+                        Spacer()
+                        
+                        // All Documents section - positioned at bottom
                         allDocumentsSectionView
-                            .padding(.top, {
-                                #if os(iOS)
-                                if UIDevice.current.userInterfaceIdiom == .phone {
-                                    return 110 // Increased breathing room for iPhone between carousel and All Documents in landscape
-                                } else {
-                                    return 30 // Reduced space between carousel and All Documents for iPad landscape
-                                }
-                                #else
-                                return 30 // Keep original spacing for other platforms
-                                #endif
-                            }()) // Device-specific spacing between carousel and All Documents
                             .padding(.trailing, 20) // Match right alignment with cards
                             .padding(.leading, {
                                 #if os(macOS)
@@ -2466,6 +2446,18 @@ struct DashboardView: View {
                                 documentRowForIndex(index, document: document, columnWidths: columnWidths)
                             }
                         }
+                        .padding(.bottom, {
+                            #if os(iOS)
+                            let isIPad = UIDevice.current.userInterfaceIdiom == .pad
+                            if isIPad && allDocumentsPosition == .expanded {
+                                return 100 // Add bottom padding on iPad when expanded so users can see last item
+                            } else {
+                                return 0 // No extra padding in other cases
+                            }
+                            #else
+                            return 0 // No extra padding on other platforms
+                            #endif
+                        }())
                     }
                     .frame(height: isIPad ? nil : 435) // Remove fixed height on iPad to allow expansion
                     .frame(maxHeight: isIPad ? .infinity : 435) // Allow it to fill available space on iPad
@@ -2511,8 +2503,53 @@ struct DashboardView: View {
                 #endif
             }()
         )
-        .frame(height: isIPad ? nil : 400)
-        .frame(maxHeight: isIPad ? .infinity : 400) // Allow All Documents to fill remaining space on iPad
+        .frame(height: {
+            #if os(iOS)
+            let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+            let isIPad = UIDevice.current.userInterfaceIdiom == .pad
+            if isPhone || isIPad {
+                // Dynamic height based on position - stretches from top, bottom stays anchored
+                switch allDocumentsPosition {
+                case .collapsed:
+                    return 300 // Compact height
+                case .default:
+                    return 600 // Default height (increased from 500)
+                case .expanded:
+                    return 1200 // Expanded height (increased from 1000 for more growth toward header)
+                }
+            } else {
+                return 400 // Default for other platforms
+            }
+            #else
+            return 400 // Default for macOS
+            #endif
+        }())
+        .offset(y: {
+            #if os(iOS)
+            let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+            let isIPad = UIDevice.current.userInterfaceIdiom == .pad
+            if isPhone || isIPad {
+                // Offset to anchor bottom edge - move up when expanded, down when collapsed
+                switch allDocumentsPosition {
+                case .collapsed:
+                    return 150 // Move down (300pt height vs 600pt default = 150pt difference)
+                case .default:
+                    return 0 // No offset (baseline position)
+                case .expanded:
+                    if isPhone {
+                        return -250 // iPhone: Move up for better spacing from header (perfect)
+                    } else {
+                        return 50 // iPad: Move down slightly for better positioning
+                    }
+                }
+            } else {
+                return 0 // No offset for other platforms
+            }
+            #else
+            return 0 // No offset for macOS
+            #endif
+        }())
+        .frame(maxHeight: isIPad ? .infinity : 1200) // Allow All Documents to fill remaining space on iPad
         .blur(radius: isSchedulerExpanded || isPinnedExpanded || isWIPExpanded ? 3 : 0)
         .opacity(isSchedulerExpanded || isPinnedExpanded || isWIPExpanded ? 0.7 : 1.0)
         .onChange(of: selectedAllDocuments) { newSelection in
@@ -2523,15 +2560,11 @@ struct DashboardView: View {
                 }
             }
         }
-        // iPhone and iPad sheet behavior - FIXED: Only expand upward, keep bottom anchored
-        .offset(y: (isPhone || isIPad) ? allDocumentsOffset : 0)
-        .frame(height: (isPhone || isIPad) ? 
-            (allDocumentsPosition == .expanded ? 600 : 400) : 400) // Expand height instead of moving entire view
+        // Remove the offset - now using dynamic height instead
         .gesture(
             (isPhone || isIPad) ? DragGesture()
                 .onChanged { value in
-                    // Allow dragging
-                    allDocumentsOffset = value.translation.height
+                    // Track dragging state for visual feedback
                     isDraggingAllDocuments = true
                 }
                 .onEnded { value in
@@ -2567,8 +2600,7 @@ struct DashboardView: View {
                             HapticFeedback.impact(.medium)
                         }
                         
-                        // Reset offset
-                        allDocumentsOffset = 0
+                        // Reset dragging state
                         isDraggingAllDocuments = false
                     }
                 } : nil
