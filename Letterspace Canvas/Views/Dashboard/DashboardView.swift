@@ -677,14 +677,6 @@ private func deleteSelectedDocuments() {
                     .foregroundStyle(theme.primary)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
-                    .padding(.top, {
-                        #if os(iOS)
-                        let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-                        return isPhone ? 12 : 0 // Add breathing room between Dashboard and greeting on iPhone
-                        #else
-                        return 0
-                        #endif
-                    }())
             }
             Spacer()
             
