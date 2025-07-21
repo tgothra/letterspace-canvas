@@ -1989,29 +1989,47 @@ private func deleteSelectedDocuments() {
         )) {
             TallyLabelModal()
         }
+        #if os(macOS)
+        .background(
+            showTallyLabelModal ? Color.red.opacity(0.1) : Color.clear
+        )
+        #endif
         .overlay {
             #if os(macOS)
-            if showTallyLabelModal {
-                ZStack {
-                    // Semi-transparent background
-                    Color.black.opacity(0.3)
-                        .ignoresSafeArea()
-                        .onTapGesture {
-                            print("🎯 Background tapped - closing modal")
-                            showTallyLabelModal = false
-                        }
-                    
-                    // Modal content
-                    TallyLabelModal()
-                        .frame(width: 600, height: 500)
-                        .background(Color(.windowBackgroundColor))
-                        .cornerRadius(12)
-                        .shadow(radius: 20)
+            Group {
+                if showTallyLabelModal {
+                    ZStack {
+                        // Semi-transparent background
+                        Color.black.opacity(0.3)
+                            .ignoresSafeArea()
+                            .onTapGesture {
+                                print("🎯 Background tapped - closing modal")
+                                showTallyLabelModal = false
+                            }
+                            .onAppear {
+                                print("🎯 Overlay background appeared!")
+                            }
+                        
+                        // Modal content
+                        TallyLabelModal()
+                            .frame(width: 600, height: 500)
+                            .background(Color(.windowBackgroundColor))
+                            .cornerRadius(12)
+                            .shadow(radius: 20)
+                            .onAppear {
+                                print("🎯 TallyLabelModal appeared on macOS")
+                            }
+                    }
+                    .animation(.easeInOut(duration: 0.2), value: showTallyLabelModal)
+                } else {
+                    EmptyView()
                         .onAppear {
-                            print("🎯 TallyLabelModal appeared on macOS")
+                            print("🎯 Overlay condition: showTallyLabelModal is false")
                         }
                 }
-                .animation(.easeInOut(duration: 0.2), value: showTallyLabelModal)
+            }
+            .onAppear {
+                print("🎯 Overlay block reached on macOS")
             }
             #endif
         }
