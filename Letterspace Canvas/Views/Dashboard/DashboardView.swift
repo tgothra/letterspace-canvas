@@ -706,6 +706,7 @@ private func deleteSelectedDocuments() {
                 .aspectRatio(contentMode: .fit)
                 .frame(maxWidth: 150, maxHeight: 60)
                 .onTapGesture {
+                    print("🎯 macOS Talle logo tapped!")
                     showTallyLabelModal = true
                 }
             #endif
@@ -751,6 +752,7 @@ private func deleteSelectedDocuments() {
                 .aspectRatio(contentMode: .fit)
                 .frame(maxWidth: 150, maxHeight: 60)
                 .onTapGesture {
+                    print("🎯 macOS Talle logo tapped!")
                     showTallyLabelModal = true
                 }
             #endif

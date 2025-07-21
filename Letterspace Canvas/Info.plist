@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>BranchStableTag</key>
+	<string>1.0.0-stable</string>
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>
@@ -19,6 +21,18 @@
 			</array>
 		</dict>
 	</array>
+	<key>NSUbiquitousContainers</key>
+	<dict>
+		<key>iCloud.com.timothygothra.letterspacecanvas</key>
+		<dict>
+			<key>NSUbiquitousContainerIsDocumentScopePublic</key>
+			<true/>
+			<key>NSUbiquitousContainerName</key>
+			<string>Tallē</string>
+			<key>NSUbiquitousContainerSupportedFolderLevels</key>
+			<string>Any</string>
+		</dict>
+	</dict>
 	<key>UIAppFonts</key>
 	<array>
 		<string>InterTight-Regular.ttf</string>
@@ -29,14 +43,34 @@
 		<string>InterTight-Bold.ttf</string>
 		<string>InterTight-BoldItalic.ttf</string>
 	</array>
-	<key>CFBundleIdentifier</key>
-	<string></string>
-	<key>CFBundleInfoDictionaryVersion</key>
-	<string>6.0</string>
-	<key>LSApplicationCategoryType</key>
-	<string></string>
-	<key>CFBundleExecutable</key>
-	<string></string>
+	<key>UILaunchScreen</key>
+	<dict>
+		<key>UIColorName</key>
+		<string>LaunchScreenBackground</string>
+	</dict>
+	<key>UTExportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>com.apple.package</string>
+				<string>public.content</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>Tallē Document</string>
+			<key>UTTypeIconSystemGenerated</key>
+			<integer>1</integer>
+			<key>UTTypeIdentifier</key>
+			<string>com.timothygothra.letterspacecanvas</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>canvas</string>
+				</array>
+			</dict>
+		</dict>
+	</array>
 	<key>UTImportedTypeDeclarations</key>
 	<array>
 		<dict>
@@ -92,64 +126,5 @@
 			</dict>
 		</dict>
 	</array>
-	<key>BranchStableTag</key>
-	<string>1.0.0-stable</string>
-	<key>UTExportedTypeDeclarations</key>
-	<array>
-		<dict>
-			<key>UTTypeConformsTo</key>
-			<array>
-				<string>com.apple.package</string>
-				<string>public.content</string>
-			</array>
-			<key>UTTypeDescription</key>
-			<string>Tallē Document</string>
-			<key>UTTypeIconSystemGenerated</key>
-			<integer>1</integer>
-			<key>UTTypeIdentifier</key>
-			<string>com.timothygothra.letterspacecanvas</string>
-			<key>UTTypeTagSpecification</key>
-			<dict>
-				<key>public.filename-extension</key>
-				<array>
-					<string>canvas</string>
-				</array>
-			</dict>
-		</dict>
-	</array>
-	<key>CFBundleName</key>
-	<string>Tallē</string>
-        <key>CFBundleDisplayName</key>
-        <string>Tallē</string>
-	<key>UISupportedInterfaceOrientations~ipad</key>
-	<array>
-		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationPortraitUpsideDown</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
-	</array>
-	<key>UIRequiresFullScreen</key>
-	<false/>
-	<key>UIStatusBarStyle</key>
-	<string>UIStatusBarStyleDefault</string>
-	<key>UILaunchScreen</key>
-	<dict>
-		<key>UIColorName</key>
-		<string>LaunchScreenBackground</string>
-	</dict>
-	<key>NSUbiquitousContainers</key>
-	<dict>
-		<key>iCloud.com.timothygothra.letterspacecanvas</key>
-		<dict>
-			<key>NSUbiquitousContainerIsDocumentScopePublic</key>
-			<true/>
-			<key>NSUbiquitousContainerName</key>
-			<string>Tallē</string>
-			<key>NSUbiquitousContainerSupportedFolderLevels</key>
-			<string>Any</string>
-		</dict>
-	</dict>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Tallē needs access to your photo library to add header images to your documents.</string>
 </dict>
 </plist>

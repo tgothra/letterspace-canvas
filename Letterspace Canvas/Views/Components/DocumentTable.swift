@@ -212,9 +212,8 @@ struct DocumentTable: NSViewRepresentable {
         customTableView.headerView?.wantsLayer = true
         customTableView.headerView?.layer?.backgroundColor = NSColor.clear.cgColor
         
-        // Create a custom header view that doesn't draw background
-        let customHeaderView = ClearBackgroundHeaderView()
-        customTableView.headerView = customHeaderView
+        // Use standard header view for now to ensure headers are visible
+        customTableView.headerView = NSTableHeaderView()
         
         // Set up context menu handlers
         customTableView.onPin = onPin

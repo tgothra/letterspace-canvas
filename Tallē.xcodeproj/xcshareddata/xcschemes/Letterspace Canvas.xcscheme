@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Scheme
-   LastUpgradeVersion = "1610"
+   LastUpgradeVersion = "2600"
    version = "1.7">
    <BuildAction
       parallelizeBuildables = "YES"
@@ -16,9 +16,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "D49BE5FC2CF6A35E00E57C24"
-               BuildableName = "Letterspace Canvas.app"
-               BlueprintName = "Letterspace Canvas"
-               ReferencedContainer = "container:Letterspace Canvas.xcodeproj">
+               BuildableName = "Talle&#x304;.app"
+               BlueprintName = "Tall&#x113;"
+               ReferencedContainer = "container:Talle&#x304;.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -38,7 +38,7 @@
                BlueprintIdentifier = "D49BE6102CF6A36000E57C24"
                BuildableName = "Letterspace CanvasTests.xctest"
                BlueprintName = "Letterspace CanvasTests"
-               ReferencedContainer = "container:Letterspace Canvas.xcodeproj">
+               ReferencedContainer = "container:Talle&#x304;.xcodeproj">
             </BuildableReference>
          </TestableReference>
          <TestableReference
@@ -49,7 +49,7 @@
                BlueprintIdentifier = "D49BE61A2CF6A36000E57C24"
                BuildableName = "Letterspace CanvasUITests.xctest"
                BlueprintName = "Letterspace CanvasUITests"
-               ReferencedContainer = "container:Letterspace Canvas.xcodeproj">
+               ReferencedContainer = "container:Talle&#x304;.xcodeproj">
             </BuildableReference>
          </TestableReference>
       </Testables>
@@ -69,9 +69,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "D49BE5FC2CF6A35E00E57C24"
-            BuildableName = "Letterspace Canvas.app"
-            BlueprintName = "Letterspace Canvas"
-            ReferencedContainer = "container:Letterspace Canvas.xcodeproj">
+            BuildableName = "Talle&#x304;.app"
+            BlueprintName = "Tall&#x113;"
+            ReferencedContainer = "container:Talle&#x304;.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </LaunchAction>
@@ -86,9 +86,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "D49BE5FC2CF6A35E00E57C24"
-            BuildableName = "Letterspace Canvas.app"
-            BlueprintName = "Letterspace Canvas"
-            ReferencedContainer = "container:Letterspace Canvas.xcodeproj">
+            BuildableName = "Talle&#x304;.app"
+            BlueprintName = "Tall&#x113;"
+            ReferencedContainer = "container:Talle&#x304;.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>
