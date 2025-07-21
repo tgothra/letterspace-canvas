@@ -103,10 +103,12 @@ struct DashboardView: View {
     @State private var selectedAllDocuments: Set<String> = []
     @State private var justLongPressed: Bool = false
     
+    // State for Talle logo sheet
+    @State private var showTallyLabelModal: Bool = false
+    
     // NEW: State for All Documents sheet behavior (iPhone and iPad)
     @State private var isDraggingAllDocuments: Bool = false
     @State private var allDocumentsPosition: AllDocumentsPosition = .default
-    @State private var showDeveloperSheet = false // For developer modal when logo is tapped
     
     // Sheet position states
     enum AllDocumentsPosition {
@@ -584,6 +586,9 @@ private func deleteSelectedDocuments() {
                 Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
+                    .onTapGesture {
+                        showTallyLabelModal = true
+                    }
                     .frame(maxWidth: {
                         #if os(iOS)
                         let screenWidth = UIScreen.main.bounds.width
@@ -621,7 +626,22 @@ private func deleteSelectedDocuments() {
                 return 12
                 #endif
             }()) {
-                // Logo moved to sticky position above header
+                // Talle Logo row above Dashboard for iPhone only
+                #if os(iOS)
+                if UIDevice.current.userInterfaceIdiom == .phone {
+                    HStack {
+                        Spacer()
+                        Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(maxWidth: min(80, UIScreen.main.bounds.width * 0.2), maxHeight: 30)
+                            .onTapGesture {
+                                showTallyLabelModal = true
+                            }
+                    }
+                    .padding(.bottom, 8) // Breathing room between logo and Dashboard
+                }
+                #endif
                 
                 Text("Dashboard")
                     .font(.system(size: {
@@ -676,12 +696,18 @@ private func deleteSelectedDocuments() {
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(maxWidth: min(200, UIScreen.main.bounds.width * 0.25), maxHeight: 80)
+                    .onTapGesture {
+                        showTallyLabelModal = true
+                    }
             }
             #else
             Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
                 .resizable()
                 .aspectRatio(contentMode: .fit)
                 .frame(maxWidth: 150, maxHeight: 60)
+                .onTapGesture {
+                    showTallyLabelModal = true
+                }
             #endif
         }
         .padding(.horizontal, 8)
@@ -715,12 +741,18 @@ private func deleteSelectedDocuments() {
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(maxWidth: min(200, UIScreen.main.bounds.width * 0.25), maxHeight: 80)
+                    .onTapGesture {
+                        showTallyLabelModal = true
+                    }
             }
             #else
             Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
                 .resizable()
                 .aspectRatio(contentMode: .fit)
                 .frame(maxWidth: 150, maxHeight: 60)
+                .onTapGesture {
+                    showTallyLabelModal = true
+                }
             #endif
         }
         .padding(.horizontal, 8)
@@ -1188,27 +1220,6 @@ private func deleteSelectedDocuments() {
                 if isPortrait && isIPad {
                     // iPad & iPhone Portrait: Special layout that respects navigation
                         VStack(alignment: .leading, spacing: 0) {
-                        // Sticky Talle Logo - independent of document list expansion
-                        #if os(iOS)
-                        if UIDevice.current.userInterfaceIdiom == .phone {
-                            HStack {
-                                Spacer()
-                                Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fit)
-                                    .frame(maxWidth: min(80, UIScreen.main.bounds.width * 0.2), maxHeight: 30)
-                                    .onTapGesture {
-                                        withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
-                                            showDeveloperSheet = true
-                                        }
-                                    }
-                            }
-                            .padding(.horizontal, 20)
-                            .padding(.top, 20) // Lower the logo position
-                            .padding(.bottom, 8) // Breathing room between logo and header
-                        }
-                        #endif
-                        
                         // Header with responsive positioning for navigation
                         iPadDashboardHeaderView
                         .padding(.horizontal, 20)
@@ -1948,7 +1959,7 @@ private func deleteSelectedDocuments() {
                 .background(Color(UIColor.systemBackground))
                 #endif
         }
-        .sheet(isPresented: $showDeveloperSheet) {
+        .sheet(isPresented: $showTallyLabelModal) {
             TallyLabelModal()
         }
     }

@@ -92,9 +92,17 @@ struct TallyLabelModal: View {
                 }
             }
             .navigationTitle("About")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: {
+                    #if os(iOS)
+                    .navigationBarTrailing
+                    #else
+                    .primaryAction
+                    #endif
+                }()) {
                     Button("Done") {
                         dismiss()
                     }
