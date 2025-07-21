@@ -620,40 +620,39 @@ private func deleteSelectedDocuments() {
                 return 12
                 #endif
             }()) {
-                // Talle Logo above Dashboard for iPhone only
-                #if os(iOS)
-                if UIDevice.current.userInterfaceIdiom == .phone {
-                    HStack {
+                HStack {
+                    // iPhone: Logo only (no Dashboard text)
+                    #if os(iOS)
+                    if UIDevice.current.userInterfaceIdiom == .phone {
+                        Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(maxWidth: min(100, UIScreen.main.bounds.width * 0.25), maxHeight: 35)
+                    } else {
+                        // iPad: Show Dashboard text with logo
+                        Text("Dashboard")
+                            .font(.system(size: UIScreen.main.bounds.width * 0.022, weight: .bold))
+                            .foregroundStyle(theme.primary.opacity(0.7))
+                            .padding(.bottom, 2)
                         Spacer()
                         Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
                             .resizable()
                             .aspectRatio(contentMode: .fit)
                             .frame(maxWidth: min(80, UIScreen.main.bounds.width * 0.2), maxHeight: 30)
-                        Spacer()
                     }
-                    .padding(.bottom, 8) // Add some spacing below the logo
+                    #else
+                    // macOS: Show Dashboard text with logo
+                    Text("Dashboard")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundStyle(theme.primary.opacity(0.7))
+                        .padding(.bottom, 2)
+                    Spacer()
+                    Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(maxWidth: 100, maxHeight: 35)
+                    #endif
                 }
-                #endif
-                
-                Text("Dashboard")
-                    .font(.system(size: {
-                        // Responsive dashboard title size using screen bounds
-                        #if os(iOS)
-                        let screenWidth = UIScreen.main.bounds.width
-                        let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-                        if isPhone {
-                            // iPhone: smaller title
-                            return max(12, min(16, screenWidth * 0.035)) // 3.5% of screen width, constrained
-                        } else {
-                            // iPad: original sizing
-                            return screenWidth * 0.022 // 2.2% of screen width
-                        }
-                        #else
-                        return 18
-                        #endif
-                    }(), weight: .bold))
-                    .foregroundStyle(theme.primary.opacity(0.7))
-                    .padding(.bottom, 2)
                 
                 Text(getTimeBasedGreeting())
                     .font(.custom("InterTight-Regular", size: {
