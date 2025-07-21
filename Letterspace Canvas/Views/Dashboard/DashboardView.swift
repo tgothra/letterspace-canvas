@@ -70,6 +70,7 @@ struct DashboardView: View {
     @State private var showPinnedModal = false
     @State private var showWIPModal = false
     @State private var showSchedulerModal = false
+    @State private var showTallyLabelModal = false // State for Tally Label modal
     
     // State for calendar modal - Managed by DashboardView
     @State private var calendarModalData: ModalDisplayData? = nil
@@ -675,12 +676,24 @@ private func deleteSelectedDocuments() {
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(maxWidth: min(200, UIScreen.main.bounds.width * 0.25), maxHeight: 80)
+                    .onTapGesture {
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                            showTallyLabelModal = true
+                        }
+                        HapticFeedback.impact(.light)
+                    }
             }
             #else
             Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
                 .resizable()
                 .aspectRatio(contentMode: .fit)
                 .frame(maxWidth: 150, maxHeight: 60)
+                .onTapGesture {
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                        showTallyLabelModal = true
+                    }
+                    HapticFeedback.impact(.light)
+                }
             #endif
         }
         .padding(.horizontal, 8)
@@ -714,12 +727,24 @@ private func deleteSelectedDocuments() {
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(maxWidth: min(200, UIScreen.main.bounds.width * 0.25), maxHeight: 80)
+                    .onTapGesture {
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                            showTallyLabelModal = true
+                        }
+                        HapticFeedback.impact(.light)
+                    }
             }
             #else
             Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
                 .resizable()
                 .aspectRatio(contentMode: .fit)
                 .frame(maxWidth: 150, maxHeight: 60)
+                .onTapGesture {
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                        showTallyLabelModal = true
+                    }
+                    HapticFeedback.impact(.light)
+                }
             #endif
         }
         .padding(.horizontal, 8)
@@ -1196,6 +1221,12 @@ private func deleteSelectedDocuments() {
                                     .resizable()
                                     .aspectRatio(contentMode: .fit)
                                     .frame(maxWidth: min(80, UIScreen.main.bounds.width * 0.2), maxHeight: 30)
+                                    .onTapGesture {
+                                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                                            showTallyLabelModal = true
+                                        }
+                                        HapticFeedback.impact(.light)
+                                    }
                             }
                             .padding(.horizontal, 20)
                             .padding(.bottom, 8) // Breathing room between logo and header
@@ -1940,6 +1971,10 @@ private func deleteSelectedDocuments() {
                 #elseif os(iOS)
                 .background(Color(UIColor.systemBackground))
                 #endif
+        }
+        // Tally Label Modal
+        .sheet(isPresented: $showTallyLabelModal) {
+            TallyLabelModal()
         }
     }
     

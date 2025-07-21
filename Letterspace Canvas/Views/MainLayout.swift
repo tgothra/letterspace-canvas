@@ -298,7 +298,16 @@ struct MainLayout: View {
                 .presentationBackground(.ultraThinMaterial)
             }
 
-            .sheet(isPresented: $showRecentlyDeletedModal) {
+            .sheet(isPresented: Binding(
+                get: { 
+                    #if os(iOS)
+                    return showRecentlyDeletedModal
+                    #else
+                    return false // Use overlay instead of sheet on macOS
+                    #endif
+                },
+                set: { showRecentlyDeletedModal = $0 }
+            )) {
                 RecentlyDeletedView(isPresented: $showRecentlyDeletedModal)
                     .presentationBackground(.ultraThinMaterial)
             }
