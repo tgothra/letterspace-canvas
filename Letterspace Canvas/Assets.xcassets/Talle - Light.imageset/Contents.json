@@ -1,15 +1,17 @@
 {
   "images" : [
     {
-      "filename" : "Etch.svg",
+      "filename" : "Talle - Light Mode.svg",
       "idiom" : "universal",
       "scale" : "1x"
     },
     {
+      "filename" : "Talle - Light Mode 1.svg",
       "idiom" : "universal",
       "scale" : "2x"
     },
     {
+      "filename" : "Talle - Light Mode 2.svg",
       "idiom" : "universal",
       "scale" : "3x"
     }

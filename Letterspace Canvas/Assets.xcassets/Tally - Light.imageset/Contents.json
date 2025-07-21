@@ -1,16 +1,17 @@
 {
   "images" : [
     {
+      "filename" : "Tally - Light Mode.svg",
       "idiom" : "universal",
       "scale" : "1x"
     },
     {
-      "filename" : "Tally - scripture.svg",
+      "filename" : "Tally - Light Mode 1.svg",
       "idiom" : "universal",
       "scale" : "2x"
     },
     {
-      "filename" : "Tally - scripture 1.svg",
+      "filename" : "Tally - Light Mode 2.svg",
       "idiom" : "universal",
       "scale" : "3x"
     }
