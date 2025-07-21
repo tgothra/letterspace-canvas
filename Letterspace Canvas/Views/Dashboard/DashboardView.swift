@@ -585,7 +585,6 @@ private func deleteSelectedDocuments() {
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(maxWidth: 200, maxHeight: 80)
-                    .interpolation(.high)
                 #endif
             }
         // Apply blur effect when DocumentDetailsCard or calendar modal is shown
