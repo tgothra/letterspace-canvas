@@ -592,29 +592,29 @@ private func deleteSelectedDocuments() {
                     Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
                         .resizable()
                         .aspectRatio(contentMode: .fit)
+                        .frame(maxWidth: {
+                            #if os(iOS)
+                            let screenWidth = UIScreen.main.bounds.width
+                            let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                            if isPhone {
+                                return min(120, screenWidth * 0.25) // 25% of screen width for iPhone, max 120 (reduced from 30% and 150)
+                            } else {
+                                return min(200, screenWidth * 0.25) // 25% of screen width for iPad, max 200
+                            }
+                            #else
+                            return 150 // macOS fixed size (reduced from 200)
+                            #endif
+                        }(), maxHeight: {
+                            #if os(iOS)
+                            let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                            return isPhone ? 45 : 80 // iPhone: smaller (reduced from 60), iPad: larger
+                            #else
+                            return 60 // macOS fixed size (reduced from 80)
+                            #endif
+                        }())
                 }
                 .buttonStyle(PlainButtonStyle())
                 .help("About Tallē")
-                .frame(maxWidth: {
-                        #if os(iOS)
-                        let screenWidth = UIScreen.main.bounds.width
-                        let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-                        if isPhone {
-                            return min(120, screenWidth * 0.25) // 25% of screen width for iPhone, max 120 (reduced from 30% and 150)
-                        } else {
-                            return min(200, screenWidth * 0.25) // 25% of screen width for iPad, max 200
-                        }
-                        #else
-                        return 150 // macOS fixed size (reduced from 200)
-                        #endif
-                    }(), maxHeight: {
-                        #if os(iOS)
-                        let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-                        return isPhone ? 45 : 80 // iPhone: smaller (reduced from 60), iPad: larger
-                        #else
-                        return 60 // macOS fixed size (reduced from 80)
-                        #endif
-                    }())
             }
         // Apply blur effect when DocumentDetailsCard or calendar modal is shown
         .blur(radius: showDetailsCard || calendarModalData != nil ? 3 : 0)
