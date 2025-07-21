@@ -119,6 +119,8 @@
 	</array>
 	<key>CFBundleName</key>
 	<string>Tallē</string>
+        <key>CFBundleDisplayName</key>
+        <string>Tallē</string>
 	<key>UISupportedInterfaceOrientations~ipad</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
