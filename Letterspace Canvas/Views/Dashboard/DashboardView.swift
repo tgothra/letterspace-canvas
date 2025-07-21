@@ -624,10 +624,13 @@ private func deleteSelectedDocuments() {
                     // iPhone: Logo only (no Dashboard text)
                     #if os(iOS)
                     if UIDevice.current.userInterfaceIdiom == .phone {
-                        Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .frame(maxWidth: min(100, UIScreen.main.bounds.width * 0.25), maxHeight: 35)
+                        HStack {
+                            Spacer()
+                            Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(maxWidth: 80, maxHeight: 30)
+                        }
                     } else {
                         // iPad: Show Dashboard text with logo
                         Text("Dashboard")
