@@ -620,25 +620,38 @@ private func deleteSelectedDocuments() {
                 return 12
                 #endif
             }()) {
-                Text("Dashboard")
-                    .font(.system(size: {
-                        // Responsive dashboard title size using screen bounds
-                        #if os(iOS)
-                        let screenWidth = UIScreen.main.bounds.width
-                        let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-                        if isPhone {
-                            // iPhone: smaller title
-                            return max(12, min(16, screenWidth * 0.035)) // 3.5% of screen width, constrained
-                        } else {
-                            // iPad: original sizing
-                            return screenWidth * 0.022 // 2.2% of screen width
-                        }
-                        #else
-                        return 18
-                        #endif
-                    }(), weight: .bold))
-                    .foregroundStyle(theme.primary.opacity(0.7))
-                    .padding(.bottom, 2)
+                HStack {
+                    Text("Dashboard")
+                        .font(.system(size: {
+                            // Responsive dashboard title size using screen bounds
+                            #if os(iOS)
+                            let screenWidth = UIScreen.main.bounds.width
+                            let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                            if isPhone {
+                                // iPhone: smaller title
+                                return max(12, min(16, screenWidth * 0.035)) // 3.5% of screen width, constrained
+                            } else {
+                                // iPad: original sizing
+                                return screenWidth * 0.022 // 2.2% of screen width
+                            }
+                            #else
+                            return 18
+                            #endif
+                        }(), weight: .bold))
+                        .foregroundStyle(theme.primary.opacity(0.7))
+                        .padding(.bottom, 2)
+                    
+                    // Talle Logo on Dashboard row for iPhone only
+                    #if os(iOS)
+                    if UIDevice.current.userInterfaceIdiom == .phone {
+                        Spacer()
+                        Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(maxWidth: min(80, UIScreen.main.bounds.width * 0.2), maxHeight: 30)
+                    }
+                    #endif
+                }
                 
                 Text(getTimeBasedGreeting())
                     .font(.custom("InterTight-Regular", size: {
@@ -666,30 +679,20 @@ private func deleteSelectedDocuments() {
             }
             Spacer()
             
-            // Talle Logo - adapts to light/dark mode and all platforms
+            // Talle Logo - adapts to light/dark mode (iPad and macOS only, iPhone shows on Dashboard row)
+            #if os(iOS)
+            if UIDevice.current.userInterfaceIdiom == .pad {
+                Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(maxWidth: min(200, UIScreen.main.bounds.width * 0.25), maxHeight: 80)
+            }
+            #else
             Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
                 .resizable()
                 .aspectRatio(contentMode: .fit)
-                .frame(maxWidth: {
-                    #if os(iOS)
-                    let screenWidth = UIScreen.main.bounds.width
-                    let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-                    if isPhone {
-                        return min(120, screenWidth * 0.25) // 25% of screen width for iPhone, max 120 (reduced from 30% and 150)
-                    } else {
-                        return min(200, screenWidth * 0.25) // 25% of screen width for iPad, max 200
-                    }
-                    #else
-                    return 150 // macOS fixed size (reduced from 200)
-                    #endif
-                }(), maxHeight: {
-                    #if os(iOS)
-                    let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-                    return isPhone ? 45 : 80 // iPhone: smaller (reduced from 60), iPad: larger
-                    #else
-                    return 60 // macOS fixed size (reduced from 80)
-                    #endif
-                }())
+                .frame(maxWidth: 150, maxHeight: 60)
+            #endif
         }
         .padding(.horizontal, 8)
         // Apply blur effect when DocumentDetailsCard or calendar modal is shown
@@ -715,30 +718,20 @@ private func deleteSelectedDocuments() {
             }
             Spacer()
             
-            // Talle Logo - adapts to light/dark mode and all platforms
+            // Talle Logo - adapts to light/dark mode (iPad and macOS only, iPhone shows on Dashboard row)
+            #if os(iOS)
+            if UIDevice.current.userInterfaceIdiom == .pad {
+                Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(maxWidth: min(200, UIScreen.main.bounds.width * 0.25), maxHeight: 80)
+            }
+            #else
             Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
                 .resizable()
                 .aspectRatio(contentMode: .fit)
-                .frame(maxWidth: {
-                    #if os(iOS)
-                    let screenWidth = UIScreen.main.bounds.width
-                    let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-                    if isPhone {
-                        return min(120, screenWidth * 0.25) // 25% of screen width for iPhone, max 120 (reduced from 30% and 150)
-                    } else {
-                        return min(200, screenWidth * 0.25) // 25% of screen width for iPad, max 200
-                    }
-                    #else
-                    return 150 // macOS fixed size (reduced from 200)
-                    #endif
-                }(), maxHeight: {
-                    #if os(iOS)
-                    let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-                    return isPhone ? 45 : 80 // iPhone: smaller (reduced from 60), iPad: larger
-                    #else
-                    return 60 // macOS fixed size (reduced from 80)
-                    #endif
-                }())
+                .frame(maxWidth: 150, maxHeight: 60)
+            #endif
         }
         .padding(.horizontal, 8)
         // Apply blur effect when DocumentDetailsCard or calendar modal is shown
