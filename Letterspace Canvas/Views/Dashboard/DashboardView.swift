@@ -70,7 +70,6 @@ struct DashboardView: View {
     @State private var showPinnedModal = false
     @State private var showWIPModal = false
     @State private var showSchedulerModal = false
-    @State private var showTallyLabelModal = false // State for Tally Label modal
     
     // State for calendar modal - Managed by DashboardView
     @State private var calendarModalData: ModalDisplayData? = nil
@@ -107,6 +106,7 @@ struct DashboardView: View {
     // NEW: State for All Documents sheet behavior (iPhone and iPad)
     @State private var isDraggingAllDocuments: Bool = false
     @State private var allDocumentsPosition: AllDocumentsPosition = .default
+    @State private var showDeveloperSheet = false // For developer modal when logo is tapped
     
     // Sheet position states
     enum AllDocumentsPosition {
@@ -676,24 +676,12 @@ private func deleteSelectedDocuments() {
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(maxWidth: min(200, UIScreen.main.bounds.width * 0.25), maxHeight: 80)
-                    .onTapGesture {
-                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                            showTallyLabelModal = true
-                        }
-                        HapticFeedback.impact(.light)
-                    }
             }
             #else
             Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
                 .resizable()
                 .aspectRatio(contentMode: .fit)
                 .frame(maxWidth: 150, maxHeight: 60)
-                .onTapGesture {
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                        showTallyLabelModal = true
-                    }
-                    HapticFeedback.impact(.light)
-                }
             #endif
         }
         .padding(.horizontal, 8)
@@ -727,24 +715,12 @@ private func deleteSelectedDocuments() {
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(maxWidth: min(200, UIScreen.main.bounds.width * 0.25), maxHeight: 80)
-                    .onTapGesture {
-                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                            showTallyLabelModal = true
-                        }
-                        HapticFeedback.impact(.light)
-                    }
             }
             #else
             Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
                 .resizable()
                 .aspectRatio(contentMode: .fit)
                 .frame(maxWidth: 150, maxHeight: 60)
-                .onTapGesture {
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                        showTallyLabelModal = true
-                    }
-                    HapticFeedback.impact(.light)
-                }
             #endif
         }
         .padding(.horizontal, 8)
@@ -1222,10 +1198,9 @@ private func deleteSelectedDocuments() {
                                     .aspectRatio(contentMode: .fit)
                                     .frame(maxWidth: min(80, UIScreen.main.bounds.width * 0.2), maxHeight: 30)
                                     .onTapGesture {
-                                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                                            showTallyLabelModal = true
+                                        withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                                            showDeveloperSheet = true
                                         }
-                                        HapticFeedback.impact(.light)
                                     }
                             }
                             .padding(.horizontal, 20)
@@ -1972,8 +1947,7 @@ private func deleteSelectedDocuments() {
                 .background(Color(UIColor.systemBackground))
                 #endif
         }
-        // Tally Label Modal
-        .sheet(isPresented: $showTallyLabelModal) {
+        .sheet(isPresented: $showDeveloperSheet) {
             TallyLabelModal()
         }
     }
