@@ -579,12 +579,13 @@ private func deleteSelectedDocuments() {
                 }
                 Spacer()
                 
-                // Stone Logo (macOS only)
+                // Etch Logo (macOS only)
                 #if os(macOS)
-                Image("Stone")
+                Image("Etch")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
-                    .frame(maxWidth: 150, maxHeight: 60)
+                    .frame(maxWidth: 200, maxHeight: 80)
+                    .interpolation(.high)
                 #endif
             }
         // Apply blur effect when DocumentDetailsCard or calendar modal is shown
