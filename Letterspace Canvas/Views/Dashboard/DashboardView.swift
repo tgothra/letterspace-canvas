@@ -579,9 +579,9 @@ private func deleteSelectedDocuments() {
                 }
                 Spacer()
                 
-                // Etch Logo (macOS only)
+                // Talle Logo (macOS only)
                 #if os(macOS)
-                Image("Etch")
+                Image("Talle")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(maxWidth: 200, maxHeight: 80)
