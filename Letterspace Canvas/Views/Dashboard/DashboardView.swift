@@ -583,13 +583,17 @@ private func deleteSelectedDocuments() {
                 Spacer()
                 
                 // Talle Logo - adapts to light/dark mode and all platforms
-                Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .onTapGesture {
-                        showTallyLabelModal = true
-                    }
-                    .frame(maxWidth: {
+                Button(action: {
+                    print("🎯 macOS first Talle logo button tapped!")
+                    showTallyLabelModal = true
+                }) {
+                    Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                }
+                .buttonStyle(PlainButtonStyle())
+                .help("About Tallē")
+                .frame(maxWidth: {
                         #if os(iOS)
                         let screenWidth = UIScreen.main.bounds.width
                         let isPhone = UIDevice.current.userInterfaceIdiom == .phone
@@ -701,14 +705,17 @@ private func deleteSelectedDocuments() {
                     }
             }
             #else
-            Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(maxWidth: 150, maxHeight: 60)
-                .onTapGesture {
-                    print("🎯 macOS Talle logo tapped!")
-                    showTallyLabelModal = true
-                }
+            Button(action: {
+                print("🎯 macOS Talle logo button tapped!")
+                showTallyLabelModal = true
+            }) {
+                Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(maxWidth: 150, maxHeight: 60)
+            }
+            .buttonStyle(PlainButtonStyle())
+            .help("About Tallē")
             #endif
         }
         .padding(.horizontal, 8)
@@ -747,14 +754,17 @@ private func deleteSelectedDocuments() {
                     }
             }
             #else
-            Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(maxWidth: 150, maxHeight: 60)
-                .onTapGesture {
-                    print("🎯 macOS Talle logo tapped!")
-                    showTallyLabelModal = true
-                }
+            Button(action: {
+                print("🎯 macOS Talle logo button tapped!")
+                showTallyLabelModal = true
+            }) {
+                Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(maxWidth: 150, maxHeight: 60)
+            }
+            .buttonStyle(PlainButtonStyle())
+            .help("About Tallē")
             #endif
         }
         .padding(.horizontal, 8)
