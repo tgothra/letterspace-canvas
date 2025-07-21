@@ -779,7 +779,36 @@ private func deleteSelectedDocuments() {
         .opacity(showDetailsCard || calendarModalData != nil ? 0.7 : 1.0)
     }
     
-    var body: some View {
+        
+    // MARK: - macOS Modal
+    @ViewBuilder
+    private var macOSModal: some View {
+        #if os(macOS)
+        if showTallyLabelModal {
+            ZStack {
+                Color.black.opacity(0.3)
+                    .ignoresSafeArea()
+                    .onTapGesture {
+                        print("🎯 macOS modal background tapped - closing")
+                        showTallyLabelModal = false
+                    }
+                
+                TallyLabelModal()
+                    .frame(width: 600, height: 500)
+                    .background(Color(.windowBackgroundColor))
+                    .cornerRadius(12)
+                    .shadow(radius: 20)
+                    .onAppear {
+                        print("🎯 macOS TallyLabelModal appeared at top level!")
+                    }
+            }
+            .zIndex(1000)
+            .animation(.easeInOut(duration: 0.2), value: showTallyLabelModal)
+        }
+        #endif
+    }
+    
+var body: some View {
         GeometryReader { geometry in
             let isPortrait = geometry.size.height > geometry.size.width
             let isIPad: Bool = {
@@ -863,32 +892,9 @@ private func deleteSelectedDocuments() {
             .ignoresSafeArea()
             #endif
         }
+
         
-        // macOS Modal Overlay - at the top level
-        #if os(macOS)
-        if showTallyLabelModal {
-            ZStack {
-                Color.black.opacity(0.3)
-                    .ignoresSafeArea()
-                    .onTapGesture {
-                        print("🎯 macOS modal background tapped - closing")
-                        showTallyLabelModal = false
-                    }
-                
-                TallyLabelModal()
-                    .frame(width: 600, height: 500)
-                    .background(Color(.windowBackgroundColor))
-                    .cornerRadius(12)
-                    .shadow(radius: 20)
-                    .onAppear {
-                        print("🎯 macOS TallyLabelModal appeared at top level!")
-                    }
-            }
-            .zIndex(1000) // Ensure it's on top
-            .animation(.easeInOut(duration: 0.2), value: showTallyLabelModal)
-        }
-        #endif
-        
+        .overlay(macOSModal)
         .onAppear {
             // Only do essential initialization - like Apple Notes and Craft
             // Load basic UserDefaults data (fast operations)
