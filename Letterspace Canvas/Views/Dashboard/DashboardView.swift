@@ -579,9 +579,9 @@ private func deleteSelectedDocuments() {
                 }
                 Spacer()
                 
-                // Etch Logo (macOS only)
+                // Stone Logo (macOS only)
                 #if os(macOS)
-                Image("Etch")
+                Image("Stone")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(maxWidth: 150, maxHeight: 60)
