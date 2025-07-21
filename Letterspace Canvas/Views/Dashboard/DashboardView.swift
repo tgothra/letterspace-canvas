@@ -620,19 +620,7 @@ private func deleteSelectedDocuments() {
                 return 12
                 #endif
             }()) {
-                // Talle Logo row above Dashboard for iPhone only
-                #if os(iOS)
-                if UIDevice.current.userInterfaceIdiom == .phone {
-                    HStack {
-                        Spacer()
-                        Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .frame(maxWidth: min(80, UIScreen.main.bounds.width * 0.2), maxHeight: 30)
-                    }
-                    .padding(.bottom, 8) // Breathing room between logo and Dashboard
-                }
-                #endif
+                // Logo moved to sticky position above header
                 
                 Text("Dashboard")
                     .font(.system(size: {
@@ -1199,6 +1187,21 @@ private func deleteSelectedDocuments() {
                 if isPortrait && isIPad {
                     // iPad & iPhone Portrait: Special layout that respects navigation
                         VStack(alignment: .leading, spacing: 0) {
+                        // Sticky Talle Logo - independent of document list expansion
+                        #if os(iOS)
+                        if UIDevice.current.userInterfaceIdiom == .phone {
+                            HStack {
+                                Spacer()
+                                Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fit)
+                                    .frame(maxWidth: min(80, UIScreen.main.bounds.width * 0.2), maxHeight: 30)
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.bottom, 8) // Breathing room between logo and header
+                        }
+                        #endif
+                        
                         // Header with responsive positioning for navigation
                         iPadDashboardHeaderView
                         .padding(.horizontal, 20)
