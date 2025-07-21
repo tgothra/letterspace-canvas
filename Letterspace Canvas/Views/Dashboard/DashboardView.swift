@@ -1204,7 +1204,7 @@ private func deleteSelectedDocuments() {
                                     }
                             }
                             .padding(.horizontal, 20)
-                            .padding(.top, 40) // Lower the logo position
+                            .padding(.top, 20) // Lower the logo position
                             .padding(.bottom, 8) // Breathing room between logo and header
                         }
                         #endif
