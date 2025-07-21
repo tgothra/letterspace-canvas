@@ -588,7 +588,7 @@ private func deleteSelectedDocuments() {
                         let screenWidth = UIScreen.main.bounds.width
                         let isPhone = UIDevice.current.userInterfaceIdiom == .phone
                         if isPhone {
-                            return min(150, screenWidth * 0.3) // 30% of screen width for iPhone, max 150
+                            return min(120, screenWidth * 0.25) // 25% of screen width for iPhone, max 120 (reduced from 30% and 150)
                         } else {
                             return min(200, screenWidth * 0.25) // 25% of screen width for iPad, max 200
                         }
@@ -598,7 +598,7 @@ private func deleteSelectedDocuments() {
                     }(), maxHeight: {
                         #if os(iOS)
                         let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-                        return isPhone ? 60 : 80 // iPhone: smaller, iPad: larger
+                        return isPhone ? 45 : 80 // iPhone: smaller (reduced from 60), iPad: larger
                         #else
                         return 60 // macOS fixed size (reduced from 80)
                         #endif
