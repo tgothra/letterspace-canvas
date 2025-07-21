@@ -20,7 +20,7 @@ struct TallyLabelModal: View {
                     VStack(spacing: 20) {
                         // App Title & Version
                         VStack(spacing: 8) {
-                            Text("Letterspace Canvas")
+                            Text("Tallē")
                                 .font(.title)
                                 .fontWeight(.bold)
                                 .foregroundColor(theme.primary)
@@ -36,7 +36,7 @@ struct TallyLabelModal: View {
                                 .font(.headline)
                                 .foregroundColor(theme.primary)
                             
-                            Text("Letterspace Canvas is a powerful document creation tool designed for pastors, teachers, and content creators. Create beautiful sermons, studies, and presentations with ease.")
+                            Text("Tallē is a powerful document creation tool designed for pastors, teachers, and content creators. Create beautiful sermons, studies, and presentations with ease.")
                                 .font(.body)
                                 .foregroundColor(theme.primary)
                                 .multilineTextAlignment(.leading)

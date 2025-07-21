@@ -2055,7 +2055,7 @@ struct DocumentArea: View {
     
     private func showTemporaryMessage(_ message: String) {
         let content = UNMutableNotificationContent()
-        content.title = "Letterspace Canvas"
+        content.title = "Tallē"
         content.body = message
         content.sound = UNNotificationSound.default
         

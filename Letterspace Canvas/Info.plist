@@ -8,7 +8,7 @@
 			<key>CFBundleTypeIconSystemGenerated</key>
 			<integer>1</integer>
 			<key>CFBundleTypeName</key>
-			<string>Letterspace Canvas Document</string>
+			<string>Tallē Document</string>
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
 			<key>LSHandlerRank</key>
@@ -76,7 +76,7 @@
 				<string>public.content</string>
 			</array>
 			<key>UTTypeDescription</key>
-			<string>Letterspace Canvas Document</string>
+			<string>Tallē Document</string>
 			<key>UTTypeIdentifier</key>
 			<string>com.timothygothra.letterspace.canvas</string>
 			<key>UTTypeTagSpecification</key>
@@ -103,7 +103,7 @@
 				<string>public.content</string>
 			</array>
 			<key>UTTypeDescription</key>
-			<string>Letterspace Canvas Document</string>
+			<string>Tallē Document</string>
 			<key>UTTypeIconSystemGenerated</key>
 			<integer>1</integer>
 			<key>UTTypeIdentifier</key>
@@ -118,7 +118,7 @@
 		</dict>
 	</array>
 	<key>CFBundleName</key>
-	<string>Letterspace Canvas</string>
+	<string>Tallē</string>
 	<key>UISupportedInterfaceOrientations~ipad</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
@@ -142,12 +142,12 @@
 			<key>NSUbiquitousContainerIsDocumentScopePublic</key>
 			<true/>
 			<key>NSUbiquitousContainerName</key>
-			<string>Letterspace Canvas</string>
+			<string>Tallē</string>
 			<key>NSUbiquitousContainerSupportedFolderLevels</key>
 			<string>Any</string>
 		</dict>
 	</dict>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Letterspace Canvas needs access to your photo library to add header images to your documents.</string>
+	<string>Tallē needs access to your photo library to add header images to your documents.</string>
 </dict>
 </plist>
