@@ -585,7 +585,9 @@ private func deleteSelectedDocuments() {
                 // Talle Logo - adapts to light/dark mode and all platforms
                 Button(action: {
                     print("🎯 macOS first Talle logo button tapped!")
+                    print("🎯 Setting showTallyLabelModal to true")
                     showTallyLabelModal = true
+                    print("🎯 showTallyLabelModal is now: \(showTallyLabelModal)")
                 }) {
                     Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
                         .resizable()
@@ -707,7 +709,9 @@ private func deleteSelectedDocuments() {
             #else
             Button(action: {
                 print("🎯 macOS Talle logo button tapped!")
+                print("🎯 Setting showTallyLabelModal to true")
                 showTallyLabelModal = true
+                print("🎯 showTallyLabelModal is now: \(showTallyLabelModal)")
             }) {
                 Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
                     .resizable()
@@ -756,7 +760,9 @@ private func deleteSelectedDocuments() {
             #else
             Button(action: {
                 print("🎯 macOS Talle logo button tapped!")
+                print("🎯 Setting showTallyLabelModal to true")
                 showTallyLabelModal = true
+                print("🎯 showTallyLabelModal is now: \(showTallyLabelModal)")
             }) {
                 Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
                     .resizable()
@@ -1971,8 +1977,43 @@ private func deleteSelectedDocuments() {
                 .background(Color(UIColor.systemBackground))
                 #endif
         }
-        .sheet(isPresented: $showTallyLabelModal) {
+        .sheet(isPresented: Binding(
+            get: { 
+                #if os(iOS)
+                return showTallyLabelModal
+                #else
+                return false // Don't use sheet on macOS
+                #endif
+            },
+            set: { showTallyLabelModal = $0 }
+        )) {
             TallyLabelModal()
+        }
+        .overlay {
+            #if os(macOS)
+            if showTallyLabelModal {
+                ZStack {
+                    // Semi-transparent background
+                    Color.black.opacity(0.3)
+                        .ignoresSafeArea()
+                        .onTapGesture {
+                            print("🎯 Background tapped - closing modal")
+                            showTallyLabelModal = false
+                        }
+                    
+                    // Modal content
+                    TallyLabelModal()
+                        .frame(width: 600, height: 500)
+                        .background(Color(.windowBackgroundColor))
+                        .cornerRadius(12)
+                        .shadow(radius: 20)
+                        .onAppear {
+                            print("🎯 TallyLabelModal appeared on macOS")
+                        }
+                }
+                .animation(.easeInOut(duration: 0.2), value: showTallyLabelModal)
+            }
+            #endif
         }
     }
     
