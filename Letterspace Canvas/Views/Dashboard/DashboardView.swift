@@ -615,50 +615,44 @@ private func deleteSelectedDocuments() {
             VStack(alignment: .leading, spacing: {
                 #if os(iOS)
                 let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-                return isPhone ? 4 : 12 // iPhone: even closer spacing when logo on Dashboard row, iPad: original spacing
+                return isPhone ? 8 : 12 // iPhone: closer spacing, iPad: original spacing
                 #else
                 return 12
                 #endif
             }()) {
-                HStack {
-                    Text("Dashboard")
-                        .font(.system(size: {
-                            // Responsive dashboard title size using screen bounds
-                            #if os(iOS)
-                            let screenWidth = UIScreen.main.bounds.width
-                            let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-                            if isPhone {
-                                // iPhone: smaller title
-                                return max(12, min(16, screenWidth * 0.035)) // 3.5% of screen width, constrained
-                            } else {
-                                // iPad: original sizing
-                                return screenWidth * 0.022 // 2.2% of screen width
-                            }
-                            #else
-                            return 18
-                            #endif
-                        }(), weight: .bold))
-                        .foregroundStyle(theme.primary.opacity(0.7))
-                        .padding(.bottom, {
-                            #if os(iOS)
-                            let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-                            return isPhone ? 0 : 2 // iPhone: no bottom padding to keep closer to greeting, iPad: original padding
-                            #else
-                            return 2 // macOS: original padding
-                            #endif
-                        }())
-                    
-                    // Talle Logo on Dashboard row for iPhone only
-                    #if os(iOS)
-                    if UIDevice.current.userInterfaceIdiom == .phone {
+                // Talle Logo row above Dashboard for iPhone only
+                #if os(iOS)
+                if UIDevice.current.userInterfaceIdiom == .phone {
+                    HStack {
                         Spacer()
                         Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
                             .resizable()
                             .aspectRatio(contentMode: .fit)
                             .frame(maxWidth: min(80, UIScreen.main.bounds.width * 0.2), maxHeight: 30)
                     }
-                    #endif
+                    .padding(.bottom, 8) // Breathing room between logo and Dashboard
                 }
+                #endif
+                
+                Text("Dashboard")
+                    .font(.system(size: {
+                        // Responsive dashboard title size using screen bounds
+                        #if os(iOS)
+                        let screenWidth = UIScreen.main.bounds.width
+                        let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                        if isPhone {
+                            // iPhone: smaller title
+                            return max(12, min(16, screenWidth * 0.035)) // 3.5% of screen width, constrained
+                        } else {
+                            // iPad: original sizing
+                            return screenWidth * 0.022 // 2.2% of screen width
+                        }
+                        #else
+                        return 18
+                        #endif
+                    }(), weight: .bold))
+                    .foregroundStyle(theme.primary.opacity(0.7))
+                    .padding(.bottom, 2)
                 
                 Text(getTimeBasedGreeting())
                     .font(.custom("InterTight-Regular", size: {
@@ -683,6 +677,14 @@ private func deleteSelectedDocuments() {
                     .foregroundStyle(theme.primary)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
+                    .padding(.top, {
+                        #if os(iOS)
+                        let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                        return isPhone ? 12 : 0 // Add breathing room between Dashboard and greeting on iPhone
+                        #else
+                        return 0
+                        #endif
+                    }())
             }
             Spacer()
             
