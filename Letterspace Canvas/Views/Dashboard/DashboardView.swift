@@ -578,6 +578,14 @@ private func deleteSelectedDocuments() {
                         .multilineTextAlignment(.leading)
                 }
                 Spacer()
+                
+                // Etch Logo (macOS only)
+                #if os(macOS)
+                Image("Etch")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(maxWidth: 150, maxHeight: 60)
+                #endif
             }
         // Apply blur effect when DocumentDetailsCard or calendar modal is shown
         .blur(radius: showDetailsCard || calendarModalData != nil ? 3 : 0)
@@ -2103,20 +2111,6 @@ private func deleteSelectedDocuments() {
                     .frame(maxWidth: .infinity)
                     .blur(radius: showDetailsCard ? 3 : 0)
                     .opacity(showDetailsCard ? 0.7 : 1.0)
-                
-                // Etch Logo Section (macOS only)
-                VStack {
-                    Spacer()
-                    Image("Etch")
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(maxWidth: 200, maxHeight: 100)
-                        .opacity(0.3) // Subtle appearance
-                    Spacer()
-                }
-                .frame(maxWidth: .infinity)
-                .blur(radius: showDetailsCard ? 3 : 0)
-                .opacity(showDetailsCard ? 0.7 : 1.0)
                 #else
                 pinnedSectionView
                     .blur(radius: showDetailsCard || calendarModalData != nil ? 3 : 0)
