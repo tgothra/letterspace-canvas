@@ -579,9 +579,9 @@ private func deleteSelectedDocuments() {
                 }
                 Spacer()
                 
-                // Talle Logo (macOS only)
+                // Tally - scripture Logo (macOS only)
                 #if os(macOS)
-                Image("Talle")
+                Image("Tally - scripture")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(maxWidth: 200, maxHeight: 80)
