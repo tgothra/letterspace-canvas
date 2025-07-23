@@ -1069,6 +1069,10 @@ var body: some View {
                 toggleWIP(documentId)
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("DismissTallyModal"))) { _ in
+            print("🎯 Received DismissTallyModal notification")
+            showTallyLabelModal = false
+        }
         // iPad Modal Overlays
         .overlay(
             Group {

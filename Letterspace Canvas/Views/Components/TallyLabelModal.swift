@@ -1,7 +1,6 @@
 import SwiftUI
 
 struct TallyLabelModal: View {
-    @Environment(\.dismiss) var dismiss
     @Environment(\.themeColors) var theme
     @Environment(\.colorScheme) var colorScheme
     
@@ -11,7 +10,7 @@ struct TallyLabelModal: View {
             HStack {
                 Spacer()
                 Button("Done") {
-                    dismiss()
+                    NotificationCenter.default.post(name: NSNotification.Name("DismissTallyModal"), object: nil)
                 }
                 .foregroundColor(theme.accent)
                 .font(.system(size: 16, weight: .medium))
