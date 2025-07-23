@@ -6,22 +6,39 @@ struct TallyLabelModal: View {
     @Environment(\.colorScheme) var colorScheme
     
     var body: some View {
-        NavigationView {
+        VStack(spacing: 0) {
+            // Custom header with Done button
+            HStack {
+                Spacer()
+                Button("Done") {
+                    NotificationCenter.default.post(name: NSNotification.Name("DismissTallyModal"), object: nil)
+                }
+                .foregroundColor(theme.accent)
+                .font(.system(size: 16, weight: .medium))
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 16)
+            .background(
+                Rectangle()
+                    .fill(colorScheme == .dark ? Color(.sRGB, white: 0.12) : .white)
+                    .ignoresSafeArea(.all, edges: .top)
+            )
+            
             ScrollView {
                 VStack(spacing: 24) {
                     // Tally Label Header Image
                     Image("Tally Label")
                         .resizable()
                         .aspectRatio(contentMode: .fit)
-                        .frame(maxHeight: 120)
-                        .padding(.top, 20)
+                        .frame(maxHeight: 80)
+                        .padding(.top, 12)
                     
                     // App Information
                     VStack(spacing: 20) {
                         // App Title & Version
                         VStack(spacing: 8) {
                             Text("Tallē")
-                                .font(.title)
+                                .font(.title2)
                                 .fontWeight(.bold)
                                 .foregroundColor(theme.primary)
                             
@@ -91,27 +108,10 @@ struct TallyLabelModal: View {
                     Spacer(minLength: 20)
                 }
             }
-            .navigationTitle("About")
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-            #endif
-            .toolbar {
-                ToolbarItem(placement: {
-                    #if os(iOS)
-                    .navigationBarTrailing
-                    #else
-                    .primaryAction
-                    #endif
-                }()) {
-                    Button("Done") {
-                        dismiss()
-                    }
-                    .foregroundColor(theme.accent)
-                }
-            }
         }
-        .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.visible)
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("DismissTallyModal"))) { _ in
+            dismiss()
+        }
     }
 }
 
