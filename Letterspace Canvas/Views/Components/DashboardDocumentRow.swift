@@ -158,26 +158,8 @@ struct DashboardDocumentRow: View {
         let isPhone = UIDevice.current.userInterfaceIdiom == .phone
         let widths = columnWidths ?? calculateFlexibleColumnWidths()
         
-        ZStack {
-            // Full-width selection background for non-iPad devices
-            if isSelected && !isIPad {
-                let useThemeColors = colorScheme == .dark ? 
-                    gradientManager.selectedDarkGradientIndex != 0 :
-                    gradientManager.selectedLightGradientIndex != 0
-                
-                if useThemeColors {
-                    // Use glassmorphism material for gradient modes
-                    RoundedRectangle(cornerRadius: 13)
-                        .fill(.regularMaterial)
-                } else {
-                    // Use theme accent color with proper opacity and rounded corners
-                    RoundedRectangle(cornerRadius: 13)
-                        .fill(theme.accent.opacity(0.1))
-                }
-            }
-            
-            HStack(spacing: 0) {
-                // Status indicators column (aligned with header)
+        HStack(spacing: 0) {
+            // Status indicators column (aligned with header)
                 HStack(spacing: isPortrait && isIPad ? 4 : 4) {
                     if !isEditMode {
                     if isPinned {
@@ -483,6 +465,24 @@ struct DashboardDocumentRow: View {
                 }
                 .buttonStyle(.plain)
                 .padding(.trailing, -15)
+            }
+        }
+        .background {
+            // Full-width selection background for non-iPad devices
+            if isSelected && !isIPad {
+                let useThemeColors = colorScheme == .dark ? 
+                    gradientManager.selectedDarkGradientIndex != 0 :
+                    gradientManager.selectedLightGradientIndex != 0
+                
+                if useThemeColors {
+                    // Use glassmorphism material for gradient modes
+                    RoundedRectangle(cornerRadius: 13)
+                        .fill(.regularMaterial)
+                } else {
+                    // Use theme accent color with proper opacity and rounded corners
+                    RoundedRectangle(cornerRadius: 13)
+                        .fill(theme.accent.opacity(0.1))
+                }
             }
         }
         .overlay(alignment: .topLeading) {
