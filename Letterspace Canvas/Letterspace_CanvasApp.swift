@@ -104,47 +104,60 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
 @main
 struct Letterspace_CanvasApp: App {
-    // MARK: - Launch Time Optimizations
+    @State private var document = Letterspace_CanvasDocument()
+    @StateObject private var appearanceController = AppearanceController.shared
     
-    // Pre-initialize commonly used objects
-    private let gradientManager = GradientWallpaperManager.shared
-    private let tokenUsageService = TokenUsageService.shared
-    private let tagColorManager = TagColorManager.shared
+    #if os(macOS)
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    // Keep the original NSView-based DocumentTableWrapper for macOS
+    // It might be defined lower in this file or in another file like HomeView.swift
+    #elseif os(iOS)
+    @UIApplicationDelegateAdaptor(iPadAppDelegate.self) var appDelegate
+    // For iOS, we will need an alternative to DocumentTableWrapper if it was used globally
+    // or ensure that views like HomeView use SwiftUI native lists or a UIViewRepresentable for UITableView.
+    #endif
     
-    // Use @StateObject for better performance
-    @StateObject private var appState = AppState()
+    init() {
+        // Fonts are now automatically loaded via Info.plist UIAppFonts
+        
+        // Add notification observer for document loading
+        #if os(macOS)
+        NotificationCenter.default.addObserver(forName: NSNotification.Name("DocumentDidLoad"), object: nil, queue: .main) { _ in
+            // Invalidate view caches when a document is loaded
+            DispatchQueue.main.async {
+                if let window = NSApp.windows.first(where: { $0.isKeyWindow }),
+                   let contentView = window.contentView {
+                    contentView.invalidateDescendantViewsCache()
+                }
+            }
+        }
+        #endif
+    }
     
     var body: some Scene {
         WindowGroup {
-            ContentView()
-                .environmentObject(appState)
-                // Launch time optimizations
+            ContentView(document: $document)
+                // Conditional frame modifiers for macOS
+                #if os(macOS)
+                .frame(minWidth: 1200, minHeight: 800)
+                .frame(idealWidth: 1440, idealHeight: 900)
+                #endif
+                .withTheme()
+                .ignoresSafeArea() // .ignoresSafeArea() is generally fine for both
+                // Apply the color scheme preference
+                .preferredColorScheme(appearanceController.colorScheme)
+                .environmentObject(appearanceController)
                 .onAppear {
-                    // Pre-warm commonly used services
-                    _ = gradientManager
-                    _ = tokenUsageService
-                    _ = tagColorManager
+                    // Set appearance when app first loads
+                    appearanceController.setAppearance()
                 }
         }
-        .commands {
-            // Add custom commands if needed
-        }
-    }
-}
-
-// MARK: - App State for Better Performance
-class AppState: ObservableObject {
-    @Published var isFirstLaunch = true
-    @Published var currentTheme: ThemeColors = .default
-    
-    init() {
-        // Initialize app state
-        loadAppSettings()
-    }
-    
-    private func loadAppSettings() {
-        // Load user preferences and settings
-        // This runs once at app launch
+        // Conditional window styling for macOS
+        #if os(macOS)
+        .windowStyle(.hiddenTitleBar)
+        .windowToolbarStyle(.unifiedCompact)
+        .defaultSize(width: 1440, height: 900)
+        #endif
     }
 }
 
