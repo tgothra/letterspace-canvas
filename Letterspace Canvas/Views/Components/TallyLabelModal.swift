@@ -11,7 +11,7 @@ struct TallyLabelModal: View {
             HStack {
                 Spacer()
                 Button("Done") {
-                    NotificationCenter.default.post(name: NSNotification.Name("DismissTallyModal"), object: nil)
+                    dismiss()
                 }
                 .foregroundColor(theme.accent)
                 .font(.system(size: 16, weight: .medium))
@@ -108,9 +108,6 @@ struct TallyLabelModal: View {
                     Spacer(minLength: 20)
                 }
             }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("DismissTallyModal"))) { _ in
-            dismiss()
         }
     }
 }
