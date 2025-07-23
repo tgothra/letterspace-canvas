@@ -451,9 +451,6 @@ struct SimpleIOSTextView: UIViewRepresentable {
         private func removeSearchHighlight(from textView: UITextView, range: NSRange, originalAttributes: [NSAttributedString.Key: Any]) {
             print("🔍 iOS: Removing search highlight")
             
-            // Create mutable attributed string
-            let mutableAttributedString = NSMutableAttributedString(attributedString: textView.attributedText)
-            
             // Animate the highlight removal with multiple steps
             self.animateSearchHighlightRemoval(textView: textView, range: range, originalAttributes: originalAttributes, step: 0)
         }
@@ -524,7 +521,7 @@ struct SimpleIOSTextView: UIViewRepresentable {
         }
         
         // MARK: - Link Handling
-        func textView(_ textView: UITextView, shouldInteractWith URL: URL, in characterRange: NSRange, interaction: UITextItemInteraction) -> Bool {
+        func textView(_ textView: UITextView, shouldInteractWith URL: URL, in characterRange: NSRange) -> Bool {
             // Only allow link interaction when not editing (when keyboard is not visible)
             if !textView.isFirstResponder {
                 // Open the link
@@ -609,7 +606,7 @@ struct SimpleIOSTextView: UIViewRepresentable {
         }
         
         func updateFormattingToolbar() {
-            guard let textView = textView else { return }
+            guard textView != nil else { return }
             
             let formatting = getCurrentFormatting()
             let toolbar = IOSTextFormattingToolbar(
@@ -918,7 +915,7 @@ struct SimpleIOSTextView: UIViewRepresentable {
             
             let baseFontSize: CGFloat = 16
             var font: UIFont
-            var paragraphStyle = NSMutableParagraphStyle()
+            let paragraphStyle = NSMutableParagraphStyle()
             
             switch styleName {
             case "Title":

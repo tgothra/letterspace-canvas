@@ -810,7 +810,6 @@ private func deleteSelectedDocuments() {
     
 var body: some View {
         GeometryReader { geometry in
-            let isPortrait = geometry.size.height > geometry.size.width
             let isIPad: Bool = {
                 #if os(iOS)
                 return UIDevice.current.userInterfaceIdiom == .pad
@@ -2887,7 +2886,7 @@ var body: some View {
         .frame(maxHeight: isIPad ? .infinity : 1200) // Allow All Documents to fill remaining space on iPad
         .blur(radius: isSchedulerExpanded || isPinnedExpanded || isWIPExpanded ? 3 : 0)
         .opacity(isSchedulerExpanded || isPinnedExpanded || isWIPExpanded ? 0.7 : 1.0)
-        .onChange(of: selectedAllDocuments) { newSelection in
+        .onChange(of: selectedAllDocuments) { oldSelection, newSelection in
             // Auto-exit edit mode when all items are deselected
             if newSelection.isEmpty && isAllDocumentsEditMode {
                 withAnimation(.easeInOut(duration: 0.2)) {
@@ -4233,10 +4232,12 @@ struct RoundedCorner: Shape {
 #endif
 
 struct AnyShape: Shape {
-    private let _path: (CGRect) -> Path
+    private let _path: @Sendable (CGRect) -> Path
     
     init<S: Shape>(_ shape: S) {
-        _path = shape.path(in:)
+        _path = { rect in
+            shape.path(in: rect)
+        }
     }
     
     func path(in rect: CGRect) -> Path {

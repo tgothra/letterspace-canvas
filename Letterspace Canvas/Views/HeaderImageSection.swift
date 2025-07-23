@@ -65,6 +65,9 @@ struct HeaderImageSection: View {
     // iOS-specific state for action sheet
     #if os(iOS)
     @State private var showImageActionSheet: Bool = false
+    // Store coordinators to prevent weak reference issues
+    @State private var photoPickerCoordinator: PhotoPickerCoordinator?
+    @State private var documentPickerCoordinator: DocumentPickerCoordinator?
     #endif
     
     // Heights for the collapsed header bar
@@ -77,7 +80,10 @@ struct HeaderImageSection: View {
     }
     #elseif os(iOS)
     private var window: UIWindow? {
-        return UIApplication.shared.windows.first { $0.isKeyWindow }
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene else {
+            return nil
+        }
+        return windowScene.windows.first { $0.isKeyWindow }
     }
     #endif
     
@@ -658,9 +664,12 @@ struct HeaderImageSection: View {
         configuration.selectionLimit = 1
         
         let picker = PHPickerViewController(configuration: configuration)
-        picker.delegate = PhotoPickerCoordinator { url in
+        let photoCoordinator = PhotoPickerCoordinator { url in
             self.handleImageSelection(url: url)
         }
+        picker.delegate = photoCoordinator
+        // Store coordinator to prevent deallocation
+        self.photoPickerCoordinator = photoCoordinator
         topController.present(picker, animated: true)
     }
     
@@ -676,9 +685,12 @@ struct HeaderImageSection: View {
         }
         
         let documentPicker = UIDocumentPickerViewController(forOpeningContentTypes: [.image, .jpeg, .png, .heic, .gif, .webP])
-        documentPicker.delegate = DocumentPickerCoordinator { url in
+        let documentCoordinator = DocumentPickerCoordinator { url in
             self.handleImageSelection(url: url)
         }
+        documentPicker.delegate = documentCoordinator
+        // Store coordinator to prevent deallocation
+        self.documentPickerCoordinator = documentCoordinator
         documentPicker.allowsMultipleSelection = false
         topController.present(documentPicker, animated: true)
     }

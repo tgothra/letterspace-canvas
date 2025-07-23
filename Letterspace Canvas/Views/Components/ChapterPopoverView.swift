@@ -251,7 +251,7 @@ struct ChapterPopoverView: View {
                     }
                 }
             }
-            .onChange(of: chapterData?.chapter) { _ in
+            .onChange(of: chapterData?.chapter) { oldValue, newValue in
                 // Scroll to highlighted verse when chapter changes
                 if let firstHighlighted = chapterReference.highlightedVerses.sorted().first,
                    currentBook == chapterReference.book && currentChapter == chapterReference.chapter {

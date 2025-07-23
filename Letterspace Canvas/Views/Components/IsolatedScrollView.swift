@@ -12,7 +12,7 @@ class ScrollBlockingView: NSView {
         if window != nil {
             // Add a local monitor to intercept scroll events
             localMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
-                guard let self = self, let window = self.window else { return event }
+                guard let self = self, let _ = self.window else { return event }
                 
                 // Get the event location in window coordinates
                 let locationInWindow = event.locationInWindow

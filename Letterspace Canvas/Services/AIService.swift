@@ -435,8 +435,14 @@ class AIService {
                         // Extract search suggestion queries if available
                         var searchQueries: [String] = []
                         if let groundingMetadata = firstCandidate["groundingMetadata"] as? [String: Any],
-                           let webSearchQueries = groundingMetadata["webSearchQueries"] as? [String] {
-                            searchQueries = webSearchQueries
+                           let webSearchQueriesRaw = groundingMetadata["webSearchQueries"] {
+                            // Handle both array of strings and array of dictionaries
+                            if let webSearchQueries = webSearchQueriesRaw as? [String] {
+                                searchQueries = webSearchQueries
+                            } else if let webSearchQueriesDict = webSearchQueriesRaw as? [[String: Any]] {
+                                // Extract text from dictionary format if needed
+                                searchQueries = webSearchQueriesDict.compactMap { $0["text"] as? String }
+                            }
                             print("📚 Found \(searchQueries.count) search queries")
                         }
                         

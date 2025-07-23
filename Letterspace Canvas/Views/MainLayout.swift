@@ -373,9 +373,9 @@ struct MainLayout: View {
                     isSwipeDownDismissing = true
                 }
             }
-            .onChange(of: sidebarMode) { _ in
+            .onChange(of: sidebarMode) { oldValue, newValue in
                 // If switching to the dashboard view, refresh document list
-                if sidebarMode == .allDocuments {
+                if newValue == .allDocuments {
                     // Post notification to refresh document list
                     NotificationCenter.default.post(name: NSNotification.Name("DocumentListDidUpdate"), object: nil)
                     print("🔄 Posted DocumentListDidUpdate notification after switching to dashboard")
@@ -1415,7 +1415,7 @@ private var iPhoneBottomNavigation: some View {
                             }
                         }
                         .padding(.horizontal, 20)
-                        .onChange(of: currentBottomNavIndex) { newIndex in
+                        .onChange(of: currentBottomNavIndex) { oldIndex, newIndex in
                             withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                                 proxy.scrollTo(newIndex, anchor: .center)
                             }
@@ -1911,7 +1911,7 @@ private func mainContentView(availableWidth: CGFloat) -> some View {
                             .offset(x: (showFloatingSidebar && (shouldShowNavigationPanel || isManuallyShown)) ? 0 : -200) // Hide when viewing documents unless manually shown
                             .animation(.spring(response: showFloatingSidebar ? 0.6 : 2.5, dampingFraction: showFloatingSidebar ? 0.75 : 0.9), value: showFloatingSidebar)
                             .animation(.spring(response: 0.6, dampingFraction: 0.75), value: shouldShowNavigationPanel)
-                            .onChange(of: sidebarMode) { newMode in
+                            .onChange(of: sidebarMode) { oldMode, newMode in
                                 // Automatically show/hide navigation based on mode (iPad only)
                                 #if os(iOS)
                                 if UIDevice.current.userInterfaceIdiom == .pad {
@@ -3062,38 +3062,38 @@ struct DocumentTransitionModifier: ViewModifier {
         content
             .opacity(isVisible.wrappedValue ? 1 : 0)
             .animation(.easeInOut(duration: 0.3), value: isVisible.wrappedValue)
-            .onChange(of: isVisible.wrappedValue) { _ in
-                if isVisible.wrappedValue {
+            .onChange(of: isVisible.wrappedValue) { oldValue, newValue in
+                if newValue {
                     // Animate scroll position reset when sidebar becomes visible
                     withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
                         scrollOffset.wrappedValue = 0
                     }
                 }
             }
-            .onChange(of: selectedElement.wrappedValue) { _ in
-                if selectedElement.wrappedValue != nil {
+            .onChange(of: selectedElement.wrappedValue) { oldValue, newValue in
+                if newValue != nil {
                     // Animate scroll position reset when an element is selected
                     withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
                         scrollOffset.wrappedValue = 0
                     }
                 }
             }
-            .onChange(of: viewMode.wrappedValue) { _ in
+            .onChange(of: viewMode.wrappedValue) { oldValue, newValue in
                 // Animate scroll position reset when view mode changes
                 withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
                     scrollOffset.wrappedValue = 0
                 }
             }
-            .onChange(of: isHeaderExpanded.wrappedValue) { _ in
-                if isHeaderExpanded.wrappedValue {
+            .onChange(of: isHeaderExpanded.wrappedValue) { oldValue, newValue in
+                if newValue {
                     // Animate scroll position reset when header is expanded
                     withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
                         scrollOffset.wrappedValue = 0
                     }
                 }
             }
-            .onChange(of: isSubtitleVisible.wrappedValue) { _ in
-                if isSubtitleVisible.wrappedValue {
+            .onChange(of: isSubtitleVisible.wrappedValue) { oldValue, newValue in
+                if newValue {
                     // Animate scroll position reset when subtitle is visible
                     withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
                         scrollOffset.wrappedValue = 0
@@ -3291,8 +3291,8 @@ struct ScriptureModalContainer<Content: View>: View {
                     modalScale = 1.0
                 }
             }
-            .onChange(of: isShowing) { _ in
-                if !isShowing {
+            .onChange(of: isShowing) { oldValue, newValue in
+                if !newValue {
                     withAnimation(.easeOut(duration: 0.2)) {
                         modalOpacity = 0.0
                         modalScale = 0.95

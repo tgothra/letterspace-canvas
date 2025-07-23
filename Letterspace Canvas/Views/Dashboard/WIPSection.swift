@@ -243,7 +243,7 @@ struct WIPSection: View {
             #endif
         }
         // Add automatic exit from edit mode when all items are deselected
-        .onChange(of: selectedItems) { newValue in
+        .onChange(of: selectedItems) { oldValue, newValue in
             if isEditMode && newValue.isEmpty {
                 withAnimation(.easeInOut(duration: 0.2)) {
                     isEditMode = false

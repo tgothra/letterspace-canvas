@@ -3134,8 +3134,8 @@ struct DocumentDetailsCard: View {
                     
         var scriptureReferences: [ScriptureElement] = [] // This will cause an error if ScriptureElement is not found
                     
-                    for (index, (_, reference)) in orderedReferences.enumerated() {
-            let uniqueKey = "\\(reference)_\\(index)"
+                    for (_, (_, reference)) in orderedReferences.enumerated() {
+            let uniqueKey = "\\(reference)_\\(UUID().uuidString)"
                         guard let refData = referenceData[uniqueKey] else { continue }
                         
                         if refData.isRange || refData.verses.count > 1 {

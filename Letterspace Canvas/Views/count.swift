@@ -2,7 +2,7 @@ import Foundation
 
 func countBracesInFile(filePath: String) {
     do {
-        let content = try String(contentsOfFile: filePath)
+        let content = try String(contentsOfFile: filePath, encoding: .utf8)
         var openCount = 0
         var closeCount = 0
         for c in content {

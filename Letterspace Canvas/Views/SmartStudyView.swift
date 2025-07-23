@@ -937,7 +937,7 @@ struct SmartStudyView: View {
                     }())
                         .fill(Color.gray.opacity(0.1))
                 )
-                .onChange(of: selectedScope) { newScope in
+                .onChange(of: selectedScope) { oldScope, newScope in
                     // Update useInternetSearch based on scope
                     if newScope == .internetOnly || newScope == .allSources {
                         useInternetSearch = true
@@ -1192,7 +1192,7 @@ struct SmartStudyView: View {
                                                 }
                                             }
                                         }
-                                        .onChange(of: isTextFieldFocused) { isFocused in
+                                        .onChange(of: isTextFieldFocused) { oldFocused, isFocused in
                                             // If user dismisses keyboard and there's an answer, return to compact state
                                             if !isFocused && !answer.isEmpty && !isLoading {
                                                 withAnimation(.easeInOut(duration: 0.3)) {
@@ -2663,13 +2663,16 @@ struct SmartStudyView: View {
     private func loadSavedQAs() {
         // Perform all heavy operations on background queue to avoid blocking UI
         Task.detached(priority: .background) {
-            var decodedQAs: [SmartStudyEntry] = []
+            let decodedQAs: [SmartStudyEntry]
             if let savedData = UserDefaults.standard.data(forKey: "savedSmartStudyQAs") {
                 do {
                     decodedQAs = try JSONDecoder().decode([SmartStudyEntry].self, from: savedData)
                 } catch {
                     print("⚠️ Failed to load saved QAs: \(error)")
+                    decodedQAs = []
                 }
+            } else {
+                decodedQAs = []
             }
             await MainActor.run {
                 self.savedQAs = decodedQAs

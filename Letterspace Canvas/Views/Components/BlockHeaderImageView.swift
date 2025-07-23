@@ -55,12 +55,12 @@ struct BlockHeaderImageView: View {
         let cacheKey = "\(documentId)_\(imagePath)"
         
         #if os(macOS)
-        if let cachedImage = ImageCache.shared.image(for: cacheKey) as? NSImage {
+        if let cachedImage = ImageCache.shared.image(for: cacheKey) {
             image = cachedImage
             return
         }
         #elseif os(iOS)
-        if let cachedImage = ImageCache.shared.image(for: cacheKey) as? UIImage {
+        if let cachedImage = ImageCache.shared.image(for: cacheKey) {
             image = cachedImage
             return
         }

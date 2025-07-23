@@ -567,7 +567,7 @@ internal struct SermonCalendar: View {
             }
             #endif
         }
-        .onChange(of: selectedSchedules) { newValue in
+        .onChange(of: selectedSchedules) { oldValue, newValue in
             if isEditMode && newValue.isEmpty {
                 withAnimation(.easeInOut(duration: 0.2)) {
                     isEditMode = false
@@ -622,7 +622,7 @@ internal struct SermonCalendar: View {
                                 for scheduleId in selectedSchedules {
                                     // Find the document and schedule to unschedule
                                     for doc in documents {
-                                        if let schedule = doc.schedules.first(where: { $0.id == scheduleId }) {
+                                        if doc.schedules.contains(where: { $0.id == scheduleId }) {
                                             // Create a copy of the document
                                             var updatedDoc = doc
                                             

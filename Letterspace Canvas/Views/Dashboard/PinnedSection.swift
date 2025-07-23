@@ -225,7 +225,7 @@ struct PinnedSection: View {
             }
             #endif
         }
-        .onChange(of: selectedItems) { newValue in
+        .onChange(of: selectedItems) { oldValue, newValue in
             if isEditMode && newValue.isEmpty {
                 withAnimation(.easeInOut(duration: 0.2)) {
                     isEditMode = false

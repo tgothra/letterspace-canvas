@@ -36,8 +36,8 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "D49BE6102CF6A36000E57C24"
-               BuildableName = "TallēTests.xctest"
-               BlueprintName = "TallēTests"
+               BuildableName = "Letterspace CanvasTests.xctest"
+               BlueprintName = "Letterspace CanvasTests"
                ReferencedContainer = "container:Talle&#x304;.xcodeproj">
             </BuildableReference>
          </TestableReference>
@@ -47,8 +47,8 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "D49BE61A2CF6A36000E57C24"
-               BuildableName = "TallēUITests.xctest"
-               BlueprintName = "TallēUITests"
+               BuildableName = "Letterspace CanvasUITests.xctest"
+               BlueprintName = "Letterspace CanvasUITests"
                ReferencedContainer = "container:Talle&#x304;.xcodeproj">
             </BuildableReference>
          </TestableReference>

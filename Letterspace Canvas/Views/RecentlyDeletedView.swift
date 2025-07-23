@@ -132,10 +132,6 @@ struct RecentlyDeletedView: View {
     private let maxDaysInTrash = 30
     
     var body: some View {
-        #if os(iOS)
-        let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-        #endif
-        
         ZStack {
             // Dismiss layer
             Color.clear
@@ -232,12 +228,6 @@ struct RecentlyDeletedView: View {
                                     let event = NSApp.currentEvent
                                     let isCommandPressed = event?.modifierFlags.contains(.command) == true
                                     let isShiftPressed = event?.modifierFlags.contains(.shift) == true
-                                    #elseif os(iOS)
-                                    // On iOS, we'll handle multi-selection differently
-                                    // For now, just do single selection
-                                    let isCommandPressed = false
-                                    let isShiftPressed = false
-                                    #endif
                                     
                                     if isCommandPressed {
                                         // Command+click: Toggle selection
@@ -267,6 +257,11 @@ struct RecentlyDeletedView: View {
                                         selectedDocuments = [deletedDoc.document.id]
                                         lastSelectedIndex = index
                                     }
+                                    #elseif os(iOS)
+                                    // On iOS, just do single selection (no modifier keys)
+                                    selectedDocuments = [deletedDoc.document.id]
+                                    lastSelectedIndex = index
+                                    #endif
                                 }
                             }
                         }

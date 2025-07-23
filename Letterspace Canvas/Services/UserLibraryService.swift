@@ -287,7 +287,7 @@ class UserLibraryService: ObservableObject {
             // TODO: Implement robust web scraping/content extraction
             // For now, just fetch raw HTML as a basic example
             do {
-                let htmlContent = try String(contentsOf: url)
+                let htmlContent = try String(contentsOf: url, encoding: .utf8)
                 // Very basic cleanup (could use regex or a parsing library)
                 let plainText = htmlContent.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression, range: nil)
                                            .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -705,7 +705,7 @@ class UserLibraryService: ObservableObject {
             // Extract text from a generic file
             DispatchQueue.global(qos: .userInitiated).async {
                 do {
-                    let content = try String(contentsOf: url)
+                    let content = try String(contentsOf: url, encoding: .utf8)
                     completion(.success(content))
                 } catch {
                     print("⚠️ Failed to extract text from file: \(url.lastPathComponent) - \(error.localizedDescription)")

@@ -732,7 +732,6 @@ struct ContentMatchRow: View {
         // Create a mapping between original content positions and cleaned content positions
         var originalToCleanedMapping: [String.Index: String.Index] = [:]
         var cleanedContent = ""
-        var cleanedIndex = cleanedContent.startIndex
         
         // Build cleaned content while maintaining position mapping
         var i = content.startIndex
@@ -1019,7 +1018,7 @@ struct HighlightedText: View {
         var highlightedPart = AttributedString(highlightedText)
         highlightedPart.backgroundColor = highlightColor
         
-        var afterPart = AttributedString(afterText)
+        let afterPart = AttributedString(afterText)
         
         attributedString.append(highlightedPart)
         attributedString.append(afterPart)

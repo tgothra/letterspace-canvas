@@ -184,7 +184,7 @@ struct CircularMenuOverlay: View {
                 }
             }
         }
-        .onChange(of: isMenuOpen) { newValue in
+        .onChange(of: isMenuOpen) { oldValue, newValue in
             // Simplified animation for better performance
             withAnimation(.easeInOut(duration: 0.25)) {
                 if newValue {

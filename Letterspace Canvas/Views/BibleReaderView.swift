@@ -572,7 +572,7 @@ struct BibleReaderView: View {
         .shadow(color: Color.black.opacity(0.1), radius: 20, x: 0, y: 10)
         .shadow(color: Color.black.opacity(0.05), radius: 6, x: 0, y: 4)
         #endif
-        .animation(.none) // Disable all layout animations
+        .animation(.none, value: UUID()) // Disable all layout animations
         .onAppear {
             // Load last read position - do this synchronously for immediate setup
             selectedBook = readerData.lastReadBook

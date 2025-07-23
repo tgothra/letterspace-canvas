@@ -1446,7 +1446,7 @@ struct PDFPreview: NSViewRepresentable {
         view.pageBreakMargins = NSEdgeInsets(top: 0, left: 0, bottom: 0, right: 0)
         
         // Disable annotations and interactions
-        view.enableDataDetectors = false
+        // Note: enableDataDetectors was deprecated in macOS 15.0
         
         // Add a slight delay to ensure the document is fully loaded
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {

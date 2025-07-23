@@ -118,13 +118,14 @@ class TokenUsageService: ObservableObject {
             let usage = UserDefaults.standard.integer(forKey: "com.letterspace.geminiTokenUsage")
             let additional = UserDefaults.standard.integer(forKey: "com.letterspace.additionalTokens")
             
-            var resetDate: Date
+            let resetDate: Date
             if let savedDate = UserDefaults.standard.object(forKey: "com.letterspace.tokenResetDate") as? Date {
                 resetDate = savedDate
             } else {
-                resetDate = self.calculateNextResetDate()
+                let newResetDate = self.calculateNextResetDate()
                 // Save the new reset date
-                UserDefaults.standard.set(resetDate, forKey: "com.letterspace.tokenResetDate")
+                UserDefaults.standard.set(newResetDate, forKey: "com.letterspace.tokenResetDate")
+                resetDate = newResetDate
             }
             
             await MainActor.run {
@@ -295,10 +296,12 @@ class TokenUsageService: ObservableObject {
     private func setupCloudKitSubscriptions() {
         guard isCloudKitAvailable else { return }
         
-        // Create subscription for token usage changes
+        // Create subscription for token usage changes with explicit subscription ID
+        let subscriptionID = CKSubscription.ID("token-usage-sync-\(recordID.recordName)")
         let subscription = CKQuerySubscription(
             recordType: recordType,
             predicate: NSPredicate(format: "recordID == %@", recordID),
+            subscriptionID: subscriptionID,
             options: [.firesOnRecordUpdate]
         )
         

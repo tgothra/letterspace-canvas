@@ -239,9 +239,9 @@ struct HeaderImageView: View {
         if let cachedImage = ImageCache.shared.image(for: element.content) {
             isAppeared = false // Reset appearance before showing
             #if os(macOS)
-            nsImage = cachedImage as? NSImage
+            nsImage = cachedImage
             #elseif os(iOS)
-            uiImage = cachedImage as? UIImage
+            uiImage = cachedImage
             #endif
             // Animation will happen in onAppear
             return

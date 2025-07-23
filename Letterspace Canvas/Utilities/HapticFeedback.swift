@@ -24,15 +24,11 @@ struct HapticFeedback {
     // Pre-warm generators on first access
     private static let preparedGenerators: Void = {
         preparationQueue.async {
-            do {
-        lightGenerator.prepare()
-        mediumGenerator.prepare()
-        heavyGenerator.prepare()
-                isPrepared = true
-                print("✅ Haptic feedback generators prepared successfully")
-            } catch {
-                print("⚠️ Warning: Failed to prepare haptic generators: \(error)")
-            }
+            lightGenerator.prepare()
+            mediumGenerator.prepare()
+            heavyGenerator.prepare()
+            isPrepared = true
+            print("✅ Haptic feedback generators prepared successfully")
         }
     }()
     #endif
@@ -47,26 +43,22 @@ struct HapticFeedback {
         
         // Dispatch haptic feedback on a background queue to avoid blocking UI
         DispatchQueue.global(qos: .userInteractive).async {
-            do {
-        let generator: UIImpactFeedbackGenerator
-        switch style {
-        case .light:
-            generator = lightGenerator
-        case .medium:
-            generator = mediumGenerator
-        case .heavy:
-            generator = heavyGenerator
-        }
-                
-                // Re-prepare if needed (defensive programming)
-                if !isPrepared {
-                    generator.prepare()
-                }
-        
-        generator.impactOccurred()
-            } catch {
-                print("⚠️ Warning: Haptic feedback failed: \(error)")
+            let generator: UIImpactFeedbackGenerator
+            switch style {
+            case .light:
+                generator = lightGenerator
+            case .medium:
+                generator = mediumGenerator
+            case .heavy:
+                generator = heavyGenerator
             }
+            
+            // Re-prepare if needed (defensive programming)
+            if !isPrepared {
+                generator.prepare()
+            }
+            
+            generator.impactOccurred()
         }
         #endif
         // On macOS, haptic feedback is not available, so we do nothing

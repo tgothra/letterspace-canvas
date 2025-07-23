@@ -31,7 +31,7 @@ struct ScrollGestureHandler: NSViewRepresentable {
         private var lastScrollPosition: CGFloat = 0
         private var momentum: CGFloat = 0
         private var lastScrollTime: TimeInterval = 0
-        private var displayLink: CVDisplayLink?
+        private var displayLink: CADisplayLink?
         private var isRubberBanding = false
         private var rubberBandingStart: CGFloat = 0
         private var scrollVelocity: CGFloat = 0
@@ -61,24 +61,24 @@ struct ScrollGestureHandler: NSViewRepresentable {
             wantsLayer = true
             layer?.backgroundColor = .clear
             
-            // Set up display link for smooth animation
-            var displayLink: CVDisplayLink?
-            CVDisplayLinkCreateWithActiveCGDisplays(&displayLink)
-            self.displayLink = displayLink
-            
-            if let displayLink = displayLink {
-                CVDisplayLinkSetOutputCallback(displayLink, { (displayLink, _, _, _, _, pointer) -> CVReturn in
-                    let view = Unmanaged<ScrollView>.fromOpaque(pointer!).takeUnretainedValue()
-                    DispatchQueue.main.async {
-                        view.updateScrollPosition()
-                        view.updateScrollbarSize()
-                    }
-                    return kCVReturnSuccess
-                }, Unmanaged.passUnretained(self).toOpaque())
-                
-                CVDisplayLinkStart(displayLink)
+            // Set up display link for smooth animation using modern API
+            if let window = self.window {
+                let link = window.displayLink(target: self, selector: #selector(displayLinkCallback))
+                self.displayLink = link
             }
             
+            // Set up scroll monitor
+            setupScrollMonitor()
+        }
+        
+        @objc private func displayLinkCallback() {
+            DispatchQueue.main.async {
+                self.updateScrollPosition()
+                self.updateScrollbarSize()
+            }
+        }
+        
+        private func setupScrollMonitor() {
             scrollMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
                 // Check if the event is within our window
                 guard let window = self?.window else { return event }
@@ -93,8 +93,8 @@ struct ScrollGestureHandler: NSViewRepresentable {
                     
                     if let self = self, abs(deltaY) > 0.01 { // Only process meaningful scroll events
                         DispatchQueue.main.async {
-                        self.onScroll?(deltaY)
-                    }
+                            self.onScroll?(deltaY)
+                        }
                     }
                 }
                 
@@ -171,9 +171,8 @@ struct ScrollGestureHandler: NSViewRepresentable {
             if let monitor = scrollMonitor {
                 NSEvent.removeMonitor(monitor)
             }
-            if let displayLink = displayLink {
-                CVDisplayLinkStop(displayLink)
-            }
+            // Invalidate display link
+            displayLink?.invalidate()
         }
         
         override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
@@ -344,7 +343,7 @@ struct DocumentArea: View {
                 }
                 .onEnded { value in
                     let translation = value.translation
-                    let velocity = value.predictedEndTranslation
+                    let _ = value.predictedEndTranslation
                     let startLocation = value.startLocation
                     let isInHeaderArea = startLocation.y < 300
                     

@@ -44,6 +44,11 @@ struct ScriptureReference: Identifiable, Codable, Hashable {
     var verseNumbers: [Int] {
         return Array(verseRange)
     }
+    
+    // MARK: - Codable Implementation
+    enum CodingKeys: String, CodingKey {
+        case book, chapter, verse, displayText
+    }
 }
 
 // MARK: - Consolidated Chapter Reference
