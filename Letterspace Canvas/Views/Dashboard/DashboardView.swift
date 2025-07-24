@@ -883,7 +883,14 @@ var body: some View {
             .blur(radius: isModalPresented || showPinnedModal || showWIPModal || showSchedulerModal ? 3 : 0)
             .opacity(isModalPresented || showPinnedModal || showWIPModal || showSchedulerModal ? 0.7 : 1.0)
             .overlay { modalOverlayView } // Apply overlay first
+
             .animation(.easeInOut(duration: 0.2), value: isModalPresented || showPinnedModal || showWIPModal || showSchedulerModal)
+            .sheet(isPresented: $showTallyLabelModal) {
+                TallyLabelModal()
+                    .presentationBackground(.thinMaterial)
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
+            }
             // BREAK UP THE COMPLEX EXPRESSION:
             #if os(iOS)
             .modifier(IgnoresSafeAreaModifier(isIPad: isIPad))
@@ -2012,18 +2019,7 @@ var body: some View {
                 .background(Color(UIColor.systemBackground))
                 #endif
         }
-        .sheet(isPresented: Binding(
-            get: { 
-                #if os(iOS)
-                return showTallyLabelModal
-                #else
-                return false // Don't use sheet on macOS
-                #endif
-            },
-            set: { showTallyLabelModal = $0 }
-        )) {
-            TallyLabelModal()
-        }
+
         #if os(macOS)
         .background(
             showTallyLabelModal ? Color.red.opacity(0.1) : Color.clear
@@ -4261,4 +4257,7 @@ private struct IgnoresSafeAreaModifier: ViewModifier {
         }
     }
 }
+
+
+
 #endif

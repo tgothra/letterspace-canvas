@@ -5,25 +5,7 @@ struct TallyLabelModal: View {
     @Environment(\.colorScheme) var colorScheme
     
     var body: some View {
-        VStack(spacing: 0) {
-            // Custom header with Done button
-            HStack {
-                Spacer()
-                Button("Done") {
-                    NotificationCenter.default.post(name: NSNotification.Name("DismissTallyModal"), object: nil)
-                }
-                .foregroundColor(theme.accent)
-                .font(.system(size: 16, weight: .medium))
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 16)
-            .background(
-                Rectangle()
-                    .fill(colorScheme == .dark ? Color(.sRGB, white: 0.12) : .white)
-                    .ignoresSafeArea(.all, edges: .top)
-            )
-            
-            ScrollView {
+        ScrollView {
                 VStack(spacing: 24) {
                     // Tally Label Header Image
                     Image("Tally Label")
@@ -109,7 +91,6 @@ struct TallyLabelModal: View {
             }
         }
     }
-}
 
 struct FeatureRow: View {
     let icon: String
