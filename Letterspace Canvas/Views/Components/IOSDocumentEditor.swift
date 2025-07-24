@@ -36,10 +36,9 @@ struct IOSDocumentEditor: View {
         if let textElement = document.elements.first(where: { $0.type == .textBlock }) {
             textContent = textElement.content
             
-            // Apply attributed content if available - use a debounced approach
+            // Apply attributed content if available
             if let attributedContent = textElement.attributedContent {
-                // Debounce the attributed content application to prevent multiple rapid updates
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                DispatchQueue.main.async {
                     NotificationCenter.default.post(
                         name: NSNotification.Name("ApplyAttributedContent"),
                         object: nil,
@@ -106,7 +105,7 @@ struct SimpleIOSTextView: UIViewRepresentable {
         scrollView.keyboardDismissMode = .interactive // Enable swipe-to-dismiss keyboard
         scrollView.contentInsetAdjustmentBehavior = .never // We handle keyboard insets manually
         
-        // Configure text view with performance optimizations
+        // Configure text view
         textView.delegate = context.coordinator
         textView.font = UIFont.systemFont(ofSize: 16, weight: .regular)
         textView.backgroundColor = UIColor.clear
@@ -122,11 +121,6 @@ struct SimpleIOSTextView: UIViewRepresentable {
         textView.dataDetectorTypes = [.link] // Auto-detect links
         // Don't set linkTextAttributes - let our custom attributes take precedence
         textView.linkTextAttributes = [:]
-        
-        // Performance optimizations
-        textView.layoutManager.allowsNonContiguousLayout = true
-        textView.textContainer.maximumNumberOfLines = 0
-        textView.textContainer.widthTracksTextView = true
         
         // Add text view to scroll view
         scrollView.addSubview(textView)
@@ -579,20 +573,14 @@ struct SimpleIOSTextView: UIViewRepresentable {
             // Update toolbar to reflect current formatting
             updateFormattingToolbar()
             
-            // Save attributed text with debounce - reduced timeout to prevent performance issues
+            // Save attributed text with debounce
             attributedTextSaveTimer?.invalidate()
-            attributedTextSaveTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { _ in
-                // Use a background queue for attributed text processing to prevent UI blocking
-                DispatchQueue.global(qos: .userInitiated).async {
-                    let attributedText = NSAttributedString(attributedString: textView.attributedText)
-                    
-                    DispatchQueue.main.async {
-                        self.onAttributedTextChange?(textView.text, attributedText)
-                        
-                        // Validate bookmarks after text change
-                        self.validateAndCleanupBookmarks(textView: textView)
-                    }
-                }
+            attributedTextSaveTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: false) { _ in
+                let attributedText = NSAttributedString(attributedString: textView.attributedText)
+                self.onAttributedTextChange?(textView.text, attributedText)
+                
+                // Validate bookmarks after text change
+                self.validateAndCleanupBookmarks(textView: textView)
             }
         }
         

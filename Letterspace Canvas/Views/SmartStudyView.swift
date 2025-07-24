@@ -639,9 +639,8 @@ struct SmartStudyView: View {
                     .environmentObject(libraryService)
             }
             .sheet(isPresented: $showingPastStudiesSheet) {
-                // Past Studies Sheet for iPhone
-                if #available(iOS 16.0, *) {
-                    NavigationStack {
+                // Past Studies Sheet for iPhone - iOS 26 exclusive
+                NavigationStack {
                         VStack(alignment: .leading, spacing: 0) {
                             // Past Studies Content
                             if savedQAs.isEmpty {
@@ -673,17 +672,9 @@ struct SmartStudyView: View {
                         }
                         .background(theme.surface)
                         .navigationTitle("Past Studies")
-                        #if os(iOS)
                         .navigationBarTitleDisplayMode(.inline)
-                        #endif
                         .toolbar {
-                            ToolbarItem(placement: {
-                                #if os(iOS)
-                                .navigationBarTrailing
-                                #else
-                                .automatic
-                                #endif
-                            }()) {
+                            ToolbarItem(placement: .navigationBarTrailing) {
                                 Button(action: {
                                     showingPastStudiesSheet = false
                                 }) {
@@ -702,66 +693,6 @@ struct SmartStudyView: View {
                     }
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
-                } else {
-                    // Fallback for iOS 15 and below: Use simple VStack to avoid NavigationView delays
-                    VStack(alignment: .leading, spacing: 0) {
-                        // Header
-                        HStack {
-                            Text("Past Studies")
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundColor(.primary)
-                            Spacer()
-                            Button(action: {
-                                showingPastStudiesSheet = false
-                            }) {
-                                Image(systemName: "xmark")
-                                    .font(.system(size: 10, weight: .bold))
-                                    .foregroundColor(.white)
-                                    .frame(width: 22, height: 22)
-                                    .background(
-                                        Circle()
-                                            .fill(Color.gray.opacity(0.5))
-                                    )
-                            }
-                            .buttonStyle(.plain)
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
-                        
-                        Divider()
-                        
-                        // Past Studies Content
-                        if savedQAs.isEmpty {
-                            VStack {
-                                Spacer()
-                                Text("No saved questions yet")
-                                    .font(.system(size: 14))
-                                    .foregroundColor(.gray)
-                                Text("Your saved Bible study questions will appear here")
-                                    .font(.system(size: 12))
-                                    .foregroundColor(.gray.opacity(0.7))
-                                    .multilineTextAlignment(.center)
-                                    .padding(.top, 4)
-                                Spacer()
-                            }
-                            .padding(.horizontal, 16)
-                        } else {
-                            ScrollView {
-                                LazyVStack(spacing: 0) {
-                                    ForEach(savedQAs) { qa in
-                                        pastStudyListItem(qa: qa)
-                                        Divider()
-                                    }
-                                }
-                            }
-                        }
-                        
-                        Spacer()
-                    }
-                    .background(theme.surface)
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
-                }
             }
             .sheet(isPresented: $showingScripturePopup) {
                 ScripturePopupView(reference: selectedScriptureReference)

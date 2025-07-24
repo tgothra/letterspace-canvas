@@ -12,77 +12,30 @@ struct BibleGlobalSearchModal: View {
     let onDismiss: () -> Void
     
     var body: some View {
-        // Use NavigationStack for iOS 16+ and NavigationView for older versions
-        Group {
-            #if os(iOS)
-            if #available(iOS 16.0, *) {
-                NavigationStack {
-                    searchContentView
-                        .navigationTitle("Bible Search")
-                        #if os(iOS)
-                        .navigationBarTitleDisplayMode(.inline)
-                        #endif
-                        .toolbar {
-                            ToolbarItem(placement: {
-                                #if os(iOS)
-                                .navigationBarTrailing
-                                #else
-                                .automatic
-                                #endif
-                            }()) {
-                                Button("Done", action: onDismiss)
-                            }
-                        }
-                }
-            } else {
-                // Fallback for iOS 15 and below: Use simple VStack to avoid NavigationView delays
-                VStack(spacing: 0) {
-                    // Simple header for older iOS
-                    HStack {
-                        Text("Bible Search")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(.primary)
-                        Spacer()
+        // iOS 26 exclusive - use NavigationStack directly
+        #if os(iOS)
+        NavigationStack {
+            searchContentView
+                .navigationTitle("Bible Search")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarTrailing) {
                         Button("Done", action: onDismiss)
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                    #if os(iOS)
-                    .background(Color(.systemBackground))
-                    #else
-                    .background(Color(NSColor.windowBackgroundColor))
-                    #endif
-                    
-                    Divider()
-                    
-                    searchContentView
                 }
-            }
-            #else
-            // macOS: Use NavigationStack or NavigationView as appropriate
-            if #available(macOS 13.0, *) {
-                NavigationStack {
-                    searchContentView
-                        .navigationTitle("Bible Search")
-                        .toolbar {
-                            ToolbarItem(placement: .cancellationAction) {
-                                Button("Done", action: onDismiss)
-                            }
-                        }
-                }
-            } else {
-        NavigationView {
-                    searchContentView
-                        .navigationTitle("Bible Search")
-                        .toolbar {
-                            ToolbarItem(placement: .cancellationAction) {
-                                Button("Done", action: onDismiss)
-                            }
-                        }
-                }
-            }
-            #endif
         }
+        #else
+        // macOS: Use NavigationStack (macOS 13.0+)
+        NavigationStack {
+            searchContentView
+                .navigationTitle("Bible Search")
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Done", action: onDismiss)
+                    }
+                }
+        }
+        #endif
         .onAppear {
             isJumpFieldFocused = true
         }

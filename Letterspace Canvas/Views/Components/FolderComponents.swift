@@ -1447,9 +1447,8 @@ struct FoldersView: View {
         Group {
             #if os(iOS)
             if isPhone {
-                // iPhone: Use NavigationStack (iOS 16+) for better performance, fallback to VStack for older iOS
-                if #available(iOS 16.0, *) {
-                    NavigationStack {
+                // iPhone: iOS 26 exclusive - use NavigationStack directly
+                NavigationStack {
                     FoldersPopupContent(
                         activePopup: $activePopup,
                         folders: $folders,
@@ -1460,47 +1459,11 @@ struct FoldersView: View {
                         showHeader: false // Don't show header since we have navigation title
                     )
                     .navigationTitle("Folders")
-                        #if os(iOS)
                     .navigationBarTitleDisplayMode(.inline)
-                        #endif
-                        .toolbar {
-                            ToolbarItem(placement: {
-                                #if os(iOS)
-                                .navigationBarTrailing
-                                #else
-                                .automatic
-                                #endif
-                            }()) {
-                                Button("Done", action: onDismiss)
-                            }
-                        }
-                    }
-                } else {
-                    // Fallback for iOS 15 and below: Use simple VStack to avoid NavigationView delays
-                    VStack(spacing: 0) {
-                        // Simple header for older iOS
-                        HStack {
-                            Text("Folders")
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundColor(.primary)
-                            Spacer()
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarTrailing) {
                             Button("Done", action: onDismiss)
                         }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
-                        .background(Color(UIColor.systemGroupedBackground))
-                        
-                        Divider()
-                        
-                        FoldersPopupContent(
-                            activePopup: $activePopup,
-                            folders: $folders,
-                            document: $document,
-                            sidebarMode: $sidebarMode,
-                            isRightSidebarVisible: $isRightSidebarVisible,
-                            onAddFolder: addFolder,
-                            showHeader: false
-                        )
                     }
                 }
             } else {

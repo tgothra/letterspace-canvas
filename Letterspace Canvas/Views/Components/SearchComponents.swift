@@ -1241,9 +1241,8 @@ struct SearchView: View {
         Group {
             #if os(iOS)
             if isPhone {
-                // iPhone: Use NavigationStack (iOS 16+) for better performance, fallback to VStack for older iOS
-                if #available(iOS 16.0, *) {
-                    NavigationStack {
+                // iPhone: iOS 26 exclusive - use NavigationStack directly
+                NavigationStack {
                     SearchPopupContent(
                         activePopup: $activePopup,
                         document: $document,
@@ -1251,50 +1250,14 @@ struct SearchView: View {
                         isRightSidebarVisible: $isRightSidebarVisible,
                         onDismiss: onDismiss
                     )
-                        .background(theme.background)
+                    .background(theme.background)
                     .navigationTitle("Search Documents")
-                        #if os(iOS)
                     .navigationBarTitleDisplayMode(.inline)
-                        #endif
-                        .toolbar {
-                            ToolbarItem(placement: {
-                                #if os(iOS)
-                                .navigationBarTrailing
-                                #else
-                                .automatic
-                                #endif
-                            }()) {
-                        Button("Done", action: onDismiss)
-                                    .foregroundColor(theme.accent)
-                            }
-                        }
-                    }
-                } else {
-                    // Fallback for iOS 15 and below: Use simple VStack to avoid NavigationView delays
-                    VStack(spacing: 0) {
-                        // Simple header for older iOS
-                        HStack {
-                            Text("Search Documents")
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundColor(.primary)
-                            Spacer()
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarTrailing) {
                             Button("Done", action: onDismiss)
                                 .foregroundColor(theme.accent)
                         }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
-                        .background(theme.surface)
-                        
-                        Divider()
-                        
-                        SearchPopupContent(
-                            activePopup: $activePopup,
-                            document: $document,
-                            sidebarMode: $sidebarMode,
-                            isRightSidebarVisible: $isRightSidebarVisible,
-                            onDismiss: onDismiss
-                        )
-                        .background(theme.background)
                     }
                 }
             } else {
