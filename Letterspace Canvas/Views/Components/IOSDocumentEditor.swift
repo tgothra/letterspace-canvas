@@ -125,7 +125,6 @@ struct SimpleIOSTextView: UIViewRepresentable {
         
         // Performance optimizations
         textView.layoutManager.allowsNonContiguousLayout = true
-        textView.layoutManager.backgroundLayoutEnabled = true
         textView.textContainer.maximumNumberOfLines = 0
         textView.textContainer.widthTracksTextView = true
         
