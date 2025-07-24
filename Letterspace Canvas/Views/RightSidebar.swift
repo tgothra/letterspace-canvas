@@ -139,7 +139,7 @@ struct RightSidebar: View {
     // Local environment values
     @Environment(\.themeColors) var theme
     @Environment(\.colorScheme) var colorScheme
-    @StateObject private var colorManager = TagColorManager.shared
+    private let colorManager = TagColorManager.shared
     
     // Add the missing series state property
     @State private var series: [DocumentSeries] = []

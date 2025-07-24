@@ -1055,7 +1055,7 @@ private struct DocumentItem: View {
     @Binding var selectedSchedules: Set<UUID>
     @Environment(\.themeColors) var theme
     @Environment(\.colorScheme) var colorScheme
-    @StateObject private var gradientManager = GradientWallpaperManager.shared
+    private let gradientManager = GradientWallpaperManager.shared
     @State private var isHovered = false
     // Add hover states for individual buttons
     @State private var isOpenButtonHovered = false

@@ -47,8 +47,9 @@ struct UserLibraryItem: Identifiable, Codable {
 }
 
 // Service to manage the user's library items
-class UserLibraryService: ObservableObject {
-    @Published var libraryItems: [UserLibraryItem] = []
+@Observable
+class UserLibraryService {
+    var libraryItems: [UserLibraryItem] = []
     
     // Static instance for preloading
     private static var preloadedInstance: UserLibraryService?

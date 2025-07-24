@@ -25,7 +25,7 @@ struct DashboardDocumentRow: View {
     
     @Environment(\.themeColors) var theme
     @Environment(\.colorScheme) var colorScheme
-    @StateObject private var gradientManager = GradientWallpaperManager.shared
+    private let gradientManager = GradientWallpaperManager.shared
     
     // Computed properties for theme-aware status colors
     private var pinColor: Color {

@@ -18,7 +18,7 @@ struct DashboardView: View {
     var floatingSidebarWidth: CGFloat // Add floating sidebar width parameter
     @Environment(\.themeColors) var theme
     @Environment(\.colorScheme) var colorScheme
-    @StateObject private var gradientManager = GradientWallpaperManager.shared
+    private let gradientManager = GradientWallpaperManager.shared
     @State private var selectedColumn: ListColumn = .name
     @State private var sortAscending = true
     @State private var dateFilterType: DateFilterType = .modified
@@ -44,7 +44,7 @@ struct DashboardView: View {
     @State private var showTagManager = false
     @State private var isHoveringInfo = false
     @State private var hoveredTag: String? = nil
-    @StateObject private var colorManager = TagColorManager.shared
+    private let colorManager = TagColorManager.shared
     @State private var isViewButtonHovering = false
     @State private var showDetailsCard = false
     @State private var selectedDetailsDocument: Letterspace_CanvasDocument?

@@ -296,11 +296,12 @@ struct BibleBookmark: Identifiable, Codable, Equatable {
 }
 
 // Data to manage bookmarks
-class BibleReaderData: ObservableObject {
-    @Published var bookmarks: [BibleBookmark] = []
-    @Published var lastReadBook: String = "Genesis"
-    @Published var lastReadChapter: Int = 1
-    @Published var lastReadTranslation: String = "KJV"
+@Observable
+class BibleReaderData {
+    var bookmarks: [BibleBookmark] = []
+    var lastReadBook: String = "Genesis"
+    var lastReadChapter: Int = 1
+    var lastReadTranslation: String = "KJV"
     
     private let bookmarksKey = "bible_reader_bookmarks"
     private let lastReadKey = "bible_reader_last_read"
@@ -385,7 +386,7 @@ class BibleReaderData: ObservableObject {
 struct BibleReaderView: View {
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.themeColors) var theme
-    @StateObject private var readerData = BibleReaderData()
+    @State private var readerData = BibleReaderData()
     @State private var selectedBook = "Genesis"
     @State private var selectedChapter = 1
     @State private var chapterData: ChapterResult?

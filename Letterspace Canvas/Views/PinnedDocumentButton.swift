@@ -19,7 +19,7 @@ struct PinnedDocumentButton: View {
     @State private var isOpenButtonHovered = false
     @State private var isUnpinButtonHovered = false
     @State private var justLongPressed = false // Track if we just long pressed
-    @StateObject private var gradientManager = GradientWallpaperManager.shared
+    private let gradientManager = GradientWallpaperManager.shared
     
     // iPad detection
     private var isIPad: Bool {

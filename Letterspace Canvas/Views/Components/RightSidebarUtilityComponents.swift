@@ -467,7 +467,7 @@ struct TagView: View {
     let onRemove: () -> Void
     @Environment(\.themeColors) var theme
     @Environment(\.colorScheme) var colorScheme
-    @StateObject private var colorManager = TagColorManager.shared
+    private let colorManager = TagColorManager.shared
     
     private func tagColor(for tag: String) -> Color {
         return colorManager.color(for: tag)

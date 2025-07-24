@@ -8,9 +8,10 @@ struct TagColorPreference: Codable {
 }
 
 // Manages the colors associated with tags
-class TagColorManager: ObservableObject {
+@Observable
+class TagColorManager {
     static let shared = TagColorManager()
-    @Published var colorPreferences: [String: Color] = [:]
+    var colorPreferences: [String: Color] = [:]
 
     private let defaultColors: [Color] = [
         Color(hex: "#dc2626"),  // Crimson
@@ -94,7 +95,7 @@ struct TagManager: View {
     @State private var newName: String = ""
     @State private var tagToDelete: String?
     @State private var showDeleteAlert: Bool = false
-    @StateObject private var colorManager = TagColorManager.shared
+    private let colorManager = TagColorManager.shared
     @State private var selectedTag: String?
     @State private var hoveredTag: String?
     @State private var hoveredColor: String?

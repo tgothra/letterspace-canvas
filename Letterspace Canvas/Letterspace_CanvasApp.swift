@@ -105,7 +105,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 @main
 struct Letterspace_CanvasApp: App {
     @State private var document = Letterspace_CanvasDocument()
-    @StateObject private var appearanceController = AppearanceController.shared
+    private let appearanceController = AppearanceController.shared
     
     #if os(macOS)
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate

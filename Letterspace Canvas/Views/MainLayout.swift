@@ -213,7 +213,7 @@ struct MainLayout: View {
     @State private var isSwipeDownDismissing: Bool = false
     
     // Gradient wallpaper manager
-    @StateObject private var gradientManager = GradientWallpaperManager.shared
+    private let gradientManager = GradientWallpaperManager.shared
     
     let rightSidebarWidth: CGFloat = 240
     let settingsWidth: CGFloat = 220

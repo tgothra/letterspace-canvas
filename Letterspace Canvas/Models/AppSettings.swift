@@ -19,10 +19,11 @@ enum AppColorScheme: String, CaseIterable {
 }
 
 // Appearance Controller for managing app-wide color scheme
-class AppearanceController: ObservableObject {
+@Observable
+class AppearanceController {
     static let shared = AppearanceController()
     
-    @Published var selectedScheme: AppColorScheme {
+    var selectedScheme: AppColorScheme {
         didSet {
             UserDefaults.standard.set(selectedScheme.rawValue, forKey: "preferredColorScheme")
             UserDefaults.standard.synchronize()
@@ -69,7 +70,8 @@ class AppearanceController: ObservableObject {
 
 // Removed extension for ScriptureLayoutStyle from here
 
-class AppSettings: ObservableObject {
+@Observable
+class AppSettings {
     // Shared instance that can be accessed throughout the app
     static let shared = AppSettings()
     
@@ -77,17 +79,17 @@ class AppSettings: ObservableObject {
     private let scriptureLineColorKey = "scriptureLineColorData"
     private let defaultLayoutKey = "defaultScriptureLayoutRawValue"
     
-    // --- Published properties with UserDefaults persistence ---
+    // --- Observable properties with UserDefaults persistence ---
     
     // Default color for the scripture line
-    @Published var scriptureLineColor: Color {
+    var scriptureLineColor: Color {
         didSet {
             saveColor(scriptureLineColor, forKey: scriptureLineColorKey)
         }
     }
     
     // Default layout for scripture blocks
-    @Published var defaultScriptureLayout: ScriptureLayoutStyle {
+    var defaultScriptureLayout: ScriptureLayoutStyle {
         didSet {
             UserDefaults.standard.set(defaultScriptureLayout.rawValue, forKey: defaultLayoutKey)
         }

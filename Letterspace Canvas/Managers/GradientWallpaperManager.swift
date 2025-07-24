@@ -1,9 +1,9 @@
 import SwiftUI
-import Combine
 
-class GradientWallpaperManager: ObservableObject {
-    @Published var selectedLightGradientIndex: Int = 0 // Default to first (current system)
-    @Published var selectedDarkGradientIndex: Int = 0 // Default to first (current system)
+@Observable
+class GradientWallpaperManager {
+    var selectedLightGradientIndex: Int = 0 // Default to first (current system)
+    var selectedDarkGradientIndex: Int = 0 // Default to first (current system)
     
     static let shared = GradientWallpaperManager()
     

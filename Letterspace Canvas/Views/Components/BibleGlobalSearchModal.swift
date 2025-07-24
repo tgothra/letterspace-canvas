@@ -35,10 +35,10 @@ struct BibleGlobalSearchModal: View {
                     }
                 }
         }
-        #endif
         .onAppear {
             isJumpFieldFocused = true
         }
+        #endif
     }
     
     private var searchContentView: some View {

@@ -24,7 +24,7 @@ struct DocumentDetailsCard: View {
     // Add custom dismiss handler
     var onDismiss: (() -> Void)?
     
-    @StateObject private var colorManager = TagColorManager.shared
+    private let colorManager = TagColorManager.shared
     @State private var title: String
     @State private var subtitle: String
     @State private var seriesName: String
