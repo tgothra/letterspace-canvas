@@ -370,6 +370,9 @@ private struct MainToolbarView: View {
             }
             .padding(.horizontal, 16)
         }
+        .scrollDisabled(false) // Ensure scrolling is enabled
+        .scrollBounceBehavior(.basedOnSize) // Add bounce for better scroll feedback
+        .scrollTargetBehavior(.viewAligned) // Better scroll targeting
         .frame(maxHeight: .infinity)
         .frame(maxWidth: .infinity)
         .background(Color(UIColor.systemBackground).opacity(0.95))
@@ -416,6 +419,7 @@ private struct InlineColorPickerView: View {
                 }
                 .padding(.horizontal, 4)
             }
+            .scrollBounceBehavior(.basedOnSize)
         }
         .frame(maxHeight: .infinity)
         .padding(.horizontal, 8)
@@ -798,17 +802,13 @@ private struct InlineColorButton: View {
             // Provide haptic feedback
             HapticFeedback.impact(.light)
         }
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in
-                    if !isPressed {
-                        isPressed = true
-                    }
-                }
-                .onEnded { _ in
-                    isPressed = false
-                }
-        )
+        .onLongPressGesture(minimumDuration: 0, maximumDistance: 50) {
+            // This handles the press effect without interfering with scroll
+        } onPressingChanged: { pressing in
+            withAnimation(.easeInOut(duration: 0.1)) {
+                isPressed = pressing
+            }
+        }
     }
 }
 
@@ -863,17 +863,13 @@ private struct IOSTextButton: View {
             // Provide haptic feedback
             HapticFeedback.impact(.light)
         }
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in
-                    if !isPressed {
-                        isPressed = true
-                    }
-                }
-                .onEnded { _ in
-                    isPressed = false
-                }
-        )
+        .onLongPressGesture(minimumDuration: 0, maximumDistance: 50) {
+            // This handles the press effect without interfering with scroll
+        } onPressingChanged: { pressing in
+            withAnimation(.easeInOut(duration: 0.1)) {
+                isPressed = pressing
+            }
+        }
     }
     
     private var buttonForegroundColor: Color {
@@ -926,17 +922,13 @@ private struct IOSToolbarButton: View {
             // Provide haptic feedback
             HapticFeedback.impact(.light)
         }
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in
-                    if !isPressed {
-                        isPressed = true
-                    }
-                }
-                .onEnded { _ in
-                    isPressed = false
-                }
-        )
+        .onLongPressGesture(minimumDuration: 0, maximumDistance: 50) {
+            // This handles the press effect without interfering with scroll
+        } onPressingChanged: { pressing in
+            withAnimation(.easeInOut(duration: 0.1)) {
+                isPressed = pressing
+            }
+        }
     }
     
     private var buttonForegroundColor: Color {

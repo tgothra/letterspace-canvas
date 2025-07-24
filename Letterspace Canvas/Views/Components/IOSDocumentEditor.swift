@@ -103,6 +103,7 @@ struct SimpleIOSTextView: UIViewRepresentable {
         scrollView.alwaysBounceVertical = true
         scrollView.delegate = context.coordinator
         scrollView.keyboardDismissMode = .interactive // Enable swipe-to-dismiss keyboard
+        scrollView.contentInsetAdjustmentBehavior = .never // We handle keyboard insets manually
         
         // Configure text view
         textView.delegate = context.coordinator
@@ -188,28 +189,28 @@ struct SimpleIOSTextView: UIViewRepresentable {
             self._document = document
             super.init()
             
-                    // Set up keyboard notifications
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(keyboardWillShow),
-            name: UIResponder.keyboardWillShowNotification,
-            object: nil
-        )
-        
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(keyboardWillHide),
-            name: UIResponder.keyboardWillHideNotification,
-            object: nil
-        )
-        
-        // Add keyboard frame change notification to handle swipe-to-dismiss
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(keyboardFrameWillChange),
-            name: UIResponder.keyboardWillChangeFrameNotification,
-            object: nil
-        )
+            // Set up keyboard notifications
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(keyboardWillShow),
+                name: UIResponder.keyboardWillShowNotification,
+                object: nil
+            )
+            
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(keyboardWillHide),
+                name: UIResponder.keyboardWillHideNotification,
+                object: nil
+            )
+            
+            // Add keyboard frame change observer for interactive dismissal
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(keyboardWillChangeFrame),
+                name: UIResponder.keyboardWillChangeFrameNotification,
+                object: nil
+            )
         }
         
         deinit {
@@ -221,12 +222,6 @@ struct SimpleIOSTextView: UIViewRepresentable {
             }
             attributedTextSaveTimer?.invalidate()
             NotificationCenter.default.removeObserver(self)
-            
-            // Clean up any remaining toolbar state
-            if let toolbar = textView?.inputAccessoryView {
-                toolbar.transform = .identity
-                toolbar.alpha = 1.0
-            }
         }
         
         // MARK: - Keyboard Handling
@@ -238,17 +233,13 @@ struct SimpleIOSTextView: UIViewRepresentable {
                 return
             }
             
-            // Animate the toolbar slide-in along with keyboard appearance
+            // Animate the toolbar fade-in along with keyboard appearance
             if let toolbar = textView.inputAccessoryView {
-                // Start toolbar off-screen and animate it in
-                toolbar.transform = CGAffineTransform(translationX: 0, y: 50)
                 toolbar.alpha = 0.0
-                
                 UIView.animate(withDuration: animationDuration,
                              delay: 0,
                              options: [.curveEaseInOut],
                              animations: {
-                    toolbar.transform = .identity
                     toolbar.alpha = 1.0
                 })
             }
@@ -326,45 +317,59 @@ struct SimpleIOSTextView: UIViewRepresentable {
                 return
             }
             
-            // Get keyboard animation curve for better coordination
-            let animationCurve = notification.userInfo?[UIResponder.keyboardAnimationCurveUserInfoKey] as? UInt ?? 7 // Default to easeInOut
+            print("🎹 Keyboard will hide - animation duration: \(animationDuration)")
             
-            // Coordinate toolbar dismissal with keyboard animation
+            // Check if this is a swipe-to-dismiss gesture (very fast animation)
+            let isSwipeToDismiss = animationDuration < 0.3
+            
             if let toolbar = textView.inputAccessoryView {
-                // Use the same duration and curve as the keyboard for perfect coordination
-                let toolbarDuration = animationDuration
-                
-                UIView.animate(withDuration: toolbarDuration, 
-                             delay: 0,
-                             options: [UIView.AnimationOptions(rawValue: animationCurve), .allowUserInteraction],
-                             animations: {
-                    // Animate the toolbar down and out of view instead of just fading
-                    toolbar.transform = CGAffineTransform(translationX: 0, y: 100)
+                if isSwipeToDismiss {
+                    // For swipe-to-dismiss, immediately hide toolbar and resign first responder
+                    // to prevent the toolbar from getting stuck
+                    print("🎹 Swipe-to-dismiss detected - immediate toolbar dismissal")
                     toolbar.alpha = 0.0
-                }, completion: { _ in
-                    // Reset transform and alpha for next appearance
-                    DispatchQueue.main.async {
-                        toolbar.transform = .identity
-                        toolbar.alpha = 1.0
-                    }
                     
-                    // Only resign first responder after toolbar animation completes
+                    // Immediately resign first responder to let iOS handle the dismissal
                     if textView.isFirstResponder {
                         textView.resignFirstResponder()
                     }
-                })
+                    
+                    // Reset alpha for next appearance after a short delay
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        toolbar.alpha = 1.0
+                    }
+                } else {
+                    // For normal keyboard dismissal (tap elsewhere, done button, etc.)
+                    // Use coordinated animation
+                    print("🎹 Normal keyboard dismissal - coordinated animation")
+                    let toolbarDuration = max(animationDuration * 0.8, 0.2)
+                    
+                    UIView.animate(withDuration: toolbarDuration, 
+                                 delay: 0,
+                                 options: [.curveEaseOut, .allowUserInteraction],
+                                 animations: {
+                        toolbar.alpha = 0.0
+                    }, completion: { _ in
+                        // Only resign first responder after toolbar animation completes
+                        if textView.isFirstResponder {
+                            textView.resignFirstResponder()
+                        }
+                        // Reset alpha for next appearance
+                        DispatchQueue.main.async {
+                            toolbar.alpha = 1.0
+                        }
+                    })
+                }
             }
             
-            // Reset content insets with animation
-            UIView.animate(withDuration: animationDuration, 
-                         delay: 0,
-                         options: UIView.AnimationOptions(rawValue: animationCurve)) {
+            // Reset content insets with animation - always use the keyboard's animation duration
+            UIView.animate(withDuration: animationDuration) {
                 scrollView.contentInset = .zero
                 scrollView.scrollIndicatorInsets = .zero
             }
         }
         
-        @objc private func keyboardFrameWillChange(_ notification: Notification) {
+        @objc private func keyboardWillChangeFrame(_ notification: Notification) {
             guard let scrollView = scrollView,
                   let textView = textView,
                   let keyboardFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect,
@@ -372,36 +377,35 @@ struct SimpleIOSTextView: UIViewRepresentable {
                 return
             }
             
-            // Check if this is a swipe-to-dismiss gesture (keyboard frame is moving down)
-            let screenHeight = UIScreen.main.bounds.height
-            let keyboardBottom = keyboardFrame.origin.y + keyboardFrame.height
+            // Get the keyboard frame in the scroll view's coordinate space
+            let keyboardFrameInScrollView = scrollView.convert(keyboardFrame, from: nil)
+            let scrollViewBounds = scrollView.bounds
+            let intersection = keyboardFrameInScrollView.intersection(scrollViewBounds)
+            let keyboardHeight = intersection.height
             
-            // If keyboard is moving down and will be off-screen, coordinate toolbar dismissal
-            if keyboardBottom >= screenHeight {
+            print("🎹 Keyboard frame change - height: \(keyboardHeight), duration: \(animationDuration)")
+            
+            // If keyboard is moving off screen (height is very small or zero)
+            if keyboardHeight < 50 {
+                print("🎹 Keyboard moving off screen - ensuring toolbar dismissal")
+                
+                // Make sure toolbar is hidden immediately
                 if let toolbar = textView.inputAccessoryView {
-                    let animationCurve = notification.userInfo?[UIResponder.keyboardAnimationCurveUserInfoKey] as? UInt ?? 7
+                    toolbar.alpha = 0.0
                     
-                    UIView.animate(withDuration: animationDuration,
-                                 delay: 0,
-                                 options: [UIView.AnimationOptions(rawValue: animationCurve), .allowUserInteraction],
-                                 animations: {
-                        // Animate toolbar down with the keyboard
-                        toolbar.transform = CGAffineTransform(translationX: 0, y: 100)
-                        toolbar.alpha = 0.0
-                    }, completion: { _ in
-                        // Reset for next appearance
-                        DispatchQueue.main.async {
-                            toolbar.transform = .identity
-                            toolbar.alpha = 1.0
-                        }
-                    })
+                    // Reset alpha for next appearance after a short delay
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                        toolbar.alpha = 1.0
+                    }
                 }
                 
-                // Reset content insets immediately for swipe-to-dismiss
-                let curve = notification.userInfo?[UIResponder.keyboardAnimationCurveUserInfoKey] as? UInt ?? 7
-                UIView.animate(withDuration: animationDuration,
-                             delay: 0,
-                             options: UIView.AnimationOptions(rawValue: curve)) {
+                // Make sure text view resigns first responder if it hasn't already
+                if textView.isFirstResponder {
+                    textView.resignFirstResponder()
+                }
+                
+                // Reset content insets
+                UIView.animate(withDuration: animationDuration) {
                     scrollView.contentInset = .zero
                     scrollView.scrollIndicatorInsets = .zero
                 }
