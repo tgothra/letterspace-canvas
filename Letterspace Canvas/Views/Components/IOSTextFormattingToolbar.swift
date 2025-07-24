@@ -994,14 +994,7 @@ class IOSFormattingToolbarHostingController: UIHostingController<IOSTextFormatti
         // The preferredContentSize provides a hint to the system about our desired height
     }
     
-    private func setupStroke() {
-        // Remove existing stroke if any
-        strokeView?.removeFromSuperview()
-        
-        // Instead of adding a UIView to UIHostingController, we'll use SwiftUI
-        // The stroke will be handled by the SwiftUI view itself
-        strokeView = nil
-    }
+
 }
 
 #endif 
