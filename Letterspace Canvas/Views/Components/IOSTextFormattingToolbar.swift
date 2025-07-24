@@ -376,6 +376,14 @@ private struct MainToolbarView: View {
         .frame(maxHeight: .infinity)
         .frame(maxWidth: .infinity)
         .background(Color(UIColor.systemBackground).opacity(0.95))
+        .overlay(
+            // Add stroke at the top using SwiftUI instead of UIKit
+            Rectangle()
+                .fill(Color.primary.opacity(0.1))
+                .frame(height: 0.5)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top),
+            alignment: .top
+        )
     }
 }
 
@@ -798,14 +806,12 @@ private struct InlineColorButton: View {
             .frame(width: 44, height: 44) // Larger tap target
         }
         .buttonStyle(PlainButtonStyle())
-        .onTapGesture {
-            // Provide haptic feedback
-            HapticFeedback.impact(.light)
-        }
         .onLongPressGesture(minimumDuration: 0, maximumDistance: 50) {
-            // This handles the press effect without interfering with scroll
+            // Execute the action on press end
+            HapticFeedback.impact(.light)
+            onSelect()
         } onPressingChanged: { pressing in
-            withAnimation(.easeInOut(duration: 0.1)) {
+            withAnimation(.easeInOut(duration: 0.05)) {
                 isPressed = pressing
             }
         }
@@ -838,8 +844,7 @@ private struct IOSTextButton: View {
     
     var body: some View {
         Button(action: {
-            print("📱 Button tapped: \(text)")
-            action()
+            // Remove the action from here since we'll handle it in the gesture
         }) {
             Text(text)
                 .font(.system(size: 14, weight: isBold ? .bold : .medium))
@@ -859,14 +864,13 @@ private struct IOSTextButton: View {
         }
         .buttonStyle(PlainButtonStyle())
         .scaleEffect(isPressed ? 0.95 : 1.0)
-        .onTapGesture {
-            // Provide haptic feedback
-            HapticFeedback.impact(.light)
-        }
         .onLongPressGesture(minimumDuration: 0, maximumDistance: 50) {
-            // This handles the press effect without interfering with scroll
+            // Execute the action on press end
+            print("📱 Button tapped: \(text)")
+            HapticFeedback.impact(.light)
+            action()
         } onPressingChanged: { pressing in
-            withAnimation(.easeInOut(duration: 0.1)) {
+            withAnimation(.easeInOut(duration: 0.05)) {
                 isPressed = pressing
             }
         }
@@ -906,8 +910,7 @@ private struct IOSToolbarButton: View {
     
     var body: some View {
         Button(action: {
-            print("📱 Toolbar button tapped: \(icon)")
-            action()
+            // Remove the action from here since we'll handle it in the gesture
         }) {
             Image(systemName: icon)
                 .font(.system(size: 16, weight: .medium))
@@ -918,14 +921,13 @@ private struct IOSToolbarButton: View {
         }
         .buttonStyle(PlainButtonStyle())
         .scaleEffect(isPressed ? 0.95 : 1.0)
-        .onTapGesture {
-            // Provide haptic feedback
-            HapticFeedback.impact(.light)
-        }
         .onLongPressGesture(minimumDuration: 0, maximumDistance: 50) {
-            // This handles the press effect without interfering with scroll
+            // Execute the action on press end
+            print("📱 Toolbar button tapped: \(icon)")
+            HapticFeedback.impact(.light)
+            action()
         } onPressingChanged: { pressing in
-            withAnimation(.easeInOut(duration: 0.1)) {
+            withAnimation(.easeInOut(duration: 0.05)) {
                 isPressed = pressing
             }
         }
@@ -952,7 +954,6 @@ private struct IOSToolbarButton: View {
 
 // MARK: - UIKit Integration
 class IOSFormattingToolbarHostingController: UIHostingController<IOSTextFormattingToolbar> {
-    private var strokeView: UIView?
     
     init(toolbar: IOSTextFormattingToolbar) {
         super.init(rootView: toolbar)
@@ -985,9 +986,6 @@ class IOSFormattingToolbarHostingController: UIHostingController<IOSTextFormatti
         
         // Set up flexible height constraints to avoid conflicts
         setupFlexibleConstraints()
-        
-        // Add stroke at the top of the toolbar
-        setupStroke()
     }
     
     private func setupFlexibleConstraints() {
@@ -1000,22 +998,9 @@ class IOSFormattingToolbarHostingController: UIHostingController<IOSTextFormatti
         // Remove existing stroke if any
         strokeView?.removeFromSuperview()
         
-        // Create stroke view
-        let stroke = UIView()
-        stroke.backgroundColor = UIColor.label.withAlphaComponent(0.1)
-        stroke.translatesAutoresizingMaskIntoConstraints = false
-        
-        view.addSubview(stroke)
-        
-        // Position stroke at the very top of the toolbar
-        NSLayoutConstraint.activate([
-            stroke.topAnchor.constraint(equalTo: view.topAnchor),
-            stroke.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            stroke.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            stroke.heightAnchor.constraint(equalToConstant: 0.5)
-        ])
-        
-        strokeView = stroke
+        // Instead of adding a UIView to UIHostingController, we'll use SwiftUI
+        // The stroke will be handled by the SwiftUI view itself
+        strokeView = nil
     }
 }
 
