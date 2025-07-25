@@ -62,11 +62,11 @@ struct LibraryView: View {
                         .padding()
                 } else {
                     ForEach(libraryService.libraryItems) { item in
-                        LibraryItemRow(item: item, isEditing: self.isEditingList, libraryService: libraryService) {
+                        LibraryItemRow(item: item, isEditing: self.isEditingList, deleteAction: {
                             if let index = libraryService.libraryItems.firstIndex(where: { $0.id == item.id }) {
                                 deleteItems(offsets: IndexSet(integer: index))
                             }
-                        }
+                        }, libraryService: libraryService)
                     }
                 }
             }
