@@ -19,7 +19,7 @@ struct DocumentRow: View {
     @State private var showCalendarContext = false
     
     // Use ColorManager from the app to get consistent tag colors
-    @ObservedObject private var colorManager = TagColorManager.shared
+    private let colorManager = TagColorManager.shared
     
     var body: some View {
         HStack(spacing: 0) {

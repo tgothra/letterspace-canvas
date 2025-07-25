@@ -3307,7 +3307,7 @@ struct ScriptureModalContainer<Content: View>: View {
 struct GlassmorphismBackground: ViewModifier {
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.themeColors) var theme
-    @ObservedObject var gradientManager: GradientWallpaperManager
+    let gradientManager: GradientWallpaperManager
     
     let cornerRadius: CGFloat
     let isActive: Bool // Whether to show glassmorphism or default background

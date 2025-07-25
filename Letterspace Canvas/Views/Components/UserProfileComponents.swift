@@ -13,7 +13,7 @@ struct UserProfilePopupContent: View {
     private let appearanceController = AppearanceController.shared
     @Binding var activePopup: ActivePopup // Keep if needed for other logic
     @Binding var isPresented: Bool
-    @ObservedObject var gradientManager: GradientWallpaperManager  // Changed from let to @ObservedObject
+    let gradientManager: GradientWallpaperManager
     @State private var userProfile = UserProfileManager.shared.userProfile
     @State private var isImagePickerPresented = false
     @State private var isImageCropperPresented = false
