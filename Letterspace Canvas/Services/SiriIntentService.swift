@@ -37,105 +37,73 @@ class SiriIntentService: NSObject, ObservableObject {
     
     // MARK: - Document Creation Intents
     private func registerDocumentIntents() {
-        // Create New Document Intent
-        let createDocumentIntent = INIntent()
-        createDocumentIntent.identifier = "CreateDocumentIntent"
+        // iOS 26 Enhancement: Use user activity-based intents for better integration
+        let createDocumentActivity = NSUserActivity(activityType: "com.letterspacecanvas.createDocument")
+        createDocumentActivity.title = "Create New Document"
+        createDocumentActivity.suggestedInvocationPhrase = "Create a new document"
+        createDocumentActivity.isEligibleForSearch = true
+        createDocumentActivity.isEligibleForPrediction = true
         
-        // Create Sermon Document Intent
-        let createSermonIntent = INIntent()
-        createSermonIntent.identifier = "CreateSermonIntent"
+        let createSermonActivity = NSUserActivity(activityType: "com.letterspacecanvas.createSermon")
+        createSermonActivity.title = "Create Sermon Document"
+        createSermonActivity.suggestedInvocationPhrase = "Create a new sermon"
+        createSermonActivity.isEligibleForSearch = true
+        createSermonActivity.isEligibleForPrediction = true
         
-        // Donate intents to Siri for learning
-        let createDocInteraction = INInteraction(intent: createDocumentIntent, response: nil)
-        createDocInteraction.donate { error in
-            if let error = error {
-                print("🎤 Error donating create document intent: \(error)")
-            } else {
-                print("🎤 Successfully donated create document intent")
-            }
-        }
+        // Donate activities to Siri for learning
+        createDocumentActivity.becomeCurrent()
+        createSermonActivity.becomeCurrent()
         
-        let createSermonInteraction = INInteraction(intent: createSermonIntent, response: nil)
-        createSermonInteraction.donate { error in
-            if let error = error {
-                print("🎤 Error donating create sermon intent: \(error)")
-            } else {
-                print("🎤 Successfully donated create sermon intent")
-            }
-        }
+        print("🎤 Successfully registered document creation intents via user activities")
     }
     
     // MARK: - Bible Verse Intents
     private func registerBibleIntents() {
-        // Add Bible Verse Intent
-        let addVerseIntent = INIntent()
-        addVerseIntent.identifier = "AddBibleVerseIntent"
+        let addVerseActivity = NSUserActivity(activityType: "com.letterspacecanvas.addBibleVerse")
+        addVerseActivity.title = "Add Bible Verse"
+        addVerseActivity.suggestedInvocationPhrase = "Add a Bible verse about faith"
+        addVerseActivity.isEligibleForSearch = true
+        addVerseActivity.isEligibleForPrediction = true
         
-        // Search Scripture Intent
-        let searchScriptureIntent = INIntent()
-        searchScriptureIntent.identifier = "SearchScriptureIntent"
+        let searchScriptureActivity = NSUserActivity(activityType: "com.letterspacecanvas.searchScripture")
+        searchScriptureActivity.title = "Search Scripture"
+        searchScriptureActivity.suggestedInvocationPhrase = "Find Bible verse about hope"
+        searchScriptureActivity.isEligibleForSearch = true
+        searchScriptureActivity.isEligibleForPrediction = true
         
-        // Donate Bible intents
-        let addVerseInteraction = INInteraction(intent: addVerseIntent, response: nil)
-        addVerseInteraction.donate { error in
-            if let error = error {
-                print("🎤 Error donating add verse intent: \(error)")
-            } else {
-                print("🎤 Successfully donated add verse intent")
-            }
-        }
+        // Donate activities
+        addVerseActivity.becomeCurrent()
+        searchScriptureActivity.becomeCurrent()
         
-        let searchScriptureInteraction = INInteraction(intent: searchScriptureIntent, response: nil)
-        searchScriptureInteraction.donate { error in
-            if let error = error {
-                print("🎤 Error donating search scripture intent: \(error)")
-            } else {
-                print("🎤 Successfully donated search scripture intent")
-            }
-        }
+        print("🎤 Successfully registered Bible verse intents via user activities")
     }
     
     // MARK: - Library Search Intents
     private func registerLibraryIntents() {
-        // Search Library Intent
-        let searchLibraryIntent = INIntent()
-        searchLibraryIntent.identifier = "SearchLibraryIntent"
+        let searchLibraryActivity = NSUserActivity(activityType: "com.letterspacecanvas.searchLibrary")
+        searchLibraryActivity.title = "Search Library"
+        searchLibraryActivity.suggestedInvocationPhrase = "Search my library for sermons"
+        searchLibraryActivity.isEligibleForSearch = true
+        searchLibraryActivity.isEligibleForPrediction = true
         
-        // Find Sermon Intent
-        let findSermonIntent = INIntent()
-        findSermonIntent.identifier = "FindSermonIntent"
+        let findSermonActivity = NSUserActivity(activityType: "com.letterspacecanvas.findSermon")
+        findSermonActivity.title = "Find Sermon"
+        findSermonActivity.suggestedInvocationPhrase = "Find sermon about grace"
+        findSermonActivity.isEligibleForSearch = true
+        findSermonActivity.isEligibleForPrediction = true
         
-        // Show Recent Documents Intent
-        let showRecentIntent = INIntent()
-        showRecentIntent.identifier = "ShowRecentDocumentsIntent"
+        let showRecentActivity = NSUserActivity(activityType: "com.letterspacecanvas.showRecent")
+        showRecentActivity.title = "Show Recent Documents"
+        showRecentActivity.suggestedInvocationPhrase = "Show my recent documents"
+        showRecentActivity.isEligibleForSearch = true
+        showRecentActivity.isEligibleForPrediction = true
         
-        // Donate library intents
-        let searchLibraryInteraction = INInteraction(intent: searchLibraryIntent, response: nil)
-        searchLibraryInteraction.donate { error in
-            if let error = error {
-                print("🎤 Error donating search library intent: \(error)")
-            } else {
-                print("🎤 Successfully donated search library intent")
-            }
-        }
+        // Donate activities
+        searchLibraryActivity.becomeCurrent()
+        findSermonActivity.becomeCurrent()
+        showRecentActivity.becomeCurrent()
         
-        let findSermonInteraction = INInteraction(intent: findSermonIntent, response: nil)
-        findSermonInteraction.donate { error in
-            if let error = error {
-                print("🎤 Error donating find sermon intent: \(error)")
-            } else {
-                print("🎤 Successfully donated find sermon intent")
-            }
-        }
-        
-        let showRecentInteraction = INInteraction(intent: showRecentIntent, response: nil)
-        showRecentInteraction.donate { error in
-            if let error = error {
-                print("🎤 Error donating show recent intent: \(error)")
-            } else {
-                print("🎤 Successfully donated show recent intent")
-            }
-        }
+        print("🎤 Successfully registered library search intents via user activities")
     }
     
     // MARK: - Intent Handlers
@@ -249,31 +217,31 @@ class SiriIntentService: NSObject, ObservableObject {
     func createVoiceShortcuts() {
         guard #available(iOS 12.0, *) else { return }
         
-        // Create shortcuts for common actions
+        // iOS 26 Enhancement: Use NSUserActivity-based shortcuts for better integration
         let shortcuts = [
             createVoiceShortcut(
                 phrase: "Create new document",
-                identifier: "CreateDocumentIntent",
+                activityType: "com.letterspacecanvas.createDocument",
                 title: "Create New Document"
             ),
             createVoiceShortcut(
                 phrase: "Create sermon document",
-                identifier: "CreateSermonIntent", 
+                activityType: "com.letterspacecanvas.createSermon",
                 title: "Create Sermon Document"
             ),
             createVoiceShortcut(
                 phrase: "Add Bible verse",
-                identifier: "AddBibleVerseIntent",
+                activityType: "com.letterspacecanvas.addBibleVerse",
                 title: "Add Bible Verse"
             ),
             createVoiceShortcut(
                 phrase: "Search my library",
-                identifier: "SearchLibraryIntent",
+                activityType: "com.letterspacecanvas.searchLibrary",
                 title: "Search Library"
             ),
             createVoiceShortcut(
                 phrase: "Show recent documents",
-                identifier: "ShowRecentDocumentsIntent",
+                activityType: "com.letterspacecanvas.showRecent",
                 title: "Show Recent Documents"
             )
         ]
@@ -281,11 +249,14 @@ class SiriIntentService: NSObject, ObservableObject {
         print("🎤 Created \(shortcuts.count) voice shortcuts")
     }
     
-    private func createVoiceShortcut(phrase: String, identifier: String, title: String) -> INShortcut {
-        let intent = INIntent()
-        intent.identifier = identifier
+    private func createVoiceShortcut(phrase: String, activityType: String, title: String) -> INShortcut {
+        let activity = NSUserActivity(activityType: activityType)
+        activity.title = title
+        activity.suggestedInvocationPhrase = phrase
+        activity.isEligibleForSearch = true
+        activity.isEligibleForPrediction = true
         
-        let shortcut = INShortcut(intent: intent)
+        let shortcut = INShortcut(userActivity: activity)
         return shortcut
     }
 }

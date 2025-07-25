@@ -2,119 +2,166 @@
 import Foundation
 import Intents
 
-// MARK: - iOS 26 Custom Intent Definitions
+// MARK: - iOS 26 Intent Handler Classes
+// Note: iOS 26 uses a simplified approach for custom intents
+// These are intent handler classes that work with the system-provided INIntent
 
-// MARK: - Document Creation Intents
+// MARK: - Document Creation Intent Handlers
 @available(iOS 26.0, *)
-class CreateDocumentIntent: INIntent {
-    @NSManaged public var documentType: String?
-    @NSManaged public var title: String?
+class CreateDocumentIntentHandler: NSObject {
+    static let intentIdentifier = "CreateDocumentIntent"
     
-    override init() {
-        super.init()
-        self.identifier = "CreateDocumentIntent"
-    }
-    
-    required init?(coder: NSCoder) {
-        super.init(coder: coder)
+    func handle(intent: INIntent, completion: @escaping (INIntentResponse) -> Void) {
+        print("🎤 Handling create document intent")
+        
+        // Create document via Siri service
+        let document = SiriIntentService.shared.handleCreateDocument(type: .general)
+        
+        let response = CreateDocumentIntentResponse(
+            documentId: document.id,
+            documentTitle: document.title
+        )
+        
+        completion(response)
     }
 }
 
 @available(iOS 26.0, *)
-class CreateSermonIntent: INIntent {
-    @NSManaged public var sermonTitle: String?
-    @NSManaged public var sermonSeries: String?
-    @NSManaged public var scripture: String?
+class CreateSermonIntentHandler: NSObject {
+    static let intentIdentifier = "CreateSermonIntent"
     
-    override init() {
-        super.init()
-        self.identifier = "CreateSermonIntent"
-    }
-    
-    required init?(coder: NSCoder) {
-        super.init(coder: coder)
-    }
-}
-
-// MARK: - Bible Verse Intents
-@available(iOS 26.0, *)
-class AddBibleVerseIntent: INIntent {
-    @NSManaged public var topic: String?
-    @NSManaged public var specificReference: String?
-    @NSManaged public var translation: String?
-    
-    override init() {
-        super.init()
-        self.identifier = "AddBibleVerseIntent"
-    }
-    
-    required init?(coder: NSCoder) {
-        super.init(coder: coder)
+    func handle(intent: INIntent, completion: @escaping (INIntentResponse) -> Void) {
+        print("🎤 Handling create sermon intent")
+        
+        let document = SiriIntentService.shared.handleCreateDocument(type: .sermon)
+        
+        let response = CreateDocumentIntentResponse(
+            documentId: document.id,
+            documentTitle: document.title
+        )
+        
+        completion(response)
     }
 }
 
+// MARK: - Bible Verse Intent Handlers
 @available(iOS 26.0, *)
-class SearchScriptureIntent: INIntent {
-    @NSManaged public var searchTerm: String?
-    @NSManaged public var book: String?
-    @NSManaged public var translation: String?
+class AddBibleVerseIntentHandler: NSObject {
+    static let intentIdentifier = "AddBibleVerseIntent"
     
-    override init() {
-        super.init()
-        self.identifier = "SearchScriptureIntent"
-    }
-    
-    required init?(coder: NSCoder) {
-        super.init(coder: coder)
-    }
-}
-
-// MARK: - Library Search Intents
-@available(iOS 26.0, *)
-class SearchLibraryIntent: INIntent {
-    @NSManaged public var query: String?
-    @NSManaged public var documentType: String?
-    @NSManaged public var author: String?
-    
-    override init() {
-        super.init()
-        self.identifier = "SearchLibraryIntent"
-    }
-    
-    required init?(coder: NSCoder) {
-        super.init(coder: coder)
+    func handle(intent: INIntent, topic: String?, completion: @escaping (INIntentResponse) -> Void) {
+        print("🎤 Handling add Bible verse intent for topic: \(topic ?? "unknown")")
+        
+        Task {
+            let verseResult = await SiriIntentService.shared.handleAddBibleVerse(topic: topic ?? "faith")
+            
+            let response: AddBibleVerseIntentResponse
+            if verseResult.contains("Error") {
+                response = AddBibleVerseIntentResponse(error: verseResult)
+            } else {
+                response = AddBibleVerseIntentResponse(
+                    verseText: verseResult,
+                    reference: "Scripture reference"
+                )
+            }
+            
+            await MainActor.run {
+                completion(response)
+            }
+        }
     }
 }
 
 @available(iOS 26.0, *)
-class FindSermonIntent: INIntent {
-    @NSManaged public var topic: String?
-    @NSManaged public var speaker: String?
-    @NSManaged public var series: String?
-    @NSManaged public var dateRange: String?
+class SearchScriptureIntentHandler: NSObject {
+    static let intentIdentifier = "SearchScriptureIntent"
     
-    override init() {
-        super.init()
-        self.identifier = "FindSermonIntent"
+    func handle(intent: INIntent, searchTerm: String?, completion: @escaping (INIntentResponse) -> Void) {
+        print("🎤 Handling search scripture intent for: \(searchTerm ?? "unknown")")
+        
+        Task {
+            let verseResult = await SiriIntentService.shared.handleAddBibleVerse(topic: searchTerm ?? "scripture")
+            
+            let response: AddBibleVerseIntentResponse
+            if verseResult.contains("Error") {
+                response = AddBibleVerseIntentResponse(error: verseResult)
+            } else {
+                response = AddBibleVerseIntentResponse(
+                    verseText: verseResult,
+                    reference: "Search result"
+                )
+            }
+            
+            await MainActor.run {
+                completion(response)
+            }
+        }
     }
+}
+
+// MARK: - Library Search Intent Handlers
+@available(iOS 26.0, *)
+class SearchLibraryIntentHandler: NSObject {
+    static let intentIdentifier = "SearchLibraryIntent"
     
-    required init?(coder: NSCoder) {
-        super.init(coder: coder)
+    func handle(intent: INIntent, query: String?, completion: @escaping (INIntentResponse) -> Void) {
+        print("🎤 Handling search library intent for: \(query ?? "unknown")")
+        
+        Task {
+            let results = await SiriIntentService.shared.handleSearchLibrary(query: query ?? "documents")
+            let resultTitles = results.map { $0.title }
+            
+            let response = SearchLibraryIntentResponse(
+                resultCount: results.count,
+                results: resultTitles
+            )
+            
+            await MainActor.run {
+                completion(response)
+            }
+        }
     }
 }
 
 @available(iOS 26.0, *)
-class ShowRecentDocumentsIntent: INIntent {
-    @NSManaged public var count: NSNumber?
-    @NSManaged public var documentType: String?
+class FindSermonIntentHandler: NSObject {
+    static let intentIdentifier = "FindSermonIntent"
     
-    override init() {
-        super.init()
-        self.identifier = "ShowRecentDocumentsIntent"
+    func handle(intent: INIntent, topic: String?, completion: @escaping (INIntentResponse) -> Void) {
+        print("🎤 Handling find sermon intent for topic: \(topic ?? "unknown")")
+        
+        Task {
+            let results = await SiriIntentService.shared.handleSearchLibrary(query: "\(topic ?? "sermon") sermon")
+            let resultTitles = results.map { $0.title }
+            
+            let response = SearchLibraryIntentResponse(
+                resultCount: results.count,
+                results: resultTitles
+            )
+            
+            await MainActor.run {
+                completion(response)
+            }
+        }
     }
+}
+
+@available(iOS 26.0, *)
+class ShowRecentDocumentsIntentHandler: NSObject {
+    static let intentIdentifier = "ShowRecentDocumentsIntent"
     
-    required init?(coder: NSCoder) {
-        super.init(coder: coder)
+    func handle(intent: INIntent, completion: @escaping (INIntentResponse) -> Void) {
+        print("🎤 Handling show recent documents intent")
+        
+        let documents = SiriIntentService.shared.handleShowRecentDocuments()
+        let documentTitles = documents.map { $0.title }
+        
+        let response = SearchLibraryIntentResponse(
+            resultCount: documents.count,
+            results: documentTitles
+        )
+        
+        completion(response)
     }
 }
 
