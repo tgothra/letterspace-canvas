@@ -184,26 +184,38 @@ class SiriIntentService: NSObject, ObservableObject {
         lastCommand = "Search library for \(query)"
         
         let libraryService = UserLibraryService()
-        let results = libraryService.searchLibrary(query: query)
         
-        lastResult = "Found \(results.count) results for '\(query)'"
+        // Use the UserLibraryService's existing search method
+        let searchResults = libraryService.searchLibrary(query: query)
+        
+        // Convert LibrarySearchResult to UserLibraryItem for return
+        let items = searchResults.compactMap { result in
+            // Find the original library item that contains this chunk
+            return libraryService.libraryItems.first { item in
+                item.chunks?.contains { chunk in
+                    chunk.id == result.chunk.id
+                } == true
+            }
+        }
+        
+        lastResult = "Found \(items.count) results for '\(query)'"
         
         // iOS 26 Enhancement: Contextual haptic feedback
-        if results.isEmpty {
+        if items.isEmpty {
             HapticFeedback.impact(.medium, intensity: 0.5)
         } else {
             HapticFeedback.impact(.light, intensity: 0.8)
         }
         
-        return results
+        return Array(Set(items)) // Remove duplicates
     }
     
     func handleShowRecentDocuments() -> [Letterspace_CanvasDocument] {
         print("🎤 Handling show recent documents via Siri")
         lastCommand = "Show recent documents"
         
-        // Get recent documents from document manager
-        let recentDocs = DocumentManager.shared.getRecentDocuments(limit: 10)
+        // For now, return empty array - this would integrate with your document storage system
+        let recentDocs: [Letterspace_CanvasDocument] = []
         
         lastResult = "Showing \(recentDocs.count) recent documents"
         
@@ -269,28 +281,8 @@ enum DocumentType: String, CaseIterable {
     case notes = "notes"
 }
 
-// MARK: - Document Manager Extension
-extension DocumentManager {
-    static let shared = DocumentManager()
-    
-    func getRecentDocuments(limit: Int = 10) -> [Letterspace_CanvasDocument] {
-        // This would integrate with your existing document storage
-        // For now, return empty array - you can implement based on your storage system
-        return []
-    }
-}
-
-// MARK: - UserLibraryService Extension
-extension UserLibraryService {
-    func searchLibrary(query: String) -> [UserLibraryItem] {
-        // Filter library items based on query
-        return libraryItems.filter { item in
-            item.title.localizedCaseInsensitiveContains(query) ||
-            item.chunks.contains { chunk in
-                chunk.text.localizedCaseInsensitiveContains(query)
-            }
-        }
-    }
-}
+// Note: Integration with document storage system would go here
+// The handleShowRecentDocuments method can be enhanced to work with
+// your existing document management system when ready
 
 #endif 
