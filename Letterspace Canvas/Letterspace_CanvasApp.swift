@@ -115,6 +115,12 @@ struct Letterspace_CanvasApp: App {
     @UIApplicationDelegateAdaptor(iPadAppDelegate.self) var appDelegate
     // For iOS, we will need an alternative to DocumentTableWrapper if it was used globally
     // or ensure that views like HomeView use SwiftUI native lists or a UIViewRepresentable for UITableView.
+    
+    // iOS 26 Enhancement: Initialize Siri integration
+    @available(iOS 26.0, *)
+    private var siriService: SiriIntentService {
+        SiriIntentService.shared
+    }
     #endif
     
     init() {

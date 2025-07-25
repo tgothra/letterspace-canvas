@@ -77,6 +77,9 @@ public enum ActivePopup {
     case userProfile
     case recentlyDeleted
     case organizeDocuments  // New case for document organization
+    #if os(iOS)
+    case siri  // iOS 26 Enhancement: Siri integration popup
+    #endif
 }
 
 // DocumentCacheManager has been moved to Letterspace Canvas/Shared/DocumentCacheManager.swift
@@ -151,6 +154,9 @@ struct MainLayout: View {
     @State private var showUserProfileModal = false  // New state variable for user profile modal
     @State private var showSmartStudyModal = false   // New state variable for Smart Study modal
     @State private var smartStudyPreloaded = false // Track if Smart Study has been preloaded
+    #if os(iOS)
+    @State private var showSiriModal = false // iOS 26 Enhancement: Siri integration modal
+    #endif
     @State private var showScriptureSearchModal = false // New state variable for Scripture Search modal
     @State private var showBibleReaderModal = false  // New state variable for Bible Reader modal
     @State private var showLeftSidebarSheet: Bool = false // Added missing state variable for iPad sidebar sheet
@@ -507,6 +513,33 @@ struct MainLayout: View {
                         ))
                     }
                 }
+                
+                // iOS 26 Enhancement: Siri Integration Modal
+                #if os(iOS)
+                if #available(iOS 26.0, *), showSiriModal {
+                    ZStack {
+                        // Background overlay
+                        Rectangle()
+                            .fill(.black.opacity(0.3))
+                            .contentShape(Rectangle())
+                            .ignoresSafeArea()
+                            .onTapGesture {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    showSiriModal = false
+                                }
+                            }
+                        LazyModalContainer {
+                            SiriIntegrationView()
+                        }
+                        .fixedSize()
+                        .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 10)
+                        .transition(.asymmetric(
+                            insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .center)),
+                            removal: .opacity.combined(with: .scale(scale: 0.95, anchor: .center))
+                        ))
+                    }
+                }
+                #endif
                 #endif
             }
             .overlay {
