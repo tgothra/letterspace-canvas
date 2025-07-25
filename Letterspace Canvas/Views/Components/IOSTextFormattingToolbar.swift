@@ -200,7 +200,7 @@ struct IOSTextFormattingToolbar: View {
         .gesture(
             DragGesture(coordinateSpace: .named("toolbar"))
                 .onChanged { value in
-                    let currentOffset = value.translation.x
+                    let currentOffset: CGFloat = value.translation.x
                     scrollVelocity = currentOffset - lastScrollOffset
                     lastScrollOffset = currentOffset
                     
@@ -280,90 +280,6 @@ struct IOSTextFormattingToolbar: View {
 }
 
 // MARK: - Supporting Views
-private struct MainToolbarView: View {
-    let currentTextStyle: String?
-    let isBold: Bool
-    let isItalic: Bool
-    let isUnderlined: Bool
-    let hasLink: Bool
-    let hasBulletList: Bool
-    let hasTextColor: Bool
-    let hasHighlight: Bool
-    let hasBookmark: Bool
-    let currentTextColor: Color?
-    let currentHighlightColor: Color?
-    let onShowStylePicker: () -> Void
-    let onBold: () -> Void
-    let onItalic: () -> Void
-    let onUnderline: () -> Void
-    let onShowLinkPicker: () -> Void
-    let onBulletList: () -> Void
-    let onShowColorPicker: () -> Void
-    let onShowHighlightPicker: () -> Void
-    let onShowAlignmentPicker: () -> Void
-    let onBookmark: () -> Void
-    @Environment(\.colorScheme) var colorScheme
-    
-    var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 0) {
-                // Left Group: Text Style - Style, Bold, Italic, Underline
-                HStack(spacing: 12) {
-                    IOSTextButton(text: currentTextStyle ?? "Style", isActive: currentTextStyle != nil && currentTextStyle != "Body", action: onShowStylePicker)
-                    IOSTextButton(text: "Bold", isBold: true, isActive: isBold, action: onBold)
-                    IOSTextButton(text: "Italic", isItalic: true, isActive: isItalic, action: onItalic)
-                    IOSTextButton(text: "Underline", isUnderlined: true, isActive: isUnderlined, action: onUnderline)
-                }
-                
-                // Separator 1
-                Rectangle()
-                    .fill(Color.primary.opacity(0.2))
-                    .frame(width: 1, height: 30)
-                    .padding(.horizontal, 20)
-                
-                // Center Group: Text Enhancement - Text Color, Highlighter, Bookmark
-                HStack(spacing: 12) {
-                    IOSTextButton(text: "Text Color", isActive: hasTextColor, action: onShowColorPicker)
-                    IOSTextButton(text: "Highlighter", isActive: hasHighlight, action: onShowHighlightPicker)
-                    IOSTextButton(text: "Bookmark", isActive: hasBookmark, action: onBookmark)
-                }
-                
-                // Separator 2
-                Rectangle()
-                    .fill(Color.primary.opacity(0.2))
-                    .frame(width: 1, height: 30)
-                    .padding(.horizontal, 20)
-                
-                // Right Group: Structure - Link, Bullet, Alignment
-                HStack(spacing: 12) {
-                    IOSTextButton(text: "Link", isActive: hasLink, action: onShowLinkPicker)
-                    IOSTextButton(text: "Bullet", isActive: hasBulletList, action: onBulletList)
-                    IOSTextButton(text: "Alignment", action: onShowAlignmentPicker)
-                }
-                
-                // Separator 3
-                Rectangle()
-                    .fill(Color.primary.opacity(0.2))
-                    .frame(width: 1, height: 30)
-                    .padding(.horizontal, 20)
-                
-                // Keyboard dismissal button
-                IOSToolbarButton(icon: "keyboard.chevron.compact.down") {
-                    // Dismiss the keyboard
-                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-                }
-            }
-            .padding(.horizontal, 16)
-        }
-        .scrollDisabled(false) // Ensure scrolling is enabled
-        .scrollBounceBehavior(.basedOnSize) // Add bounce for better scroll feedback
-        .scrollTargetBehavior(.viewAligned) // Better scroll targeting
-        .frame(maxHeight: .infinity)
-        .frame(maxWidth: .infinity)
-        .background(Color(UIColor.systemBackground).opacity(0.95))
-    }
-}
-
 private struct InlineColorPickerView: View {
     let title: String
     let colors: [Color]
