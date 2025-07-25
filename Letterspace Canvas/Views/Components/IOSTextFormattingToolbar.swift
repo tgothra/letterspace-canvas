@@ -198,9 +198,10 @@ struct IOSTextFormattingToolbar: View {
         .coordinateSpace(name: "toolbar")
         // iOS 26 Enhancement: Advanced gesture tracking for better responsiveness
         .gesture(
-            DragGesture(coordinateSpace: .named("toolbar"))
+            DragGesture()
                 .onChanged { value in
-                    let currentOffset: CGFloat = value.translation.x
+                    let translation = value.translation
+                    let currentOffset: CGFloat = translation.x
                     scrollVelocity = currentOffset - lastScrollOffset
                     lastScrollOffset = currentOffset
                     
