@@ -189,12 +189,23 @@ class SiriIntentService: NSObject, ObservableObject {
         let searchResults = libraryService.searchLibrary(query: query)
         
         // Convert LibrarySearchResult to UserLibraryItem for return
-        let items = searchResults.compactMap { result in
+        var items: [UserLibraryItem] = []
+        
+        for result in searchResults {
             // Find the original library item that contains this chunk
-            return libraryService.libraryItems.first { item in
-                item.chunks?.contains { chunk in
-                    chunk.id == result.chunk.id
-                } == true
+            for item in libraryService.libraryItems {
+                if let chunks = item.chunks {
+                    let containsChunk = chunks.contains { chunk in
+                        chunk.id == result.chunk.id
+                    }
+                    if containsChunk {
+                        // Avoid duplicates by checking if already added
+                        if !items.contains(where: { $0.id == item.id }) {
+                            items.append(item)
+                        }
+                        break
+                    }
+                }
             }
         }
         
@@ -207,7 +218,7 @@ class SiriIntentService: NSObject, ObservableObject {
             HapticFeedback.impact(.light, intensity: 0.8)
         }
         
-        return Array(Set(items)) // Remove duplicates
+        return items
     }
     
     func handleShowRecentDocuments() -> [Letterspace_CanvasDocument] {
