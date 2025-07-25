@@ -10,7 +10,7 @@ import UIKit
 struct UserProfilePopupContent: View {
     @Environment(\.themeColors) var theme
     @Environment(\.colorScheme) var colorScheme
-    @EnvironmentObject var appearanceController: AppearanceController
+    private let appearanceController = AppearanceController.shared
     @Binding var activePopup: ActivePopup // Keep if needed for other logic
     @Binding var isPresented: Bool
     @ObservedObject var gradientManager: GradientWallpaperManager  // Changed from let to @ObservedObject

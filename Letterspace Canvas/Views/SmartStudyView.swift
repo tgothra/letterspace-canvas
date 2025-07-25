@@ -524,7 +524,7 @@ struct SmartStudyView: View {
     var onDismiss: () -> Void
     
     // View Models and Services
-    @StateObject private var libraryService: UserLibraryService = {
+    @State private var libraryService: UserLibraryService = {
         return UserLibraryService()
     }()
     @ObservedObject private var tokenService = TokenUsageService.shared
@@ -635,8 +635,7 @@ struct SmartStudyView: View {
                 upgradeView
             }
             .sheet(isPresented: $showLibrarySheet) {
-                LibraryView()
-                    .environmentObject(libraryService)
+                LibraryView(libraryService: libraryService)
             }
             .sheet(isPresented: $showingPastStudiesSheet) {
                 // Past Studies Sheet for iPhone - iOS 26 exclusive

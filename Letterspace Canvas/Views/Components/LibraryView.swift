@@ -7,7 +7,7 @@ import UIKit
 #endif
 
 struct LibraryView: View {
-    @EnvironmentObject var libraryService: UserLibraryService
+    let libraryService: UserLibraryService
     @State private var showingFileImporter = false
     @State private var showingAddLinkSheet = false
     @State private var newLinkURLString = ""
@@ -62,7 +62,7 @@ struct LibraryView: View {
                         .padding()
                 } else {
                     ForEach(libraryService.libraryItems) { item in
-                        LibraryItemRow(item: item, isEditing: self.isEditingList) {
+                        LibraryItemRow(item: item, isEditing: self.isEditingList, libraryService: libraryService) {
                             if let index = libraryService.libraryItems.firstIndex(where: { $0.id == item.id }) {
                                 deleteItems(offsets: IndexSet(integer: index))
                             }
@@ -316,7 +316,7 @@ struct LibraryItemRow: View {
     let deleteAction: () -> Void // Action to perform on delete
     
     // Access to the library service to get the full path
-    @EnvironmentObject var libraryService: UserLibraryService 
+    let libraryService: UserLibraryService 
 
     var body: some View {
         HStack {
@@ -435,7 +435,7 @@ struct AddLinkSheet: View {
 // Preview
 struct LibraryView_Previews: PreviewProvider {
     // Create a static instance for the preview
-    @StateObject static var mockService = UserLibraryService()
+    static let mockService = UserLibraryService()
     
     static var previews: some View {
         // Create mock chunks (optional, could be nil or empty)
@@ -448,7 +448,6 @@ struct LibraryView_Previews: PreviewProvider {
             UserLibraryItem(id: UUID(), type: .webLink, title: "example.com", source: "https://example.com", chunks: mockLinkChunks, dateAdded: Date(), isEmbeddingComplete: false)
         ]
         
-        return LibraryView()
-            .environmentObject(mockService) // Inject the static mock instance
+        return LibraryView(libraryService: mockService)
     }
 } 

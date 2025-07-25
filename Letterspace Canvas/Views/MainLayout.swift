@@ -134,7 +134,7 @@ struct MainLayout: View {
     @Environment(\.themeColors) var theme
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.horizontalSizeClass) var horizontalSizeClass // For iPadOS adaptation
-    @EnvironmentObject private var appearanceController: AppearanceController
+    private let appearanceController = AppearanceController.shared
     @State private var transitionOpacity = 1.0
     @State private var isScrolling = false
     @State private var scrollTimer: Timer?
