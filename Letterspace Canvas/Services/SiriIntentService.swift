@@ -192,20 +192,12 @@ class SiriIntentService: NSObject, ObservableObject {
         var items: [UserLibraryItem] = []
         
         for result in searchResults {
-            // Find the original library item that contains this chunk
-            for item in libraryService.libraryItems {
-                if let chunks = item.chunks {
-                    let containsChunk = chunks.contains { chunk in
-                        chunk.id == result.chunk.id
-                    }
-                    if containsChunk {
-                        // Avoid duplicates by checking if already added
-                        if !items.contains(where: { $0.id == item.id }) {
-                            items.append(item)
-                        }
-                        break
-                    }
-                }
+            // LibrarySearchResult already contains the item we need
+            let item = result.item
+            
+            // Avoid duplicates by checking if already added
+            if !items.contains(where: { $0.id == item.id }) {
+                items.append(item)
             }
         }
         
