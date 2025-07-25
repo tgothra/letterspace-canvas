@@ -201,7 +201,7 @@ struct IOSTextFormattingToolbar: View {
             DragGesture()
                 .onChanged { value in
                     let translation = value.translation
-                    let currentOffset: CGFloat = translation.x
+                    let currentOffset: CGFloat = translation.width
                     scrollVelocity = currentOffset - lastScrollOffset
                     lastScrollOffset = currentOffset
                     
