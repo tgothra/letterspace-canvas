@@ -146,7 +146,6 @@ struct Letterspace_CanvasApp: App {
                 .ignoresSafeArea() // .ignoresSafeArea() is generally fine for both
                 // Apply the color scheme preference
                 .preferredColorScheme(appearanceController.colorScheme)
-                .environmentObject(appearanceController)
                 .onAppear {
                     // Set appearance when app first loads
                     appearanceController.setAppearance()
