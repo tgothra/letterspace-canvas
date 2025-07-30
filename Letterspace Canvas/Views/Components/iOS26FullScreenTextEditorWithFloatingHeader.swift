@@ -429,10 +429,8 @@ struct iOS26FullScreenTextEditorWithFloatingHeader: View {
         // Load header image if available
         if let headerElement = document.elements.first(where: { $0.type == .headerImage && !$0.content.isEmpty }) {
             // Try to load from cache first
-            if let cachedImage = ImageCache.shared.getImage(for: headerElement.content) {
-                #if os(iOS)
+            if let cachedImage = ImageCache.shared.image(for: headerElement.content) {
                 headerImage = cachedImage
-                #endif
             } else {
                 // Load from file path
                 let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
