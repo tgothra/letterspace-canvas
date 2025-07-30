@@ -44,7 +44,8 @@ struct FloatingHeaderComponent: View {
                     isShowingImagePicker = true
                 }) {
                     if let headerImage = headerImage {
-                        Image(headerImage)
+                        #if os(macOS)
+                        Image(nsImage: headerImage)
                             .resizable()
                             .aspectRatio(contentMode: .fill)
                             .frame(width: 40, height: 40)
@@ -53,6 +54,17 @@ struct FloatingHeaderComponent: View {
                                 RoundedRectangle(cornerRadius: 8)
                                     .stroke(Color.primary.opacity(0.1), lineWidth: 1)
                             )
+                        #elseif os(iOS)
+                        Image(uiImage: headerImage)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: 40, height: 40)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                            )
+                        #endif
                     } else {
                         // Placeholder for no image
                         RoundedRectangle(cornerRadius: 8)
