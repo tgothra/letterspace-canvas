@@ -663,12 +663,13 @@ struct DocumentArea: View {
                 }
             }
             
-            // Floating header overlay - never affects layout
+            // Floating header overlay - positioned at top with proper padding
             if viewMode != .focus && !isDistractionFreeMode {
                 VStack {
                     if headerCollapseProgress < 0.85 {
                         // Full header floating above content
                         headerView
+                            .padding(.top, 24)
                             .opacity(1.0 - (headerCollapseProgress / 0.85))
                             .transition(createHeaderTransition())
                     } else {
@@ -688,7 +689,7 @@ struct DocumentArea: View {
                     
                     Spacer()
                 }
-                .allowsHitTesting(headerCollapseProgress >= 0.9)
+                .allowsHitTesting(true) // Allow interaction with header buttons
                 .onTapGesture {
                     // Cancel editing when tapping outside text fields
                     if isEditingFloatingTitle || isEditingFloatingSubtitle {
@@ -2020,6 +2021,7 @@ struct DocumentArea: View {
                     swipeDownProgress: $swipeDownProgress
                 )
                 .buttonStyle(.plain)
+                .padding(.top, 24)
                 // Remove fixed height constraint - let HeaderImageSection determine its own height
                 // .frame(height: calculateDynamicHeaderHeight()) // REMOVED: This was forcing 200px height
                 .clipped() // Only clip overflow, not the content itself
@@ -2031,6 +2033,7 @@ struct DocumentArea: View {
             } else {
                 // Show collapsed header bar for documents without header images
                 collapsedTextOnlyHeaderView
+                    .padding(.top, 24)
             }
         }
     }
