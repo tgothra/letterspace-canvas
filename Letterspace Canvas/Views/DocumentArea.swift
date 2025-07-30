@@ -1987,7 +1987,7 @@ struct DocumentArea: View {
                     onClick: {
                         // No longer needed - header images don't collapse on tap
                     },
-                    headerCollapseProgress: smoothedHeaderProgress, // Pass smoothed scaling progress for ultra-smooth slow scrolling
+                    headerCollapseProgress: $smoothedHeaderProgress, // Pass smoothed scaling progress for ultra-smooth slow scrolling
                     isTitleVisible: $isTitleVisible,
                     onDismiss: {
                         // iPhone swipe-to-dismiss callback with slide-down animation

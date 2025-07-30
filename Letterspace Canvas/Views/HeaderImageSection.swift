@@ -40,7 +40,7 @@ struct HeaderImageSection: View {
     @Binding var isHeaderExpanded: Bool
     @Binding var isEditorFocused: Bool
     let onClick: () -> Void
-    let headerCollapseProgress: CGFloat // Add scroll-based scaling parameter
+    @Binding var headerCollapseProgress: CGFloat // Add scroll-based scaling parameter
     @State private var isHoveringPhoto = false
     @State private var isHoveringX = false
     @State private var isHoveringHeader = false
