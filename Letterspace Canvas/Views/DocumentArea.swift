@@ -2071,14 +2071,9 @@ struct DocumentArea: View {
                     )
 
                 #elseif os(iOS)
-                // iOS 26 Text Editor with Scroll Detection for Header Collapse
+                // iOS 26 Native SwiftUI Text Editor with Floating Header
                 if #available(iOS 26.0, *) {
-                    iOS26ScrollDetectingTextEditor(
-                        document: $document,
-                        headerCollapseProgress: $headerCollapseProgress,
-                        text: documentTextBinding,
-                        maxScrollForCollapse: calculateDynamicMaxScrollForCollapse()
-                    )
+                    iOS26NativeTextEditorWithToolbar(document: $document)
                     .allowsHitTesting(!isAnimatingHeaderCollapse)
                     .onChange(of: headerCollapseProgress) { _, newProgress in
                         // Trigger smoothing when headerCollapseProgress changes
