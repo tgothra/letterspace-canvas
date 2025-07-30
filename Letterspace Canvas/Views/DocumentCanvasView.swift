@@ -139,9 +139,9 @@ private struct CanvasBlockView: View {
                     }
                 )
                 #elseif os(iOS)
-                // iOS 26 Enhanced Text Editor
+                // iOS 26 Full Screen Text Editor with Floating Header
                 if #available(iOS 26.0, *) {
-                    iOS26NativeTextEditorWithToolbar(document: Binding(
+                    iOS26FullScreenTextEditorWithFloatingHeader(document: Binding(
                         get: {
                             // Create a temporary document with this text block
                             var tempDoc = Letterspace_CanvasDocument()

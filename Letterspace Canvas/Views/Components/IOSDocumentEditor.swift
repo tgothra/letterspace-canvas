@@ -14,7 +14,7 @@ struct IOSDocumentEditor: View {
         VStack(spacing: 0) {
             GeometryReader { geometry in
                 if #available(iOS 26.0, *) {
-                    iOS26FullScreenTextEditor(document: $document)
+                    iOS26FullScreenTextEditorWithFloatingHeader(document: $document)
                 } else {
                     // Fallback for older iOS versions
                     SimpleIOSTextView(
