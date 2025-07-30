@@ -654,43 +654,43 @@ struct DocumentArea: View {
     // Document vertical content stack
     private func documentVStack(geo: GeometryProxy) -> some View {
                         ZStack(alignment: .top) {
-            // Full-screen text editor
+            // Main content - smooth spacer transition
             VStack(spacing: 0) {
-                // Full-screen text editor that takes up the entire available space
-                if #available(iOS 26.0, *) {
-                    iOS26NativeTextEditorWithToolbar(document: $document)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .background(Color(UIColor.systemBackground))
-                } else {
-                    // Fallback for older iOS versions
-                    IOSDocumentEditor(
-                        document: $document,
-                        onScrollChange: { scrollOffset in
-                            handleIOSScrollChange(scrollOffset: scrollOffset)
-                        }
-                    )
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Color(UIColor.systemBackground))
+                // Header section with dynamic spacer for smooth transition
+                if viewMode != .focus && !isDistractionFreeMode {
+                    // Header that continues collapsing even when invisible
+                    headerView
+                        .opacity(headerCollapseProgress < 0.85 ? 1.0 : 0.0) // Fade out header content but keep collapsing
+                        .transition(createHeaderTransition())
                 }
+                
+                // Document content - always has the same layout
+                AnimatedDocumentContainer(document: $document) {
+                    documentContentView
+                        .frame(minHeight: geo.size.height)
+                }
+                .padding(.top, 24) // Always the same padding
             }
             
-            // Floating header overlay - always visible when not in focus mode
-            if viewMode != .focus && !isDistractionFreeMode {
+            // Floating header overlay - never affects layout
+            if viewMode != .focus && !isDistractionFreeMode && headerCollapseProgress >= 0.85 {
                 VStack {
                     floatingCollapsedHeader
-                        .padding(.horizontal, 8)
+                        .padding(.horizontal, 8) // Reduced from 16 to 8 for wider appearance
                         .padding(.top, {
                             #if os(iOS)
                             let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-                            return isPhone ? 40 : 16
+                            return isPhone ? 40 : 16 // Reduced from 60/24 to 40/16 to lift higher
                             #else
-                            return 16
+                            return 16 // Reduced from 24 to 16
                             #endif
                         }())
+                        // Smooth opacity transition
+                        .opacity(max(0, min(1, (headerCollapseProgress - 0.85) / 0.15)))
                     
                     Spacer()
                 }
-                .allowsHitTesting(true)
+                .allowsHitTesting(headerCollapseProgress >= 0.9)
                 .onTapGesture {
                     // Cancel editing when tapping outside text fields
                     if isEditingFloatingTitle || isEditingFloatingSubtitle {
@@ -1791,27 +1791,27 @@ struct DocumentArea: View {
 
     private var floatingCollapsedHeader: some View {
         Group {
-            // Floating header with enhanced liquid glass effect - always show
-            ZStack {
-                if #available(iOS 26.0, *) {
-                    // Enhanced liquid glass background for floating state
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(.clear) // No material fill - let glass effect do the work
-                        .frame(width: paperWidth - 16, height: 60)
-                        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12)) // Pure glass effect without material interference
-                        .shadow(color: colorScheme == .dark ? Color.white.opacity(0.04) : Color.black.opacity(0.05), radius: 8, x: 0, y: 4) // Very minimal shadow
-                } else {
-                    // Fallback
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(colorScheme == .dark ? Color(.sRGB, red: 0.15, green: 0.15, blue: 0.15, opacity: 0.25) : Color(.sRGB, red: 0.95, green: 0.95, blue: 0.95, opacity: 0.25)) // Extremely transparent fallback
-                        .frame(width: paperWidth - 16, height: 60)
-                        .shadow(color: colorScheme == .dark ? Color.white.opacity(0.02) : Color.black.opacity(0.02), radius: 6, x: 0, y: 2) // Minimal shadow
-                }
-                
-                // Content
-                HStack(spacing: 12) {
-                    // Image thumbnail - tappable for photo selection (only show if image exists)
-                    if let headerImage = headerImage {
+            if let headerImage = headerImage {
+                // Floating header with enhanced liquid glass effect
+                ZStack {
+                    if #available(iOS 26.0, *) {
+                        // Enhanced liquid glass background for floating state
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(.clear) // No material fill - let glass effect do the work
+                            .frame(width: paperWidth - 16, height: 80)
+                            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16)) // Pure glass effect without material interference
+                            .shadow(color: colorScheme == .dark ? Color.white.opacity(0.04) : Color.black.opacity(0.05), radius: 8, x: 0, y: 4) // Very minimal shadow
+                    } else {
+                        // Fallback
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(colorScheme == .dark ? Color(.sRGB, red: 0.15, green: 0.15, blue: 0.15, opacity: 0.25) : Color(.sRGB, red: 0.95, green: 0.95, blue: 0.95, opacity: 0.25)) // Extremely transparent fallback
+                            .frame(width: paperWidth - 16, height: 80)
+                            .shadow(color: colorScheme == .dark ? Color.white.opacity(0.02) : Color.black.opacity(0.02), radius: 6, x: 0, y: 2) // Minimal shadow
+                    }
+                    
+                    // Content
+                    HStack(spacing: 12) {
+                        // Image thumbnail - tappable for photo selection
                         Button(action: {
                             // Trigger photo picker action sheet
                             showFloatingImageActionSheet = true
@@ -1820,55 +1820,33 @@ struct DocumentArea: View {
                             Image(nsImage: headerImage)
                                 .resizable()
                                 .aspectRatio(contentMode: .fill)
-                                .frame(width: 32, height: 32)
-                                .clipShape(RoundedRectangle(cornerRadius: 6))
+                                .frame(width: 40, height: 40)
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
                                 .overlay(
-                                    RoundedRectangle(cornerRadius: 6)
+                                    RoundedRectangle(cornerRadius: 8)
                                         .stroke(Color.primary.opacity(0.1), lineWidth: 1)
                                 )
                             #elseif os(iOS)
                             Image(uiImage: headerImage)
                                 .resizable()
                                 .aspectRatio(contentMode: .fill)
-                                .frame(width: 32, height: 32)
-                                .clipShape(RoundedRectangle(cornerRadius: 6))
+                                .frame(width: 40, height: 40)
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
                                 .overlay(
-                                    RoundedRectangle(cornerRadius: 6)
+                                    RoundedRectangle(cornerRadius: 8)
                                         .stroke(Color.primary.opacity(0.1), lineWidth: 1)
                                 )
                             #endif
                         }
                         .buttonStyle(.plain)
                         .help("Tap to change header image")
-                    } else {
-                        // Add image button when no image exists
-                        Button(action: {
-                            // Trigger photo picker action sheet
-                            showFloatingImageActionSheet = true
-                        }) {
-                            Image(systemName: "photo.badge.plus")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
-                                .frame(width: 32, height: 32)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 6)
-                                        .fill(colorScheme == .dark ? Color.white.opacity(0.1) : Color.black.opacity(0.1))
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 6)
-                                                .stroke(colorScheme == .dark ? Color.white.opacity(0.2) : Color.black.opacity(0.2), lineWidth: 1)
-                                        )
-                                )
-                        }
-                        .buttonStyle(.plain)
-                        .help("Add header image")
-                    }
                         
                         // Title and subtitle - tappable for editing
                         VStack(alignment: .leading, spacing: 2) {
                             // Title section
                             if isEditingFloatingTitle {
                                 TextField("Enter title", text: $floatingTitleText)
-                                    .font(.system(size: 16, weight: .semibold))
+                                    .font(.system(size: 18, weight: .semibold))
                                     .textFieldStyle(.plain)
                                     .foregroundColor(colorScheme == .dark ? .white : .black)
                                     .focused($isFloatingTitleFocused)
@@ -1889,7 +1867,7 @@ struct DocumentArea: View {
                                     isEditingFloatingTitle = true
                                 }) {
                                     Text(document.title.isEmpty ? "Untitled" : document.title)
-                                        .font(.system(size: 16, weight: .semibold))
+                                        .font(.system(size: 18, weight: .semibold))
                                         .foregroundColor(colorScheme == .dark ? .white : .black)
                                         .lineLimit(1)
                                 }
@@ -1900,7 +1878,7 @@ struct DocumentArea: View {
                             // Subtitle section
                             if isEditingFloatingSubtitle {
                                 TextField("Enter subtitle", text: $floatingSubtitleText)
-                                    .font(.system(size: 12, weight: .regular))
+                                    .font(.system(size: 14, weight: .regular))
                                     .textFieldStyle(.plain)
                                     .foregroundColor(colorScheme == .dark ? .white.opacity(0.8) : .black.opacity(0.7))
                                     .focused($isFloatingSubtitleFocused)
@@ -1921,7 +1899,7 @@ struct DocumentArea: View {
                                     isEditingFloatingSubtitle = true
                                 }) {
                                     Text(document.subtitle.isEmpty ? "Add subtitle" : document.subtitle)
-                                        .font(.system(size: 12, weight: .regular))
+                                        .font(.system(size: 14, weight: .regular))
                                         .foregroundColor(document.subtitle.isEmpty ? 
                                             (colorScheme == .dark ? .white.opacity(0.4) : .black.opacity(0.4)) :
                                             (colorScheme == .dark ? .white.opacity(0.8) : .black.opacity(0.7)))
@@ -1934,16 +1912,21 @@ struct DocumentArea: View {
                         
                         Spacer()
                         
-                        // Document actions button
+                        // Scroll to top button with enhanced styling
                         Button(action: {
-                            // Show document actions menu
+                            // Scroll back to top to expand header with smooth animation
                             #if os(iOS)
                             HapticFeedback.impact(.light)
                             #endif
                             
-                            // TODO: Add document actions menu
+                            withAnimation(.interactiveSpring(response: 0.8, dampingFraction: 0.85, blendDuration: 0.3)) {
+                                headerCollapseProgress = 0
+                            }
+                            
+                            // Also scroll the text editor to top if possible
+                            scrollToTop()
                         }) {
-                            Image(systemName: "ellipsis.circle")
+                            Image(systemName: "chevron.up")
                                 .font(.system(size: 14, weight: .semibold))
                                 .foregroundColor(colorScheme == .dark ? .white.opacity(0.8) : .black.opacity(0.8))
                                 .frame(width: 32, height: 32)
@@ -1957,15 +1940,17 @@ struct DocumentArea: View {
                                 )
                         }
                         .buttonStyle(.plain)
-                        .help("Document actions")
+                        .help("Scroll to top")
+                        .scaleEffect(headerCollapseProgress > 0.95 ? 1.0 : 0.9)
+                        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: headerCollapseProgress)
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 12)
                 }
             }
         }
         #if os(iOS)
-        .confirmationDialog(headerImage != nil ? "Header Image Options" : "Add Header Image", isPresented: $showFloatingImageActionSheet) {
+        .confirmationDialog("Header Image Options", isPresented: $showFloatingImageActionSheet) {
             Button("Photo Library") {
                 presentFloatingPhotoLibraryPicker()
             }
@@ -1979,7 +1964,7 @@ struct DocumentArea: View {
             }
             Button("Cancel", role: .cancel) { }
         } message: {
-            Text(headerImage != nil ? "Choose how to change your header image" : "Choose how to add a header image")
+            Text("Choose how to change your header image")
         }
         #endif
     }
