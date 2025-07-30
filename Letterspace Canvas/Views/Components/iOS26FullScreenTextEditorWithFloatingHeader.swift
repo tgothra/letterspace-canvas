@@ -1,6 +1,5 @@
 #if os(iOS)
 import SwiftUI
-import UIKit
 
 // MARK: - Full Screen Text Editor with Floating Header
 @available(iOS 26.0, *)
@@ -57,42 +56,34 @@ struct iOS26FullScreenTextEditorWithFloatingHeader: View {
     var body: some View {
         ZStack {
             // Full screen text editor
-            VStack(spacing: 0) {
-                TextEditor(text: $attributedText, selection: $selection)
-                    .focused($isFocused)
-                    .padding(.horizontal, 16)
-                    .padding(.top, showFloatingHeader ? 100 : 20) // Add top padding when header is visible
-                    .padding(.bottom, 20)
-                    .background(Color(UIColor.systemBackground))
-                    .scrollContentBackground(.hidden)
-                    .onAppear {
-                        loadDocumentContent()
-                        isFocused = true
-                    }
-                    .onChange(of: attributedText) { _, newValue in
-                        saveToDocument(newValue)
-                    }
-                    .onChange(of: selection) { _, newSelection in
-                        updateToolbarVisibility(for: newSelection)
-                        updateFormattingIndicators(for: newSelection)
-                    }
-                    .onTapGesture {
-                        // Hide floating header when tapping in text area
-                        if showFloatingHeader && !isEditingTitle && !isEditingSubtitle {
-                            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                                showFloatingHeader = false
-                            }
+            TextEditor(text: $attributedText, selection: $selection)
+                .focused($isFocused)
+                .padding(.horizontal, 16)
+                .padding(.top, showFloatingHeader ? 100 : 20) // Add top padding when header is visible
+                .padding(.bottom, 20)
+                .background(Color(UIColor.systemBackground))
+                .scrollContentBackground(.hidden)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .onAppear {
+                    print("🔄 iOS26FullScreenTextEditorWithFloatingHeader appeared")
+                    loadDocumentContent()
+                    isFocused = true
+                }
+                .onChange(of: attributedText) { _, newValue in
+                    saveToDocument(newValue)
+                }
+                .onChange(of: selection) { _, newSelection in
+                    updateToolbarVisibility(for: newSelection)
+                    updateFormattingIndicators(for: newSelection)
+                }
+                .onTapGesture {
+                    // Hide floating header when tapping in text area
+                    if showFloatingHeader && !isEditingTitle && !isEditingSubtitle {
+                        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                            showFloatingHeader = false
                         }
                     }
-                    .toolbar {
-                        ToolbarItemGroup(placement: .keyboard) {
-                            if activeInlinePicker != .none {
-                                toolbarColorPicker
-                            } else {
-                                toolbarFormattingButtons
-                            }
-                        }
-                    }
+                }
             }
             
             // Floating header overlay
@@ -397,6 +388,7 @@ struct iOS26FullScreenTextEditorWithFloatingHeader: View {
     
     // MARK: - Document Management
     private func loadDocumentContent() {
+        print("📄 Loading document content for full-screen editor")
         if let element = document.elements.first(where: { $0.type == .textBlock }) {
             if let data = element.rtfData {
                 do {
