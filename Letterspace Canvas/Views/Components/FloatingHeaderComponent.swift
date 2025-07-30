@@ -1,4 +1,3 @@
-// DEBUG: This component does not control its vertical alignment; check parent container.
 #if os(iOS)
 import SwiftUI
 import UIKit
