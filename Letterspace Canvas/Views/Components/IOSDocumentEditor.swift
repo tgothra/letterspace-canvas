@@ -11,12 +11,12 @@ struct IOSDocumentEditor: View {
     @Environment(\.colorScheme) private var colorScheme
     
     var body: some View {
-        if #available(iOS 26.0, *) {
-            iOS26FullScreenTextEditorWithFloatingHeader(document: $document)
-        } else {
-            // Fallback for older iOS versions
-            VStack(spacing: 0) {
-                GeometryReader { geometry in
+        VStack(spacing: 0) {
+            GeometryReader { geometry in
+                if #available(iOS 26.0, *) {
+                    iOS26NativeTextEditorWithToolbar(document: $document)
+                } else {
+                    // Fallback for older iOS versions
                     SimpleIOSTextView(
                         text: $textContent,
                         colorScheme: colorScheme,
@@ -31,9 +31,9 @@ struct IOSDocumentEditor: View {
                     )
                 }
             }
-            .onAppear {
-                loadDocumentContent()
-            }
+        }
+        .onAppear {
+            loadDocumentContent()
         }
     }
     

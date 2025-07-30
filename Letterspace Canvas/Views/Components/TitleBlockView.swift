@@ -32,9 +32,9 @@ struct TitleBlockView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 24)
             #elseif os(iOS)
-            // iOS 26 Full Screen Editor with Floating Header for titles
+            // iOS 26 Native Text Editor with Floating Header for titles
             if #available(iOS 26.0, *) {
-                iOS26FullScreenTextEditorWithFloatingHeader(document: Binding(
+                iOS26NativeTextEditorWithToolbar(document: Binding(
                     get: {
                         var tempDoc = Letterspace_CanvasDocument()
                         var element = DocumentElement(type: .textBlock)
