@@ -13,18 +13,23 @@ struct IOSDocumentEditor: View {
     var body: some View {
         VStack(spacing: 0) {
             GeometryReader { geometry in
-                SimpleIOSTextView(
-                    text: $textContent,
-                    colorScheme: colorScheme,
-                    document: $document,
-                    onTextChange: { newText in
-                        updateDocumentContent(newText)
-                    },
-                    onAttributedTextChange: { plainText, attributedText in
-                        updateDocumentWithFormatting(plainText, attributedText: attributedText)
-                    },
-                    onScrollChange: onScrollChange
-                )
+                if #available(iOS 26.0, *) {
+                    iOS26NativeTextEditorWithToolbar(document: $document)
+                } else {
+                    // Fallback for older iOS versions
+                    SimpleIOSTextView(
+                        text: $textContent,
+                        colorScheme: colorScheme,
+                        document: $document,
+                        onTextChange: { newText in
+                            updateDocumentContent(newText)
+                        },
+                        onAttributedTextChange: { plainText, attributedText in
+                            updateDocumentWithFormatting(plainText, attributedText: attributedText)
+                        },
+                        onScrollChange: onScrollChange
+                    )
+                }
             }
         }
         .onAppear {
