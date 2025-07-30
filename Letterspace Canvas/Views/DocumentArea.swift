@@ -2071,26 +2071,31 @@ struct DocumentArea: View {
                     )
 
                 #elseif os(iOS)
-                // iOS 26 Native Text Editor with Toolbar and Floating Header
+                // iOS 26 Text Editor with Scroll Detection for Header Collapse
                 if #available(iOS 26.0, *) {
-                    iOS26NativeTextEditorWithToolbar(document: $document)
-                        .allowsHitTesting(!isAnimatingHeaderCollapse)
-                        .onChange(of: headerCollapseProgress) { _, newProgress in
-                            // Trigger smoothing when headerCollapseProgress changes
-                            applySmoothingToHeaderProgress()
-                            print("🔄 Header progress changed to: \(newProgress)")
+                    iOS26ScrollDetectingTextEditor(
+                        document: $document,
+                        headerCollapseProgress: $headerCollapseProgress,
+                        text: documentTextBinding,
+                        maxScrollForCollapse: calculateDynamicMaxScrollForCollapse()
+                    )
+                    .allowsHitTesting(!isAnimatingHeaderCollapse)
+                    .onChange(of: headerCollapseProgress) { _, newProgress in
+                        // Trigger smoothing when headerCollapseProgress changes
+                        applySmoothingToHeaderProgress()
+                        print("🔄 Header progress changed to: \(newProgress)")
+                    }
+                    .overlay(
+                        GeometryReader { geometry in
+                            Color.clear // Use Color.clear for geometry reading
+                                .onAppear {
+                                    viewportHeight = geometry.size.height
+                                }
+                                .onChange(of: geometry.size.height) { _, newHeight in
+                                    viewportHeight = newHeight
+                                }
                         }
-                        .overlay(
-                            GeometryReader { geometry in
-                                Color.clear // Use Color.clear for geometry reading
-                                    .onAppear {
-                                        viewportHeight = geometry.size.height
-                                    }
-                                    .onChange(of: geometry.size.height) { _, newHeight in
-                                        viewportHeight = newHeight
-                                    }
-                            }
-                        )
+                    )
                 } else {
                     // Fallback for older iOS versions
                     IOSDocumentEditor(

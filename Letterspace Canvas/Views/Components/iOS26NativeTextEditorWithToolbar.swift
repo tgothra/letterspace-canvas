@@ -11,16 +11,6 @@ struct iOS26NativeTextEditorWithToolbar: View {
     @State private var selection: AttributedTextSelection = AttributedTextSelection()
     @State private var isEditing: Bool = false
     
-    // Header state
-    @State private var headerImage: UIImage?
-    @State private var isHeaderExpanded: Bool = true
-    @State private var isImageExpanded: Bool = true
-    @State private var isTitleVisible: Bool = true
-    @State private var isEditorFocused: Bool = true
-    @State private var viewMode: ViewMode = .normal
-    @State private var headerCollapseProgress: CGFloat = 0.9
-    @Environment(\.colorScheme) var colorScheme
-    
     // Toolbar visibility
     @State private var showToolbar: Bool = false
     @State private var toolbarOpacity: Double = 0.0
@@ -57,26 +47,9 @@ struct iOS26NativeTextEditorWithToolbar: View {
     }
 
     var body: some View {
-        ZStack {
+        VStack(spacing: 0) {
             // Main Text Editor
             textEditorView
-            
-            // Floating Header with Morph
-            if #available(iOS 26.0, *) {
-                FloatingHeaderWithMorph(
-                    document: $document,
-                    headerCollapseProgress: $headerCollapseProgress,
-                    headerImage: $headerImage,
-                    isHeaderExpanded: $isHeaderExpanded,
-                    isImageExpanded: $isImageExpanded,
-                    isTitleVisible: $isTitleVisible,
-                    isEditorFocused: $isEditorFocused,
-                    viewMode: $viewMode,
-                    colorScheme: colorScheme,
-                    paperWidth: UIScreen.main.bounds.width - 32.0
-                )
-                .zIndex(1000)
-            }
             
             // Custom Toolbar (slides up when text is selected)
             if showToolbar {
@@ -86,7 +59,6 @@ struct iOS26NativeTextEditorWithToolbar: View {
                 )
                 .opacity(toolbarOpacity)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
-                .zIndex(1001)
             }
         }
         .onAppear {
@@ -561,10 +533,6 @@ struct iOS26NativeTextEditorWithToolbar: View {
     // MARK: - Document Management
     private func loadDocumentContent() {
         print("📄 Loading document content...")
-        
-        // Load header image from document
-        loadHeaderImage()
-        
         // Load from the first text element in the document
         if let element = document.elements.first(where: { $0.type == .textBlock }) {
             print("📝 Found text element with content: '\(element.content)'")
@@ -632,24 +600,6 @@ struct iOS26NativeTextEditorWithToolbar: View {
             print("📄 No text element found, creating empty AttributedString")
             // Create initial empty attributed string with default formatting
             attributedText = AttributedString()
-        }
-    }
-    
-    private func loadHeaderImage() {
-        // Load header image from document elements
-        if let headerElement = document.elements.first(where: { $0.type == .headerImage }),
-           !headerElement.content.isEmpty,
-           let appDirectory = Letterspace_CanvasDocument.getAppDocumentsDirectory() {
-            
-            let documentPath = appDirectory.appendingPathComponent("\(document.id)")
-            let imagesPath = documentPath.appendingPathComponent("Images")
-            let imageURL = imagesPath.appendingPathComponent(headerElement.content)
-            
-            if let imageData = try? Data(contentsOf: imageURL),
-               let image = UIImage(data: imageData) {
-                headerImage = image
-                print("📸 Loaded header image: \(headerElement.content)")
-            }
         }
     }
     
