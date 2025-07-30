@@ -1791,27 +1791,27 @@ struct DocumentArea: View {
 
     private var floatingCollapsedHeader: some View {
         Group {
-            if let headerImage = headerImage {
-                // Floating header with enhanced liquid glass effect
-                ZStack {
-                    if #available(iOS 26.0, *) {
-                        // Enhanced liquid glass background for floating state
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(.clear) // No material fill - let glass effect do the work
-                            .frame(width: paperWidth - 16, height: 60)
-                            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12)) // Pure glass effect without material interference
-                            .shadow(color: colorScheme == .dark ? Color.white.opacity(0.04) : Color.black.opacity(0.05), radius: 8, x: 0, y: 4) // Very minimal shadow
-                    } else {
-                        // Fallback
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(colorScheme == .dark ? Color(.sRGB, red: 0.15, green: 0.15, blue: 0.15, opacity: 0.25) : Color(.sRGB, red: 0.95, green: 0.95, blue: 0.95, opacity: 0.25)) // Extremely transparent fallback
-                            .frame(width: paperWidth - 16, height: 60)
-                            .shadow(color: colorScheme == .dark ? Color.white.opacity(0.02) : Color.black.opacity(0.02), radius: 6, x: 0, y: 2) // Minimal shadow
-                    }
-                    
-                    // Content
-                    HStack(spacing: 12) {
-                        // Image thumbnail - tappable for photo selection
+            // Floating header with enhanced liquid glass effect - always show
+            ZStack {
+                if #available(iOS 26.0, *) {
+                    // Enhanced liquid glass background for floating state
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(.clear) // No material fill - let glass effect do the work
+                        .frame(width: paperWidth - 16, height: 60)
+                        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12)) // Pure glass effect without material interference
+                        .shadow(color: colorScheme == .dark ? Color.white.opacity(0.04) : Color.black.opacity(0.05), radius: 8, x: 0, y: 4) // Very minimal shadow
+                } else {
+                    // Fallback
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(colorScheme == .dark ? Color(.sRGB, red: 0.15, green: 0.15, blue: 0.15, opacity: 0.25) : Color(.sRGB, red: 0.95, green: 0.95, blue: 0.95, opacity: 0.25)) // Extremely transparent fallback
+                        .frame(width: paperWidth - 16, height: 60)
+                        .shadow(color: colorScheme == .dark ? Color.white.opacity(0.02) : Color.black.opacity(0.02), radius: 6, x: 0, y: 2) // Minimal shadow
+                }
+                
+                // Content
+                HStack(spacing: 12) {
+                    // Image thumbnail - tappable for photo selection (only show if image exists)
+                    if let headerImage = headerImage {
                         Button(action: {
                             // Trigger photo picker action sheet
                             showFloatingImageActionSheet = true
@@ -1840,6 +1840,28 @@ struct DocumentArea: View {
                         }
                         .buttonStyle(.plain)
                         .help("Tap to change header image")
+                    } else {
+                        // Add image button when no image exists
+                        Button(action: {
+                            // Trigger photo picker action sheet
+                            showFloatingImageActionSheet = true
+                        }) {
+                            Image(systemName: "photo.badge.plus")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
+                                .frame(width: 32, height: 32)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .fill(colorScheme == .dark ? Color.white.opacity(0.1) : Color.black.opacity(0.1))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 6)
+                                                .stroke(colorScheme == .dark ? Color.white.opacity(0.2) : Color.black.opacity(0.2), lineWidth: 1)
+                                        )
+                                )
+                        }
+                        .buttonStyle(.plain)
+                        .help("Add header image")
+                    }
                         
                         // Title and subtitle - tappable for editing
                         VStack(alignment: .leading, spacing: 2) {
@@ -1943,7 +1965,7 @@ struct DocumentArea: View {
             }
         }
         #if os(iOS)
-        .confirmationDialog("Header Image Options", isPresented: $showFloatingImageActionSheet) {
+        .confirmationDialog(headerImage != nil ? "Header Image Options" : "Add Header Image", isPresented: $showFloatingImageActionSheet) {
             Button("Photo Library") {
                 presentFloatingPhotoLibraryPicker()
             }
@@ -1957,7 +1979,7 @@ struct DocumentArea: View {
             }
             Button("Cancel", role: .cancel) { }
         } message: {
-            Text("Choose how to change your header image")
+            Text(headerImage != nil ? "Choose how to change your header image" : "Choose how to add a header image")
         }
         #endif
     }
