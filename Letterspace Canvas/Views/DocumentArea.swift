@@ -2071,9 +2071,10 @@ struct DocumentArea: View {
                     )
 
                 #elseif os(iOS)
-                // iOS 26 SwiftUI Native Text Editor
+                // iOS 26 SwiftUI Native Text Editor - Full Screen
                 if #available(iOS 26.0, *) {
                     iOS26NativeTextEditorWithToolbar(document: $document)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .allowsHitTesting(!isAnimatingHeaderCollapse)
                         .onChange(of: headerCollapseProgress) { _, newProgress in
                             // Trigger smoothing when headerCollapseProgress changes

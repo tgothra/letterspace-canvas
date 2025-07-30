@@ -12,11 +12,12 @@ struct IOSDocumentEditor: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            GeometryReader { geometry in
-                if #available(iOS 26.0, *) {
-                    iOS26NativeTextEditorWithToolbar(document: $document)
-                } else {
-                    // Fallback for older iOS versions
+            if #available(iOS 26.0, *) {
+                iOS26NativeTextEditorWithToolbar(document: $document)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                // Fallback for older iOS versions
+                GeometryReader { geometry in
                     SimpleIOSTextView(
                         text: $textContent,
                         colorScheme: colorScheme,
@@ -32,6 +33,7 @@ struct IOSDocumentEditor: View {
                 }
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
             loadDocumentContent()
         }

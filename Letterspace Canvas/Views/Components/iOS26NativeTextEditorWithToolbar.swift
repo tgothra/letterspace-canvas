@@ -9,7 +9,7 @@ struct iOS26NativeTextEditorWithToolbar: View {
     @Binding var document: Letterspace_CanvasDocument
     @State private var attributedText: AttributedString = AttributedString()
     @State private var selection: AttributedTextSelection = AttributedTextSelection()
-    @State private var isEditing: Bool = false
+    @FocusState private var isEditing: Bool
     
     // Toolbar visibility
     @State private var showToolbar: Bool = false
@@ -48,19 +48,12 @@ struct iOS26NativeTextEditorWithToolbar: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Main Text Editor
+            // Full Screen Text Editor
             textEditorView
-            
-            // Custom Toolbar (slides up when text is selected)
-            if showToolbar {
-                iOS26NativeToolbarWrapper(
-                    text: $attributedText,
-                    selection: $selection
-                )
-                .opacity(toolbarOpacity)
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color(UIColor.systemBackground))
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
             loadDocumentContent()
         }
@@ -82,19 +75,14 @@ struct iOS26NativeTextEditorWithToolbar: View {
     private var textEditorView: some View {
         TextEditor(text: $attributedText, selection: $selection)
             .font(.system(size: 16))
-            .padding()
-            .background(Color(UIColor.systemBackground))
-                .onTapGesture {
-                    isEditing = true
-                }
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(isEditing ? Color.blue : Color(UIColor.systemGray4), lineWidth: isEditing ? 2 : 1)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-                .toolbar {
-                        ToolbarItemGroup(placement: .keyboard) {
-                        if activeInlinePicker != .none {
+            .padding(.horizontal)
+            .focused($isEditing)
+            .onTapGesture {
+                isEditing = true
+            }
+            .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    if activeInlinePicker != .none {
                                                          if activeInlinePicker == .textColor {
                                 HStack(spacing: 12) {
                                     Button(action: {
