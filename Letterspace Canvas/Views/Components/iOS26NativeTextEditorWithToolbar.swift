@@ -11,6 +11,16 @@ struct iOS26NativeTextEditorWithToolbar: View {
     @State private var selection: AttributedTextSelection = AttributedTextSelection()
     @State private var isEditing: Bool = false
     
+    // Header state
+    @State private var headerImage: UIImage?
+    @State private var isHeaderExpanded: Bool = true
+    @State private var isImageExpanded: Bool = true
+    @State private var isTitleVisible: Bool = true
+    @State private var isEditorFocused: Bool = true
+    @State private var viewMode: ViewMode = .normal
+    @State private var headerCollapseProgress: CGFloat = 0.9
+    @Environment(\.colorScheme) var colorScheme
+    
     // Toolbar visibility
     @State private var showToolbar: Bool = false
     @State private var toolbarOpacity: Double = 0.0
@@ -33,17 +43,6 @@ struct iOS26NativeTextEditorWithToolbar: View {
     @State private var currentIsBold: Bool = false
     @State private var currentIsItalic: Bool = false
     
-    // Floating header state
-    @State private var showFloatingHeader: Bool = true // Show expanded by default
-    @State private var isHeaderCollapsed: Bool = false // Track if header is collapsed
-    @State private var headerImage: UIImage?
-    @State private var isEditingTitle: Bool = false
-    @State private var isEditingSubtitle: Bool = false
-    @State private var titleText: String = ""
-    @State private var subtitleText: String = ""
-    @FocusState private var isTitleFocused: Bool
-    @FocusState private var isSubtitleFocused: Bool
-    
     // Color arrays for compact picker
     private var textColors: [Color] {
         [.clear, .gray, .blue, .green, .yellow, .red, .orange, .purple, .pink, .brown, .primary]
@@ -59,69 +58,51 @@ struct iOS26NativeTextEditorWithToolbar: View {
 
     var body: some View {
         ZStack {
-            // Full screen text editor
-            VStack(spacing: 0) {
-                // Main Text Editor - now full screen like RichTextEditor example
-                textEditorView
-            }
-            .onAppear {
-                loadDocumentContent()
-            }
-            .onChange(of: attributedText) { _, newValue in
-                print("🔄 AttributedText changed, triggering save...")
-                saveToDocument(newValue)
-            }
-            .onChange(of: selection) { _, newValue in
-                print("🔄 Selection changed, checking bookmark state...")
-                checkBookmarkState()
-            }
-            .onChange(of: selection) { _, newSelection in
-                updateToolbarVisibility(for: newSelection)
-                updateColorIndicators(for: newSelection)
+            // Main Text Editor
+            textEditorView
+            
+            // Floating Header with Morph
+            if #available(iOS 26.0, *) {
+                FloatingHeaderWithMorph(
+                    document: $document,
+                    headerCollapseProgress: $headerCollapseProgress,
+                    headerImage: $headerImage,
+                    isHeaderExpanded: $isHeaderExpanded,
+                    isImageExpanded: $isImageExpanded,
+                    isTitleVisible: $isTitleVisible,
+                    isEditorFocused: $isEditorFocused,
+                    viewMode: $viewMode,
+                    colorScheme: colorScheme,
+                    paperWidth: UIScreen.main.bounds.width - 32
+                )
+                .zIndex(1000)
             }
             
-            // Floating header overlay
-            VStack {
-                if showFloatingHeader {
-                    floatingHeaderView
-                        .padding(.horizontal, 16)
-                        .padding(.top, 50)
-                        .transition(.move(edge: .top).combined(with: .opacity))
-                }
-                
-                Spacer()
+            // Custom Toolbar (slides up when text is selected)
+            if showToolbar {
+                iOS26NativeToolbarWrapper(
+                    text: $attributedText,
+                    selection: $selection
+                )
+                .opacity(toolbarOpacity)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .zIndex(1001)
             }
-            .allowsHitTesting(showFloatingHeader)
-            
-            // Header collapse/expand button
-            VStack {
-                HStack {
-                    Spacer()
-                    
-                    Button(action: {
-                        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                            if headerImage != nil {
-                                isHeaderCollapsed.toggle()
-                            } else {
-                                showFloatingHeader.toggle()
-                            }
-                        }
-                    }) {
-                        Image(systemName: headerImage != nil 
-                              ? (isHeaderCollapsed ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
-                              : (showFloatingHeader ? "chevron.up" : "doc.text.image"))
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundColor(.primary)
-                            .frame(width: 44, height: 44)
-                            .background(.ultraThinMaterial, in: Circle())
-                            .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
-                    }
-                    .padding(.trailing, 20)
-                }
-                .padding(.top, 20)
-                
-                Spacer()
-            }
+        }
+        .onAppear {
+            loadDocumentContent()
+        }
+        .onChange(of: attributedText) { _, newValue in
+            print("🔄 AttributedText changed, triggering save...")
+            saveToDocument(newValue)
+        }
+        .onChange(of: selection) { _, newValue in
+            print("🔄 Selection changed, checking bookmark state...")
+            checkBookmarkState()
+        }
+        .onChange(of: selection) { _, newSelection in
+            updateToolbarVisibility(for: newSelection)
+            updateColorIndicators(for: newSelection)
         }
     }
     
@@ -129,14 +110,16 @@ struct iOS26NativeTextEditorWithToolbar: View {
     private var textEditorView: some View {
         TextEditor(text: $attributedText, selection: $selection)
             .font(.system(size: 16))
-            .padding(.horizontal, 16)
-            .padding(.top, showFloatingHeader && !isHeaderCollapsed ? 200 : (isHeaderCollapsed ? 80 : 20)) // Adjust padding based on header state
-            .padding(.bottom, 20)
+            .padding()
             .background(Color(UIColor.systemBackground))
-            .scrollContentBackground(.hidden)
-            .onTapGesture {
-                isEditing = true
-            }
+                .onTapGesture {
+                    isEditing = true
+                }
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(isEditing ? Color.blue : Color(UIColor.systemGray4), lineWidth: isEditing ? 2 : 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 8))
                 .toolbar {
                         ToolbarItemGroup(placement: .keyboard) {
                         if activeInlinePicker != .none {
@@ -381,148 +364,6 @@ struct iOS26NativeTextEditorWithToolbar: View {
                 }
     }
     
-    // MARK: - Floating Header View
-    private var floatingHeaderView: some View {
-        Group {
-            if let headerImage = headerImage {
-                if isHeaderCollapsed {
-                    // Collapsed header bar
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 16)
-                            .fill(.ultraThinMaterial)
-                            .frame(height: 60)
-                            .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
-                        
-                        HStack(spacing: 12) {
-                            // Small header image
-                            Image(uiImage: headerImage)
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                                .frame(width: 40, height: 40)
-                                .clipShape(RoundedRectangle(cornerRadius: 8))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .stroke(Color.primary.opacity(0.1), lineWidth: 1)
-                                )
-                            
-                            // Title and subtitle
-                            VStack(alignment: .leading, spacing: 2) {
-                                titleView
-                                subtitleView
-                            }
-                            
-                            Spacer()
-                        }
-                        .padding(.horizontal, 16)
-                    }
-                } else {
-                    // Expanded header with large image
-                    VStack(spacing: 0) {
-                        // Large header image
-                        Image(uiImage: headerImage)
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(height: 160)
-                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .stroke(Color.primary.opacity(0.1), lineWidth: 1)
-                            )
-                        
-                        // Title and subtitle overlay on image
-                        VStack(alignment: .leading, spacing: 4) {
-                            titleView
-                            subtitleView
-                        }
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 16)
-                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
-                        .padding(.horizontal, 16)
-                        .offset(y: -20) // Overlay on bottom of image
-                    }
-                    .shadow(color: .black.opacity(0.1), radius: 8, x: 0, y: 4)
-                }
-            } else {
-                // Header without image - always collapsed style
-                ZStack {
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(.ultraThinMaterial)
-                        .frame(height: 60)
-                        .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
-                    
-                    VStack(alignment: .leading, spacing: 2) {
-                        titleView
-                        subtitleView
-                    }
-                    .padding(.horizontal, 16)
-                }
-            }
-        }
-    }
-    
-    // MARK: - Title and Subtitle Views
-    private var titleView: some View {
-        Group {
-            if isEditingTitle {
-                TextField("Enter title", text: $titleText)
-                    .font(.system(size: 18, weight: .semibold))
-                    .textFieldStyle(.plain)
-                    .focused($isTitleFocused)
-                    .onSubmit {
-                        document.title = titleText
-                        saveDocument()
-                        isEditingTitle = false
-                    }
-                    .onAppear {
-                        titleText = document.title
-                        isTitleFocused = true
-                    }
-            } else {
-                Button(action: {
-                    titleText = document.title
-                    isEditingTitle = true
-                }) {
-                    Text(document.title.isEmpty ? "Untitled" : document.title)
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(.primary)
-                        .lineLimit(1)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-    }
-    
-    private var subtitleView: some View {
-        Group {
-            if isEditingSubtitle {
-                TextField("Enter subtitle", text: $subtitleText)
-                    .font(.system(size: 14, weight: .regular))
-                    .textFieldStyle(.plain)
-                    .focused($isSubtitleFocused)
-                    .onSubmit {
-                        document.subtitle = subtitleText
-                        saveDocument()
-                        isEditingSubtitle = false
-                    }
-                    .onAppear {
-                        subtitleText = document.subtitle
-                        isSubtitleFocused = true
-                    }
-            } else if !document.subtitle.isEmpty || isEditingTitle {
-                Button(action: {
-                    subtitleText = document.subtitle
-                    isEditingSubtitle = true
-                }) {
-                    Text(document.subtitle.isEmpty ? "Add subtitle" : document.subtitle)
-                        .font(.system(size: 14, weight: .regular))
-                        .foregroundColor(.secondary)
-                        .lineLimit(1)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-    }
-    
     // Palette helper for inline picker row (no background or capsule)
     private func colorsRow(colors: [Color], action: @escaping (Color) -> Void) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -721,23 +562,8 @@ struct iOS26NativeTextEditorWithToolbar: View {
     private func loadDocumentContent() {
         print("📄 Loading document content...")
         
-        // Load header image if available
-        if let headerElement = document.elements.first(where: { $0.type == .headerImage && !$0.content.isEmpty }) {
-            // Try to load from cache first
-            if let cachedImage = ImageCache.shared.image(for: headerElement.content) {
-                headerImage = cachedImage
-            } else {
-                // Load from file path
-                let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-                let imageUrl = documentsPath.appendingPathComponent(headerElement.content)
-                
-                if let imageData = try? Data(contentsOf: imageUrl),
-                   let loadedImage = UIImage(data: imageData) {
-                    headerImage = loadedImage
-                    ImageCache.shared.setImage(loadedImage, for: headerElement.content)
-                }
-            }
-        }
+        // Load header image from document
+        loadHeaderImage()
         
         // Load from the first text element in the document
         if let element = document.elements.first(where: { $0.type == .textBlock }) {
@@ -809,6 +635,24 @@ struct iOS26NativeTextEditorWithToolbar: View {
         }
     }
     
+    private func loadHeaderImage() {
+        // Load header image from document elements
+        if let headerElement = document.elements.first(where: { $0.type == .headerImage }),
+           !headerElement.content.isEmpty,
+           let appDirectory = Letterspace_CanvasDocument.getAppDocumentsDirectory() {
+            
+            let documentPath = appDirectory.appendingPathComponent("\(document.id)")
+            let imagesPath = documentPath.appendingPathComponent("Images")
+            let imageURL = imagesPath.appendingPathComponent(headerElement.content)
+            
+            if let imageData = try? Data(contentsOf: imageURL),
+               let image = UIImage(data: imageData) {
+                headerImage = image
+                print("📸 Loaded header image: \(headerElement.content)")
+            }
+        }
+    }
+    
     private func saveToDocument(_ newAttributedText: AttributedString) {
         print("💾 Saving document content...")
         print("📝 AttributedString has \(newAttributedText.characters.count) characters")
@@ -870,12 +714,6 @@ struct iOS26NativeTextEditorWithToolbar: View {
             print("🚀 Starting document save...")
             document.save()
             print("💾 Document save completed")
-        }
-    }
-    
-    private func saveDocument() {
-        DispatchQueue.global(qos: .utility).async {
-            document.save()
         }
     }
     

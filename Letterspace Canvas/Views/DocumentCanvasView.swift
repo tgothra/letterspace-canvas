@@ -139,7 +139,7 @@ private struct CanvasBlockView: View {
                     }
                 )
                 #elseif os(iOS)
-                // iOS 26 Native Text Editor with Floating Header
+                // iOS 26 Enhanced Text Editor
                 if #available(iOS 26.0, *) {
                     iOS26NativeTextEditorWithToolbar(document: Binding(
                         get: {

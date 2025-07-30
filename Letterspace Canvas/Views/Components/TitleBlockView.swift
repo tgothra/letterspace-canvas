@@ -32,7 +32,7 @@ struct TitleBlockView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 24)
             #elseif os(iOS)
-            // iOS 26 Native Text Editor with Floating Header for titles
+            // iOS 26 Native with Custom Toolbar for titles
             if #available(iOS 26.0, *) {
                 iOS26NativeTextEditorWithToolbar(document: Binding(
                     get: {
