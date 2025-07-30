@@ -663,7 +663,7 @@ struct DocumentArea: View {
                 }
             }
             
-            // Floating header overlay - positioned at top with proper padding
+            // Floating header overlay - positioned at top of screen
             if viewMode != .focus && !isDistractionFreeMode {
                 VStack {
                     if headerCollapseProgress < 0.85 {
@@ -689,6 +689,7 @@ struct DocumentArea: View {
                     
                     Spacer()
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .allowsHitTesting(true) // Allow interaction with header buttons
                 .onTapGesture {
                     // Cancel editing when tapping outside text fields
