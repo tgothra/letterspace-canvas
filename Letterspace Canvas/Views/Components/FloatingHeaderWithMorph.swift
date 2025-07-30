@@ -42,7 +42,7 @@ struct FloatingHeaderWithMorph: View {
             // Full header when expanded (headerCollapseProgress < 0.3)
             if headerCollapseProgress < 0.3 {
                 fullHeaderView
-                    .opacity(1 - (headerCollapseProgress / 0.3))
+                    .opacity(1.0 - (headerCollapseProgress / 0.3))
                     .scaleEffect(1.0 - (headerCollapseProgress * 0.1))
             }
             
