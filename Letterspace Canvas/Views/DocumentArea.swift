@@ -653,40 +653,38 @@ struct DocumentArea: View {
     
     // Document vertical content stack
     private func documentVStack(geo: GeometryProxy) -> some View {
-                        ZStack(alignment: .top) {
-            // Main content - smooth spacer transition
+        ZStack(alignment: .top) {
+            // Main content - full screen text editor
             VStack(spacing: 0) {
-                // Header section with dynamic spacer for smooth transition
-                if viewMode != .focus && !isDistractionFreeMode {
-                    // Header that continues collapsing even when invisible
-                    headerView
-                        .opacity(headerCollapseProgress < 0.85 ? 1.0 : 0.0) // Fade out header content but keep collapsing
-                        .transition(createHeaderTransition())
-                }
-                
                 // Document content - always has the same layout
                 AnimatedDocumentContainer(document: $document) {
                     documentContentView
                         .frame(minHeight: geo.size.height)
                 }
-                .padding(.top, 24) // Always the same padding
             }
             
             // Floating header overlay - never affects layout
-            if viewMode != .focus && !isDistractionFreeMode && headerCollapseProgress >= 0.85 {
+            if viewMode != .focus && !isDistractionFreeMode {
                 VStack {
-                    floatingCollapsedHeader
-                        .padding(.horizontal, 8) // Reduced from 16 to 8 for wider appearance
-                        .padding(.top, {
-                            #if os(iOS)
-                            let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-                            return isPhone ? 40 : 16 // Reduced from 60/24 to 40/16 to lift higher
-                            #else
-                            return 16 // Reduced from 24 to 16
-                            #endif
-                        }())
-                        // Smooth opacity transition
-                        .opacity(max(0, min(1, (headerCollapseProgress - 0.85) / 0.15)))
+                    if headerCollapseProgress < 0.85 {
+                        // Full header floating above content
+                        headerView
+                            .opacity(1.0 - (headerCollapseProgress / 0.85))
+                            .transition(createHeaderTransition())
+                    } else {
+                        // Collapsed floating header
+                        floatingCollapsedHeader
+                            .padding(.horizontal, 8)
+                            .padding(.top, {
+                                #if os(iOS)
+                                let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                                return isPhone ? 40 : 16
+                                #else
+                                return 16
+                                #endif
+                            }())
+                            .opacity(max(0, min(1, (headerCollapseProgress - 0.85) / 0.15)))
+                    }
                     
                     Spacer()
                 }
@@ -2022,7 +2020,6 @@ struct DocumentArea: View {
                     swipeDownProgress: $swipeDownProgress
                 )
                 .buttonStyle(.plain)
-                .padding(.top, 24)
                 // Remove fixed height constraint - let HeaderImageSection determine its own height
                 // .frame(height: calculateDynamicHeaderHeight()) // REMOVED: This was forcing 200px height
                 .clipped() // Only clip overflow, not the content itself
@@ -2034,7 +2031,6 @@ struct DocumentArea: View {
             } else {
                 // Show collapsed header bar for documents without header images
                 collapsedTextOnlyHeaderView
-                    .padding(.top, 24)
             }
         }
     }
