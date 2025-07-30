@@ -665,40 +665,45 @@ struct DocumentArea: View {
             
             // Floating header overlay - positioned at top of screen
             if viewMode != .focus && !isDistractionFreeMode {
-                VStack {
-                    if headerCollapseProgress < 0.85 {
-                        // Full header floating above content
-                        headerView
-                            .padding(.top, 24)
-                            .opacity(1.0 - (headerCollapseProgress / 0.85))
-                            .transition(createHeaderTransition())
-                    } else {
-                        // Collapsed floating header
-                        floatingCollapsedHeader
-                            .padding(.horizontal, 8)
-                            .padding(.top, {
-                                #if os(iOS)
-                                let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-                                return isPhone ? 40 : 16
-                                #else
-                                return 16
-                                #endif
-                            }())
-                            .opacity(max(0, min(1, (headerCollapseProgress - 0.85) / 0.15)))
-                    }
-                    
-                    Spacer()
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                .allowsHitTesting(true) // Allow interaction with header buttons
-                .onTapGesture {
-                    // Cancel editing when tapping outside text fields
-                    if isEditingFloatingTitle || isEditingFloatingSubtitle {
-                        isEditingFloatingTitle = false
-                        isEditingFloatingSubtitle = false
-                        isFloatingTitleFocused = false
-                        isFloatingSubtitleFocused = false
-                    }
+                if headerCollapseProgress < 0.85 {
+                    // Full header floating above content
+                    headerView
+                        .padding(.top, 24)
+                        .opacity(1.0 - (headerCollapseProgress / 0.85))
+                        .transition(createHeaderTransition())
+                        .allowsHitTesting(true)
+                        .onTapGesture {
+                            // Cancel editing when tapping outside text fields
+                            if isEditingFloatingTitle || isEditingFloatingSubtitle {
+                                isEditingFloatingTitle = false
+                                isEditingFloatingSubtitle = false
+                                isFloatingTitleFocused = false
+                                isFloatingSubtitleFocused = false
+                            }
+                        }
+                } else {
+                    // Collapsed floating header
+                    floatingCollapsedHeader
+                        .padding(.horizontal, 8)
+                        .padding(.top, {
+                            #if os(iOS)
+                            let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                            return isPhone ? 40 : 16
+                            #else
+                            return 16
+                            #endif
+                        }())
+                        .opacity(max(0, min(1, (headerCollapseProgress - 0.85) / 0.15)))
+                        .allowsHitTesting(true)
+                        .onTapGesture {
+                            // Cancel editing when tapping outside text fields
+                            if isEditingFloatingTitle || isEditingFloatingSubtitle {
+                                isEditingFloatingTitle = false
+                                isEditingFloatingSubtitle = false
+                                isFloatingTitleFocused = false
+                                isFloatingSubtitleFocused = false
+                            }
+                        }
                 }
             }
         }
