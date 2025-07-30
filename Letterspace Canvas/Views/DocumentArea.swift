@@ -669,7 +669,6 @@ struct DocumentArea: View {
                     documentContentView
                         .frame(minHeight: geo.size.height)
                 }
-                .padding(.top, 24) // Always the same padding
             }
             
             // Floating header overlay - never affects layout
@@ -705,21 +704,7 @@ struct DocumentArea: View {
                         .frame(width: paperWidth)
             // Remove overall animation on currentOverlap to prevent animating document title
             // when header is toggled (this was causing sliding effect)
-            .padding(.top, {
-                #if os(iOS)
-                let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-                if isPhone {
-                    // iPhone: Add extra breathing room from top of screen
-                    return 60 // Increased from 24 to 60 for better visual spacing
-                } else {
-                    // iPad: Keep original spacing
-                    return 24
-                }
-                #else
-                // macOS: Keep original spacing
-                return 24
-                #endif
-            }())
+            // Removed top padding to allow full screen text editor
                         .opacity(isDocumentVisible ? 1 : 0)
                         .offset(y: isDocumentVisible ? 0 : 20)
                     }
@@ -2022,7 +2007,6 @@ struct DocumentArea: View {
                     swipeDownProgress: $swipeDownProgress
                 )
                 .buttonStyle(.plain)
-                .padding(.top, 24)
                 // Remove fixed height constraint - let HeaderImageSection determine its own height
                 // .frame(height: calculateDynamicHeaderHeight()) // REMOVED: This was forcing 200px height
                 .clipped() // Only clip overflow, not the content itself
@@ -2034,7 +2018,6 @@ struct DocumentArea: View {
             } else {
                 // Show collapsed header bar for documents without header images
                 collapsedTextOnlyHeaderView
-                    .padding(.top, 24)
             }
         }
     }
