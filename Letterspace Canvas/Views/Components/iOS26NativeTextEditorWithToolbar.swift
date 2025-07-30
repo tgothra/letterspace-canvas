@@ -73,7 +73,7 @@ struct iOS26NativeTextEditorWithToolbar: View {
                     isEditorFocused: $isEditorFocused,
                     viewMode: $viewMode,
                     colorScheme: colorScheme,
-                    paperWidth: UIScreen.main.bounds.width - 32
+                    paperWidth: UIScreen.main.bounds.width - 32.0
                 )
                 .zIndex(1000)
             }
