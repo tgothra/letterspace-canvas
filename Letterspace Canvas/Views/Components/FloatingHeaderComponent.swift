@@ -6,7 +6,7 @@ import UIKit
 @available(iOS 26.0, *)
 struct FloatingHeaderComponent: View {
     @Binding var document: Letterspace_CanvasDocument
-    @Binding var headerImage: UIImage?
+    @Binding var headerImage: PlatformSpecificImage?
     @Binding var isShowingImagePicker: Bool
     @Binding var isEditingTitle: Bool
     @Binding var isEditingSubtitle: Bool
@@ -44,7 +44,7 @@ struct FloatingHeaderComponent: View {
                     isShowingImagePicker = true
                 }) {
                     if let headerImage = headerImage {
-                        Image(uiImage: headerImage)
+                        Image(headerImage)
                             .resizable()
                             .aspectRatio(contentMode: .fill)
                             .frame(width: 40, height: 40)

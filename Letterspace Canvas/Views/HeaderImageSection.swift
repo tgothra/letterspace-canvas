@@ -328,123 +328,113 @@ struct HeaderImageSection: View {
         }
     }
 
-    // MARK: - Floating Header View (iOS 26+)
+    // MARK: - Floating Header View (SwiftUI Native)
     @ViewBuilder
     private func floatingHeaderView() -> some View {
-        #if os(iOS)
-        if #available(iOS 26.0, *) {
-            ZStack {
-                // Enhanced liquid glass background
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(.clear)
-                    .frame(width: paperWidth - 16, height: 80)
-                    .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16))
-                    .shadow(color: colorScheme == .dark ? Color.white.opacity(0.04) : Color.black.opacity(0.05), radius: 8, x: 0, y: 4)
+        ZStack {
+            // Enhanced liquid glass background
+            RoundedRectangle(cornerRadius: 16)
+                .fill(.clear)
+                .frame(width: paperWidth - 16, height: 80)
+                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16))
+                .shadow(color: colorScheme == .dark ? Color.white.opacity(0.04) : Color.black.opacity(0.05), radius: 8, x: 0, y: 4)
+            
+            // Content
+            HStack(spacing: 12) {
+                // Image thumbnail - tappable for photo selection
+                Button(action: {
+                    #if os(iOS)
+                    showImageActionSheet = true
+                    #endif
+                }) {
+                    if let headerImage = headerImage {
+                        Image(headerImage)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: 40, height: 40)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                            )
+                    } else {
+                        // Placeholder for no image
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color.gray.opacity(0.2))
+                            .frame(width: 40, height: 40)
+                            .overlay(
+                                Image(systemName: "photo")
+                                    .foregroundColor(.gray)
+                                    .font(.system(size: 16))
+                            )
+                    }
+                }
+                .buttonStyle(.plain)
                 
-                // Content
-                HStack(spacing: 12) {
-                    // Image thumbnail - tappable for photo selection
+                // Title and subtitle - tappable for editing
+                VStack(alignment: .leading, spacing: 2) {
+                    // Title section
                     Button(action: {
-                        #if os(iOS)
-                        showImageActionSheet = true
-                        #endif
-                    }) {
-                        if let headerImage = headerImage {
-                            Image(uiImage: headerImage)
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                                .frame(width: 40, height: 40)
-                                .clipShape(RoundedRectangle(cornerRadius: 8))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .stroke(Color.primary.opacity(0.1), lineWidth: 1)
-                                )
-                        } else {
-                            // Placeholder for no image
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(Color.gray.opacity(0.2))
-                                .frame(width: 40, height: 40)
-                                .overlay(
-                                    Image(systemName: "photo")
-                                        .foregroundColor(.gray)
-                                        .font(.system(size: 16))
-                                )
+                        // Start editing title
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            isTitleVisible = true
                         }
+                    }) {
+                        Text(document.title.isEmpty ? "Untitled" : document.title)
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(colorScheme == .dark ? .white : .black)
+                            .lineLimit(1)
                     }
                     .buttonStyle(.plain)
                     
-                    // Title and subtitle - tappable for editing
-                    VStack(alignment: .leading, spacing: 2) {
-                        // Title section
+                    // Subtitle section
+                    if !document.subtitle.isEmpty {
                         Button(action: {
-                            // Start editing title
+                            // Start editing subtitle
                             withAnimation(.easeInOut(duration: 0.2)) {
                                 isTitleVisible = true
                             }
                         }) {
-                            Text(document.title.isEmpty ? "Untitled" : document.title)
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundColor(colorScheme == .dark ? .white : .black)
+                            Text(document.subtitle)
+                                .font(.system(size: 14, weight: .regular))
+                                .foregroundColor(colorScheme == .dark ? .white.opacity(0.8) : .black.opacity(0.7))
                                 .lineLimit(1)
                         }
                         .buttonStyle(.plain)
-                        
-                        // Subtitle section
-                        if !document.subtitle.isEmpty {
-                            Button(action: {
-                                // Start editing subtitle
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    isTitleVisible = true
-                                }
-                            }) {
-                                Text(document.subtitle)
-                                    .font(.system(size: 14, weight: .regular))
-                                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.8) : .black.opacity(0.7))
-                                    .lineLimit(1)
-                            }
-                            .buttonStyle(.plain)
-                        }
                     }
-                    
-                    Spacer()
-                    
-                    // Scroll to top button with enhanced styling
-                    Button(action: {
-                        // Scroll back to top to expand header with smooth animation
-                        #if os(iOS)
-                        HapticFeedback.impact(.light)
-                        #endif
-                        
-                        withAnimation(.interactiveSpring(response: 0.8, dampingFraction: 0.85, blendDuration: 0.3)) {
-                            headerCollapseProgress = 0
-                        }
-                    }) {
-                        Image(systemName: "chevron.up")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(colorScheme == .dark ? .white.opacity(0.8) : .black.opacity(0.8))
-                            .frame(width: 32, height: 32)
-                            .background(
-                                Circle()
-                                    .fill(colorScheme == .dark ? Color.white.opacity(0.15) : Color.black.opacity(0.15))
-                                    .overlay(
-                                        Circle()
-                                            .stroke(colorScheme == .dark ? Color.white.opacity(0.2) : Color.black.opacity(0.2), lineWidth: 1)
-                                    )
-                            )
-                    }
-                    .buttonStyle(.plain)
                 }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 12)
+                
+                Spacer()
+                
+                // Scroll to top button with enhanced styling
+                Button(action: {
+                    // Scroll back to top to expand header with smooth animation
+                    #if os(iOS)
+                    HapticFeedback.impact(.light)
+                    #endif
+                    
+                    withAnimation(.interactiveSpring(response: 0.8, dampingFraction: 0.85, blendDuration: 0.3)) {
+                        headerCollapseProgress = 0
+                    }
+                }) {
+                    Image(systemName: "chevron.up")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.8) : .black.opacity(0.8))
+                        .frame(width: 32, height: 32)
+                        .background(
+                            Circle()
+                                .fill(colorScheme == .dark ? Color.white.opacity(0.15) : Color.black.opacity(0.15))
+                                .overlay(
+                                    Circle()
+                                        .stroke(colorScheme == .dark ? Color.white.opacity(0.2) : Color.black.opacity(0.2), lineWidth: 1)
+                                )
+                        )
+                }
+                .buttonStyle(.plain)
             }
-        } else {
-            // Fallback for older iOS versions
-            expandedHeaderView(headerImage!)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
         }
-        #else
-        // macOS fallback
-        expandedHeaderView(headerImage!)
-        #endif
     }
     
     // MARK: - Expanded Header View (Legacy)
