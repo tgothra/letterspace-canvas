@@ -656,13 +656,12 @@ struct DocumentArea: View {
                         ZStack(alignment: .top) {
             // Main content - smooth spacer transition
             VStack(spacing: 0) {
-                // Header section with dynamic spacer for smooth transition
-                if viewMode != .focus && !isDistractionFreeMode {
-                    // Header that continues collapsing even when invisible
-                    headerView
-                        .opacity(headerCollapseProgress < 0.85 ? 1.0 : 0.0) // Fade out header content but keep collapsing
-                        .transition(createHeaderTransition())
-                }
+                // Header section removed - now using floating header in SwiftUI TextEditor
+                // if viewMode != .focus && !isDistractionFreeMode {
+                //     headerView
+                //         .opacity(headerCollapseProgress < 0.85 ? 1.0 : 0.0)
+                //         .transition(createHeaderTransition())
+                // }
                 
                 // Document content - always has the same layout
                 AnimatedDocumentContainer(document: $document) {
@@ -672,35 +671,25 @@ struct DocumentArea: View {
                 .padding(.top, 24) // Always the same padding
             }
             
-            // Floating header overlay - never affects layout
-            if viewMode != .focus && !isDistractionFreeMode && headerCollapseProgress >= 0.85 {
-                VStack {
-                    floatingCollapsedHeader
-                        .padding(.horizontal, 8) // Reduced from 16 to 8 for wider appearance
-                        .padding(.top, {
-                            #if os(iOS)
-                            let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-                            return isPhone ? 40 : 16 // Reduced from 60/24 to 40/16 to lift higher
-                            #else
-                            return 16 // Reduced from 24 to 16
-                            #endif
-                        }())
-                        // Smooth opacity transition
-                        .opacity(max(0, min(1, (headerCollapseProgress - 0.85) / 0.15)))
-                    
-                    Spacer()
-                }
-                .allowsHitTesting(headerCollapseProgress >= 0.9)
-                .onTapGesture {
-                    // Cancel editing when tapping outside text fields
-                    if isEditingFloatingTitle || isEditingFloatingSubtitle {
-                        isEditingFloatingTitle = false
-                        isEditingFloatingSubtitle = false
-                        isFloatingTitleFocused = false
-                        isFloatingSubtitleFocused = false
-                    }
-                }
-            }
+            // Old floating header overlay removed - now using floating header in SwiftUI TextEditor
+            // if viewMode != .focus && !isDistractionFreeMode && headerCollapseProgress >= 0.85 {
+            //     VStack {
+            //         floatingCollapsedHeader
+            //             .padding(.horizontal, 8)
+            //             .padding(.top, {
+            //                 #if os(iOS)
+            //                 let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+            //                 return isPhone ? 40 : 16
+            //                 #else
+            //                 return 16
+            //                 #endif
+            //             }())
+            //             .opacity(max(0, min(1, (headerCollapseProgress - 0.85) / 0.15)))
+            //         
+            //         Spacer()
+            //     }
+            //     .allowsHitTesting(headerCollapseProgress >= 0.9)
+            // }
         }
                         .frame(width: paperWidth)
             // Remove overall animation on currentOverlap to prevent animating document title
