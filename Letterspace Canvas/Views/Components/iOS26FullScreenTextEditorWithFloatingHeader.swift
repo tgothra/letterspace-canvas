@@ -234,7 +234,7 @@ struct iOS26FullScreenTextEditorWithFloatingHeader: View {
                     }
                     .onAppear {
                         subtitleText = document.subtitle
-                        isTitleFocused = true
+                        isSubtitleFocused = true
                     }
             } else if !document.subtitle.isEmpty || isEditingTitle {
                 Button(action: {
@@ -427,8 +427,23 @@ struct iOS26FullScreenTextEditorWithFloatingHeader: View {
         }
         
         // Load header image if available
-        if let imageData = document.headerImageData {
-            headerImage = UIImage(data: imageData)
+        if let headerElement = document.elements.first(where: { $0.type == .headerImage && !$0.content.isEmpty }) {
+            // Try to load from cache first
+            if let cachedImage = ImageCache.shared.getImage(for: headerElement.content) {
+                #if os(iOS)
+                headerImage = cachedImage
+                #endif
+            } else {
+                // Load from file path
+                let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+                let imageUrl = documentsPath.appendingPathComponent(headerElement.content)
+                
+                if let imageData = try? Data(contentsOf: imageUrl),
+                   let loadedImage = UIImage(data: imageData) {
+                    headerImage = loadedImage
+                    ImageCache.shared.setImage(loadedImage, for: headerElement.content)
+                }
+            }
         }
     }
     
