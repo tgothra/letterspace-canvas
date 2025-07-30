@@ -641,12 +641,8 @@ struct DocumentArea: View {
                 
     // Main document content stack
     private func documentHStack(geo: GeometryProxy) -> some View {
-                HStack(spacing: 0) {
-                    Spacer()
-            
+        HStack(spacing: 0) {
             documentVStack(geo: geo)
-            
-            Spacer()
         }
         .frame(maxWidth: .infinity) // Ensure HStack takes max width
     }
