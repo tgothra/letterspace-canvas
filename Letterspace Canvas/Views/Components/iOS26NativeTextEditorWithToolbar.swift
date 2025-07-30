@@ -34,7 +34,8 @@ struct iOS26NativeTextEditorWithToolbar: View {
     @State private var currentIsItalic: Bool = false
     
     // Floating header state
-    @State private var showFloatingHeader: Bool = false
+    @State private var showFloatingHeader: Bool = true // Show expanded by default
+    @State private var isHeaderCollapsed: Bool = false // Track if header is collapsed
     @State private var headerImage: UIImage?
     @State private var isEditingTitle: Bool = false
     @State private var isEditingSubtitle: Bool = false
@@ -92,17 +93,23 @@ struct iOS26NativeTextEditorWithToolbar: View {
             }
             .allowsHitTesting(showFloatingHeader)
             
-            // Show/hide header button
+            // Header collapse/expand button
             VStack {
                 HStack {
                     Spacer()
                     
                     Button(action: {
                         withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                            showFloatingHeader.toggle()
+                            if headerImage != nil {
+                                isHeaderCollapsed.toggle()
+                            } else {
+                                showFloatingHeader.toggle()
+                            }
                         }
                     }) {
-                        Image(systemName: showFloatingHeader ? "chevron.up" : "doc.text.image")
+                        Image(systemName: headerImage != nil 
+                              ? (isHeaderCollapsed ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
+                              : (showFloatingHeader ? "chevron.up" : "doc.text.image"))
                             .font(.system(size: 16, weight: .medium))
                             .foregroundColor(.primary)
                             .frame(width: 44, height: 44)
@@ -123,17 +130,11 @@ struct iOS26NativeTextEditorWithToolbar: View {
         TextEditor(text: $attributedText, selection: $selection)
             .font(.system(size: 16))
             .padding(.horizontal, 16)
-            .padding(.top, showFloatingHeader ? 100 : 20) // Add top padding when header is visible
+            .padding(.top, showFloatingHeader && !isHeaderCollapsed ? 200 : (isHeaderCollapsed ? 80 : 20)) // Adjust padding based on header state
             .padding(.bottom, 20)
             .background(Color(UIColor.systemBackground))
             .scrollContentBackground(.hidden)
             .onTapGesture {
-                // Hide floating header when tapping in text area
-                if showFloatingHeader && !isEditingTitle && !isEditingSubtitle {
-                    withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                        showFloatingHeader = false
-                    }
-                }
                 isEditing = true
             }
                 .toolbar {
@@ -384,40 +385,65 @@ struct iOS26NativeTextEditorWithToolbar: View {
     private var floatingHeaderView: some View {
         Group {
             if let headerImage = headerImage {
-                // Header with image
-                ZStack {
-                    // Glass effect background
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(.clear)
-                        .frame(height: 80)
-                        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16))
-                        .shadow(color: .black.opacity(0.1), radius: 8, x: 0, y: 4)
-                    
-                    // Content
-                    HStack(spacing: 12) {
-                        // Header image
+                if isHeaderCollapsed {
+                    // Collapsed header bar
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(.ultraThinMaterial)
+                            .frame(height: 60)
+                            .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+                        
+                        HStack(spacing: 12) {
+                            // Small header image
+                            Image(uiImage: headerImage)
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(width: 40, height: 40)
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                                )
+                            
+                            // Title and subtitle
+                            VStack(alignment: .leading, spacing: 2) {
+                                titleView
+                                subtitleView
+                            }
+                            
+                            Spacer()
+                        }
+                        .padding(.horizontal, 16)
+                    }
+                } else {
+                    // Expanded header with large image
+                    VStack(spacing: 0) {
+                        // Large header image
                         Image(uiImage: headerImage)
                             .resizable()
                             .aspectRatio(contentMode: .fill)
-                            .frame(width: 40, height: 40)
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                            .frame(height: 160)
+                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                             .overlay(
-                                RoundedRectangle(cornerRadius: 8)
+                                RoundedRectangle(cornerRadius: 16, style: .continuous)
                                     .stroke(Color.primary.opacity(0.1), lineWidth: 1)
                             )
                         
-                        // Title and subtitle
-                        VStack(alignment: .leading, spacing: 2) {
+                        // Title and subtitle overlay on image
+                        VStack(alignment: .leading, spacing: 4) {
                             titleView
                             subtitleView
                         }
-                        
-                        Spacer()
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 16)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+                        .padding(.horizontal, 16)
+                        .offset(y: -20) // Overlay on bottom of image
                     }
-                    .padding(.horizontal, 16)
+                    .shadow(color: .black.opacity(0.1), radius: 8, x: 0, y: 4)
                 }
             } else {
-                // Header without image
+                // Header without image - always collapsed style
                 ZStack {
                     RoundedRectangle(cornerRadius: 16)
                         .fill(.ultraThinMaterial)
