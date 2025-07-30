@@ -680,8 +680,8 @@ struct ScriptureLayoutSelectionContent: View {
     @State private var selectedLayout: ScriptureLayoutStyle
     @Environment(\.colorScheme) var colorScheme
     
-    // Use the shared AppSettings instance directly
-    private let appSettings = AppSettings.shared
+    // Use the shared AppSettings instance with @State for @Observable classes
+    @State private var appSettings = AppSettings.shared
     
     // Add State variable for the popover
     @State private var showColorPopover = false

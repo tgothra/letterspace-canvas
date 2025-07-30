@@ -4,6 +4,7 @@ import SwiftUI
 import AppKit
 #elseif os(iOS)
 import UIKit // For UIImage
+import PhotosUI // For PHPickerViewController
 #endif
 import UniformTypeIdentifiers
 import UserNotifications
@@ -246,6 +247,41 @@ struct DocumentArea: View {
     @State private var slideDownOffset: CGFloat = 0 // Track slide-down dismiss animation
     @State private var showPresentationLabel: Bool = false // Track presentation view label display
     
+    // Floating header interaction states
+    @State private var isEditingFloatingTitle: Bool = false
+    @State private var isEditingFloatingSubtitle: Bool = false
+    @State private var floatingTitleText: String = ""
+    @State private var floatingSubtitleText: String = ""
+    
+    // Computed binding for document text content
+    private var documentTextBinding: Binding<String> {
+        Binding(
+            get: {
+                // Get text from the first textBlock element
+                return document.elements.first(where: { $0.type == .textBlock })?.content ?? ""
+            },
+            set: { newValue in
+                // Update or create textBlock element
+                if let index = document.elements.firstIndex(where: { $0.type == .textBlock }) {
+                    document.elements[index].content = newValue
+                } else {
+                    var newElement = DocumentElement(type: .textBlock)
+                    newElement.content = newValue
+                    document.elements.append(newElement)
+                }
+            }
+        )
+    }
+    @FocusState private var isFloatingTitleFocused: Bool
+    @FocusState private var isFloatingSubtitleFocused: Bool
+    @State private var showFloatingImageActionSheet: Bool = false
+    
+    // Photo picker coordinators for floating header
+    #if os(iOS)
+    @State private var floatingPhotoPickerCoordinator: PhotoPickerCoordinator?
+    @State private var floatingDocumentPickerCoordinator: DocumentPickerCoordinator?
+    #endif
+    
     // Ultra-smooth easing function for buttery navigation
     private func easeOutCubic(_ t: CGFloat) -> CGFloat {
         let t1 = t - 1
@@ -484,9 +520,9 @@ struct DocumentArea: View {
                         Spacer()
                     }
                     .frame(width: geometry.size.width, height: geometry.size.height)
+                    .allowsHitTesting(false) // Correctly applied to concrete VStack here
+                    .ignoresSafeArea()
                 }
-                .allowsHitTesting(false) // Don't interfere with gestures
-                .ignoresSafeArea()
             }
             
             // iOS presentation view label overlay (for distraction-free mode)
@@ -522,9 +558,9 @@ struct DocumentArea: View {
                         Spacer()
                     }
                     .frame(width: geometry.size.width, height: geometry.size.height)
+                    .allowsHitTesting(false) // Correctly applied to concrete VStack here
+                    .ignoresSafeArea()
                 }
-                .allowsHitTesting(false) // Don't interfere with gestures
-                .ignoresSafeArea()
             }
             #endif
             
@@ -617,22 +653,55 @@ struct DocumentArea: View {
     
     // Document vertical content stack
     private func documentVStack(geo: GeometryProxy) -> some View {
-                        VStack(spacing: 0) {
-            // Header section is ALWAYS rendered unless in focus mode or distraction-free mode
-            // Show collapsed header bar for documents without images, full header for documents with images
-            if viewMode != .focus && !isDistractionFreeMode {
-                                headerView
-                    .transition(createHeaderTransition())
+                        ZStack(alignment: .top) {
+            // Main content - smooth spacer transition
+            VStack(spacing: 0) {
+                // Header section with dynamic spacer for smooth transition
+                if viewMode != .focus && !isDistractionFreeMode {
+                    // Header that continues collapsing even when invisible
+                    headerView
+                        .opacity(headerCollapseProgress < 0.85 ? 1.0 : 0.0) // Fade out header content but keep collapsing
+                        .transition(createHeaderTransition())
+                }
+                
+                // Document content - always has the same layout
+                AnimatedDocumentContainer(document: $document) {
+                    documentContentView
+                        .frame(minHeight: geo.size.height)
+                }
+                .padding(.top, 24) // Always the same padding
             }
             
-            // Document content always appears below the header (no overlapping)
-            AnimatedDocumentContainer(document: $document) {
-                            documentContentView
-                    .frame(minHeight: geo.size.height)
+            // Floating header overlay - never affects layout
+            if viewMode != .focus && !isDistractionFreeMode && headerCollapseProgress >= 0.85 {
+                VStack {
+                    floatingCollapsedHeader
+                        .padding(.horizontal, 8) // Reduced from 16 to 8 for wider appearance
+                        .padding(.top, {
+                            #if os(iOS)
+                            let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                            return isPhone ? 40 : 16 // Reduced from 60/24 to 40/16 to lift higher
+                            #else
+                            return 16 // Reduced from 24 to 16
+                            #endif
+                        }())
+                        // Smooth opacity transition
+                        .opacity(max(0, min(1, (headerCollapseProgress - 0.85) / 0.15)))
+                    
+                    Spacer()
+                }
+                .allowsHitTesting(headerCollapseProgress >= 0.9)
+                .onTapGesture {
+                    // Cancel editing when tapping outside text fields
+                    if isEditingFloatingTitle || isEditingFloatingSubtitle {
+                        isEditingFloatingTitle = false
+                        isEditingFloatingSubtitle = false
+                        isFloatingTitleFocused = false
+                        isFloatingSubtitleFocused = false
+                    }
+                }
             }
-            // Always add padding since we always show a header now
-            .padding(.top, 24)
-                        }
+        }
                         .frame(width: paperWidth)
             // Remove overall animation on currentOverlap to prevent animating document title
             // when header is toggled (this was causing sliding effect)
@@ -1542,10 +1611,111 @@ struct DocumentArea: View {
     
     // Apply smoothing to header progress for ultra-smooth slow scrolling
     private func applySmoothingToHeaderProgress() {
-        withAnimation(.linear(duration: 0.1)) {
-            smoothedHeaderProgress = headerCollapseProgress
+        // Remove animation to prevent container snap-back
+        smoothedHeaderProgress = headerCollapseProgress
+    }
+    
+    // Scroll to top function for floating header button
+    private func scrollToTop() {
+        // This function will trigger the text editor to scroll to the top
+        // The actual scrolling is handled by the text editor component
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: NSNotification.Name("ScrollToTop"), object: nil)
         }
     }
+    
+    // MARK: - Floating Header Image Picker Methods
+    #if os(iOS)
+    private func presentFloatingPhotoLibraryPicker() {
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let rootViewController = windowScene.windows.first?.rootViewController else {
+            return
+        }
+        
+        var topController = rootViewController
+        while let presented = topController.presentedViewController {
+            topController = presented
+        }
+        
+        var configuration = PHPickerConfiguration()
+        configuration.filter = .images
+        configuration.selectionLimit = 1
+        
+        let picker = PHPickerViewController(configuration: configuration)
+        let photoCoordinator = PhotoPickerCoordinator { url in
+            self.handleFloatingImageSelection(url: url)
+        }
+        picker.delegate = photoCoordinator
+        // Store coordinator to prevent deallocation
+        self.floatingPhotoPickerCoordinator = photoCoordinator
+        topController.present(picker, animated: true)
+    }
+    
+    private func presentFloatingDocumentPicker() {
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let rootViewController = windowScene.windows.first?.rootViewController else {
+            return
+        }
+        
+        var topController = rootViewController
+        while let presented = topController.presentedViewController {
+            topController = presented
+        }
+        
+        let documentPicker = UIDocumentPickerViewController(forOpeningContentTypes: [.image, .jpeg, .png, .heic, .gif, .webP])
+        let documentCoordinator = DocumentPickerCoordinator { url in
+            self.handleFloatingImageSelection(url: url)
+        }
+        documentPicker.delegate = documentCoordinator
+        // Store coordinator to prevent deallocation
+        self.floatingDocumentPickerCoordinator = documentCoordinator
+        documentPicker.allowsMultipleSelection = false
+        topController.present(documentPicker, animated: true)
+    }
+    
+    private func handleFloatingImageSelection(url: URL) {
+        // Post notification to handle the image import
+        NotificationCenter.default.post(
+            name: NSNotification.Name("HandleImageImport"),
+            object: nil,
+            userInfo: ["imageURL": url]
+        )
+    }
+    
+    private func removeHeaderImage() {
+        let filenameToDelete = document.elements.first(where: { $0.type == .headerImage })?.content
+        
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) {
+            headerImage = nil
+            isHeaderExpanded = false
+            
+            // Update document model
+            if let index = document.elements.firstIndex(where: { $0.type == .headerImage }) {
+                document.elements[index].content = ""
+            }
+            document.isHeaderExpanded = false
+        }
+        
+        // File deletion on background thread
+        if let name = filenameToDelete, !name.isEmpty {
+            DispatchQueue.global(qos: .background).async {
+                if let appDirectory = Letterspace_CanvasDocument.getAppDocumentsDirectory() {
+                    let documentPath = appDirectory.appendingPathComponent("\(self.document.id)")
+                    let imagesPath = documentPath.appendingPathComponent("Images")
+                    let imageUrl = imagesPath.appendingPathComponent(name)
+                    try? FileManager.default.removeItem(at: imageUrl)
+                    print("🗑️ Image file \(name) removed.")
+                }
+            }
+        }
+        
+        // Save document changes
+        DispatchQueue.main.async {
+            self.document.save()
+            print("🗑️ Header image settings saved, document updated.")
+        }
+    }
+    #endif
     
     private var collapsedTextOnlyHeaderView: some View {
         ZStack {
@@ -1617,6 +1787,188 @@ struct DocumentArea: View {
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
     
+
+
+    private var floatingCollapsedHeader: some View {
+        Group {
+            if let headerImage = headerImage {
+                // Floating header with enhanced liquid glass effect
+                ZStack {
+                    if #available(iOS 26.0, *) {
+                        // Enhanced liquid glass background for floating state
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(.clear) // No material fill - let glass effect do the work
+                            .frame(width: paperWidth - 16, height: 80)
+                            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16)) // Pure glass effect without material interference
+                            .shadow(color: colorScheme == .dark ? Color.white.opacity(0.04) : Color.black.opacity(0.05), radius: 8, x: 0, y: 4) // Very minimal shadow
+                    } else {
+                        // Fallback
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(colorScheme == .dark ? Color(.sRGB, red: 0.15, green: 0.15, blue: 0.15, opacity: 0.25) : Color(.sRGB, red: 0.95, green: 0.95, blue: 0.95, opacity: 0.25)) // Extremely transparent fallback
+                            .frame(width: paperWidth - 16, height: 80)
+                            .shadow(color: colorScheme == .dark ? Color.white.opacity(0.02) : Color.black.opacity(0.02), radius: 6, x: 0, y: 2) // Minimal shadow
+                    }
+                    
+                    // Content
+                    HStack(spacing: 12) {
+                        // Image thumbnail - tappable for photo selection
+                        Button(action: {
+                            // Trigger photo picker action sheet
+                            showFloatingImageActionSheet = true
+                        }) {
+                            #if os(macOS)
+                            Image(nsImage: headerImage)
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(width: 40, height: 40)
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                                )
+                            #elseif os(iOS)
+                            Image(uiImage: headerImage)
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(width: 40, height: 40)
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                                )
+                            #endif
+                        }
+                        .buttonStyle(.plain)
+                        .help("Tap to change header image")
+                        
+                        // Title and subtitle - tappable for editing
+                        VStack(alignment: .leading, spacing: 2) {
+                            // Title section
+                            if isEditingFloatingTitle {
+                                TextField("Enter title", text: $floatingTitleText)
+                                    .font(.system(size: 18, weight: .semibold))
+                                    .textFieldStyle(.plain)
+                                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                                    .focused($isFloatingTitleFocused)
+                                    .onSubmit {
+                                        // Save and exit editing
+                                        document.title = floatingTitleText
+                                        document.save()
+                                        isEditingFloatingTitle = false
+                                    }
+                                    .onAppear {
+                                        floatingTitleText = document.title
+                                        isFloatingTitleFocused = true
+                                    }
+                            } else {
+                                Button(action: {
+                                    // Start editing title
+                                    floatingTitleText = document.title
+                                    isEditingFloatingTitle = true
+                                }) {
+                                    Text(document.title.isEmpty ? "Untitled" : document.title)
+                                        .font(.system(size: 18, weight: .semibold))
+                                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                                        .lineLimit(1)
+                                }
+                                .buttonStyle(.plain)
+                                .help("Tap to edit title")
+                            }
+                            
+                            // Subtitle section
+                            if isEditingFloatingSubtitle {
+                                TextField("Enter subtitle", text: $floatingSubtitleText)
+                                    .font(.system(size: 14, weight: .regular))
+                                    .textFieldStyle(.plain)
+                                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.8) : .black.opacity(0.7))
+                                    .focused($isFloatingSubtitleFocused)
+                                    .onSubmit {
+                                        // Save and exit editing
+                                        document.subtitle = floatingSubtitleText
+                                        document.save()
+                                        isEditingFloatingSubtitle = false
+                                    }
+                                    .onAppear {
+                                        floatingSubtitleText = document.subtitle
+                                        isFloatingSubtitleFocused = true
+                                    }
+                            } else if !document.subtitle.isEmpty || isEditingFloatingTitle {
+                                Button(action: {
+                                    // Start editing subtitle
+                                    floatingSubtitleText = document.subtitle
+                                    isEditingFloatingSubtitle = true
+                                }) {
+                                    Text(document.subtitle.isEmpty ? "Add subtitle" : document.subtitle)
+                                        .font(.system(size: 14, weight: .regular))
+                                        .foregroundColor(document.subtitle.isEmpty ? 
+                                            (colorScheme == .dark ? .white.opacity(0.4) : .black.opacity(0.4)) :
+                                            (colorScheme == .dark ? .white.opacity(0.8) : .black.opacity(0.7)))
+                                        .lineLimit(1)
+                                }
+                                .buttonStyle(.plain)
+                                .help("Tap to edit subtitle")
+                            }
+                        }
+                        
+                        Spacer()
+                        
+                        // Scroll to top button with enhanced styling
+                        Button(action: {
+                            // Scroll back to top to expand header with smooth animation
+                            #if os(iOS)
+                            HapticFeedback.impact(.light)
+                            #endif
+                            
+                            withAnimation(.interactiveSpring(response: 0.8, dampingFraction: 0.85, blendDuration: 0.3)) {
+                                headerCollapseProgress = 0
+                            }
+                            
+                            // Also scroll the text editor to top if possible
+                            scrollToTop()
+                        }) {
+                            Image(systemName: "chevron.up")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(colorScheme == .dark ? .white.opacity(0.8) : .black.opacity(0.8))
+                                .frame(width: 32, height: 32)
+                                .background(
+                                    Circle()
+                                        .fill(colorScheme == .dark ? Color.white.opacity(0.15) : Color.black.opacity(0.15))
+                                        .overlay(
+                                            Circle()
+                                                .stroke(colorScheme == .dark ? Color.white.opacity(0.2) : Color.black.opacity(0.2), lineWidth: 1)
+                                        )
+                                )
+                        }
+                        .buttonStyle(.plain)
+                        .help("Scroll to top")
+                        .scaleEffect(headerCollapseProgress > 0.95 ? 1.0 : 0.9)
+                        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: headerCollapseProgress)
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 12)
+                }
+            }
+        }
+        #if os(iOS)
+        .confirmationDialog("Header Image Options", isPresented: $showFloatingImageActionSheet) {
+            Button("Photo Library") {
+                presentFloatingPhotoLibraryPicker()
+            }
+            Button("Browse Files") {
+                presentFloatingDocumentPicker()
+            }
+            if headerImage != nil {
+                Button("Remove Image", role: .destructive) {
+                    removeHeaderImage()
+                }
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("Choose how to change your header image")
+        }
+        #endif
+    }
+
     private var headerView: some View {
         Group {
             if headerImage != nil || isHeaderExpanded {
@@ -1719,16 +2071,20 @@ struct DocumentArea: View {
                     )
 
                 #elseif os(iOS)
-                // iOS: SwiftUI-based text editor optimized for touch with scroll-based header behavior
-                IOSDocumentEditor(
-                    document: $document,
-                    onScrollChange: { scrollOffset in
-                        handleIOSScrollChange(scrollOffset: scrollOffset)
-                    }
-                )
+                // iOS 26 Text Editor with Scroll Detection for Header Collapse
+                if #available(iOS 26.0, *) {
+                    iOS26ScrollDetectingTextEditor(
+                        document: $document,
+                        headerCollapseProgress: $headerCollapseProgress,
+                        text: documentTextBinding,
+                        maxScrollForCollapse: calculateDynamicMaxScrollForCollapse()
+                    )
                     .allowsHitTesting(!isAnimatingHeaderCollapse)
-                    .animation(.spring(response: 0.6, dampingFraction: 0.8), value: viewMode)
-                    .animation(.spring(response: 0.6, dampingFraction: 0.8), value: isDistractionFreeMode)
+                    .onChange(of: headerCollapseProgress) { _, newProgress in
+                        // Trigger smoothing when headerCollapseProgress changes
+                        applySmoothingToHeaderProgress()
+                        print("🔄 Header progress changed to: \(newProgress)")
+                    }
                     .overlay(
                         GeometryReader { geometry in
                             Color.clear // Use Color.clear for geometry reading
@@ -1740,6 +2096,27 @@ struct DocumentArea: View {
                                 }
                         }
                     )
+                } else {
+                    // Fallback for older iOS versions
+                    IOSDocumentEditor(
+                        document: $document,
+                        onScrollChange: { scrollOffset in
+                            handleIOSScrollChange(scrollOffset: scrollOffset)
+                        }
+                    )
+                    .allowsHitTesting(!isAnimatingHeaderCollapse)
+                    .overlay(
+                        GeometryReader { geometry in
+                            Color.clear // Use Color.clear for geometry reading
+                                .onAppear {
+                                    viewportHeight = geometry.size.height
+                                }
+                                .onChange(of: geometry.size.height) { _, newHeight in
+                                    viewportHeight = newHeight
+                                }
+                        }
+                    )
+                }
 
                 #endif
             }
@@ -2132,63 +2509,7 @@ struct TopRoundedRectangle: Shape {
     }
 }
 
-// Animation container view
-struct AnimatedDocumentContainer<Content: View>: View {
-    @Binding var document: Letterspace_CanvasDocument
-    @Namespace private var animation
-    let content: Content
-    @State private var isTogglingHeader = false
-    
-    init(document: Binding<Letterspace_CanvasDocument>, @ViewBuilder content: () -> Content) {
-        self._document = document
-        self.content = content()
-    }
-    
-    var body: some View {
-        // Wrap content in ZStack to prevent layout animation
-        ZStack {
-            content
-                .id(document.id)
-                .onChange(of: document.isHeaderExpanded) { _, _ in
-                    // Set flag when header is toggled to avoid animating document content
-                    isTogglingHeader = true
-                    // Reset the flag after the transition should be complete
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-                        isTogglingHeader = false
-                    }
-                }
-                .onAppear {
-                    // Set up notification observer for manual header toggles
-                    NotificationCenter.default.addObserver(forName: NSNotification.Name("HeaderImageToggling"), 
-                                                        object: nil, 
-                                                        queue: .main) { _ in
-                        // Set flag to prevent animation when header is manually toggled
-                        isTogglingHeader = true
-                        print("📱 AnimatedDocumentContainer: Received HeaderImageToggling notification")
-                        
-                        // Reset flag after animation should be complete
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-                            isTogglingHeader = false
-                        }
-                    }
-                }
-        }
-        // Apply the transition to the entire ZStack
-        .transition(
-            // Only use transitions when not toggling header
-            isTogglingHeader 
-            ? .identity // No transition when toggling header (in either direction)
-            : .asymmetric(
-                insertion: .opacity
-                    .combined(with: .scale(scale: 0.98))
-                    .animation(.spring(response: 0.5, dampingFraction: 0.8)),
-                removal: .identity // No animation for removal - instant transition
-            )
-        )
-        // Explicitly use no animation during header toggle
-        .animation(isTogglingHeader ? nil : .default, value: document.isHeaderExpanded)
-    }
-}
+
 
 // MARK: - Vertical Bookmark Timeline
 struct VerticalBookmarkTimelineView: View {
@@ -2425,4 +2746,63 @@ private func createHeaderTransition() -> AnyTransition {
     )
 }
 
+// Animation container view
+struct AnimatedDocumentContainer<Content: View>: View {
+    @Binding var document: Letterspace_CanvasDocument
+    @Namespace private var animation
+    let content: Content
+    @State private var isTogglingHeader = false
+    
+    init(document: Binding<Letterspace_CanvasDocument>, @ViewBuilder content: () -> Content) {
+        self._document = document
+        self.content = content()
+    }
+    
+    var body: some View {
+        // Wrap content in ZStack to prevent layout animation
+        ZStack {
+            content
+                .id(document.id)
+                .onChange(of: document.isHeaderExpanded) { _, _ in
+                    // Set flag when header is toggled to avoid animating document content
+                    isTogglingHeader = true
+                    // Reset the flag after the transition should be complete
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                        isTogglingHeader = false
+                    }
+                }
+                .onAppear {
+                    // Set up notification observer for manual header toggles
+                    NotificationCenter.default.addObserver(forName: NSNotification.Name("HeaderImageToggling"), 
+                                                        object: nil, 
+                                                        queue: .main) { _ in
+                        // Set flag to prevent animation when header is manually toggled
+                        isTogglingHeader = true
+                        print("📱 AnimatedDocumentContainer: Received HeaderImageToggling notification")
+                        
+                        // Reset flag after animation should be complete
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                            isTogglingHeader = false
+                        }
+                    }
+                }
+        }
+        // Apply the transition to the entire ZStack
+        .transition(
+            // Only use transitions when not toggling header
+            isTogglingHeader 
+            ? .identity // No transition when toggling header (in either direction)
+            : .asymmetric(
+                insertion: .opacity
+                    .combined(with: .scale(scale: 0.98))
+                    .animation(.spring(response: 0.5, dampingFraction: 0.8)),
+                removal: .identity // No animation for removal - instant transition
+            )
+        )
+        // Explicitly use no animation during header toggle
+        .animation(isTogglingHeader ? nil : .default, value: document.isHeaderExpanded)
+    }
+}
+
 #endif
+

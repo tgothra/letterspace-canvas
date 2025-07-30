@@ -14,8 +14,9 @@ import CoreGraphics
 struct DashboardView: View {
     @Binding var document: Letterspace_CanvasDocument
     var onSelectDocument: (Letterspace_CanvasDocument) -> Void // Added this property
-    @Binding var showFloatingSidebar: Bool // Add floating sidebar state
-    var floatingSidebarWidth: CGFloat // Add floating sidebar width parameter
+    // Removed floating sidebar parameters - iPhone uses circular menu, iPad uses native NavigationSplitView
+    // Dummy property for compatibility
+    private var showFloatingSidebar: Bool { false }
     @Environment(\.themeColors) var theme
     @Environment(\.colorScheme) var colorScheme
     private let gradientManager = GradientWallpaperManager.shared
@@ -156,29 +157,13 @@ struct DashboardView: View {
     
     // Computed property to determine if navigation padding should be added
     private var shouldAddNavigationPadding: Bool {
-        #if os(iOS)
-        // Only add padding when navigation is actually shown in dashboard mode for both iPad and iPhone
-        let isIPadOrPhone = UIDevice.current.userInterfaceIdiom == .pad || UIDevice.current.userInterfaceIdiom == .phone
-        return isIPadOrPhone && showFloatingSidebar && sidebarMode == .allDocuments
-        #else
+        // No navigation padding needed - iPhone uses circular menu, iPad uses native NavigationSplitView
         return false
-        #endif
     }
     
-    // NEW: Computed property for responsive navigation padding
+    // Navigation padding no longer needed
     private var navPadding: CGFloat {
-        #if os(iOS)
-        let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-        if isPhone {
-            // iPhone: Extra breathing room between nav and content
-            return floatingSidebarWidth + 60 // Sidebar width + 60pt buffer (increased from 55pt)
-        } else {
-            // iPad: More breathing room between nav and content
-            return floatingSidebarWidth + 70 // Sidebar width + 70pt buffer for more breathing room
-        }
-        #else
-        return 0
-        #endif
+        return 0 // No navigation padding needed
     }
     
     // iPad detection helper
@@ -243,28 +228,52 @@ struct DashboardView: View {
             
             return (statusWidth: statusWidth, nameWidth: nameWidth, seriesWidth: seriesWidth, locationWidth: locationWidth, dateWidth: dateWidth, createdDateWidth: createdDateWidth)
         } else if isIPad {
-            // Dynamic widths for iPad
-            let statusWidth: CGFloat = 60
-            let minNameWidth: CGFloat = 200
-            let minSeriesWidth: CGFloat = 120
-            let minLocationWidth: CGFloat = 130
-            let dateWidth: CGFloat = 100
-            let createdDateWidth: CGFloat = 100
-            let actionsWidth: CGFloat = 80 // Estimate for actions column
-            let spacing: CGFloat = 16 * 4 // 4 spacers between columns
+            // iPad: Use same flex ratio system as iPhone but with iPad-specific sizing
+            let effectiveWidth = availableWidth ?? UIScreen.main.bounds.width
             
-            if let availableWidth = availableWidth {
-                let totalFixed = statusWidth + dateWidth + createdDateWidth + actionsWidth + spacing
-                let minTotal = minNameWidth + minSeriesWidth + minLocationWidth
-                let extra = max(0, availableWidth - totalFixed - minTotal)
-                // Distribute extra: Name 60%, Series 20%, Location 20%
-                let nameWidth = minNameWidth + extra * 0.6
-                let seriesWidth = minSeriesWidth + extra * 0.2
-                let locationWidth = minLocationWidth + extra * 0.2
-                return (statusWidth: statusWidth, nameWidth: nameWidth, seriesWidth: seriesWidth, locationWidth: locationWidth, dateWidth: dateWidth, createdDateWidth: createdDateWidth)
-            } else {
-                return (statusWidth: statusWidth, nameWidth: minNameWidth, seriesWidth: minSeriesWidth, locationWidth: minLocationWidth, dateWidth: dateWidth, createdDateWidth: createdDateWidth)
+            // Fixed width columns that don't flex
+            let statusWidth: CGFloat = 60
+            let actionsWidth: CGFloat = 80 // Actions column always visible on iPad
+            
+            // Calculate remaining width for flexible columns
+            let remainingWidth = effectiveWidth - statusWidth - actionsWidth
+            
+            // Get visible columns (excluding status and actions) - ensure name is always included
+            let effectiveVisibleColumns = visibleColumns.union(["name"])
+            let visibleFlexColumns = effectiveVisibleColumns.filter { $0 != "status" && $0 != "actions" }
+            
+            // If only name column is visible, it takes all remaining space
+            if visibleFlexColumns.count == 1 && visibleFlexColumns.contains("name") {
+                return (statusWidth: statusWidth, nameWidth: remainingWidth, seriesWidth: 0, locationWidth: 0, dateWidth: 0, createdDateWidth: 0)
             }
+            
+            // Define flex ratios for each column type (iPad gets more generous minimums)
+            let flexRatios: [String: CGFloat] = [
+                "name": 2.5,        // Name gets even more space on iPad
+                "series": 1.3,      // Series gets good space
+                "location": 1.4,    // Location gets good space
+                "date": 1.0,        // Date columns get standard space
+                "createdDate": 1.0
+            ]
+            
+            // Calculate total flex ratio for visible columns
+            let totalFlexRatio = visibleFlexColumns.reduce(0) { sum, columnId in
+                sum + (flexRatios[columnId] ?? 1.0)
+            }
+            
+            // Calculate individual widths with iPad-appropriate minimums
+            let nameWidth = visibleFlexColumns.contains("name") ? 
+                max(200, remainingWidth * (flexRatios["name"] ?? 1.0) / totalFlexRatio) : 0
+            let seriesWidth = visibleFlexColumns.contains("series") ? 
+                max(120, remainingWidth * (flexRatios["series"] ?? 1.0) / totalFlexRatio) : 0
+            let locationWidth = visibleFlexColumns.contains("location") ? 
+                max(130, remainingWidth * (flexRatios["location"] ?? 1.0) / totalFlexRatio) : 0
+            let dateWidth = visibleFlexColumns.contains("date") ? 
+                max(100, remainingWidth * (flexRatios["date"] ?? 1.0) / totalFlexRatio) : 0
+            let createdDateWidth = visibleFlexColumns.contains("createdDate") ? 
+                max(100, remainingWidth * (flexRatios["createdDate"] ?? 1.0) / totalFlexRatio) : 0
+            
+            return (statusWidth: statusWidth, nameWidth: nameWidth, seriesWidth: seriesWidth, locationWidth: locationWidth, dateWidth: dateWidth, createdDateWidth: createdDateWidth)
         }
         #endif
         // Default values for other devices
@@ -623,31 +632,49 @@ private func deleteSelectedDocuments() {
     
     // Extracted computed property for the dashboard header (iPad version)
     private var iPadDashboardHeaderView: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: {
-                #if os(iOS)
-                let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-                return isPhone ? 8 : 12 // iPhone: closer spacing, iPad: original spacing
-                #else
-                return 12
-                #endif
-            }()) {
-                // Talle Logo row above Dashboard for iPhone only
-                #if os(iOS)
-                if UIDevice.current.userInterfaceIdiom == .phone {
-                    HStack {
-                        Spacer()
-                        Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .frame(maxWidth: min(80, UIScreen.main.bounds.width * 0.2), maxHeight: 30)
-                            .onTapGesture {
-                                showTallyLabelModal = true
-                            }
-                    }
-                    .padding(.bottom, 8) // Breathing room between logo and Dashboard
+        VStack(spacing: 12) {
+            // Talle Logo row for iPad - positioned above everything
+            #if os(iOS)
+            if UIDevice.current.userInterfaceIdiom == .pad {
+                HStack {
+                    Spacer()
+                    Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(maxWidth: min(140, UIScreen.main.bounds.width * 0.18), maxHeight: 55)
+                        .onTapGesture {
+                            showTallyLabelModal = true
+                        }
                 }
-                #endif
+                .padding(.bottom, 8) // Breathing room between logo and content below
+            }
+            #endif
+            
+            HStack {
+                VStack(alignment: .leading, spacing: {
+                    #if os(iOS)
+                    let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                    return isPhone ? 8 : 12 // iPhone: closer spacing, iPad: original spacing
+                    #else
+                    return 12
+                    #endif
+                }()) {
+                    // Talle Logo row above Dashboard for iPhone only
+                    #if os(iOS)
+                    if UIDevice.current.userInterfaceIdiom == .phone {
+                        HStack {
+                            Spacer()
+                            Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(maxWidth: min(80, UIScreen.main.bounds.width * 0.2), maxHeight: 30)
+                                .onTapGesture {
+                                    showTallyLabelModal = true
+                                }
+                        }
+                        .padding(.bottom, 8) // Breathing room between logo and Dashboard
+                    }
+                    #endif
                 
                 Text("Dashboard")
                     .font(.system(size: {
@@ -680,9 +707,9 @@ private func deleteSelectedDocuments() {
                             let calculatedSize = screenWidth * 0.075 // 7.5% of screen width for iPhone (reduced from 8%)
                             return max(26, min(33, calculatedSize)) // Constrain between 26-33pt for iPhone (reduced from 28-35pt)
                         } else {
-                            // iPad: original sizing
-                            let calculatedSize = screenWidth * 0.065 // 6.5% of screen width
-                            return max(45, min(85, calculatedSize)) // Constrain between 45-85pt
+                            // iPad: slightly smaller sizing
+                            let calculatedSize = screenWidth * 0.055 // 5.5% of screen width (reduced from 6.5%)
+                            return max(40, min(70, calculatedSize)) // Constrain between 40-70pt (reduced from 45-85pt)
                         }
                         #else
                         return 52
@@ -695,18 +722,8 @@ private func deleteSelectedDocuments() {
             }
             Spacer()
             
-            // Talle Logo - adapts to light/dark mode (iPad and macOS only, iPhone shows on Dashboard row)
-            #if os(iOS)
-            if UIDevice.current.userInterfaceIdiom == .pad {
-                Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(maxWidth: min(200, UIScreen.main.bounds.width * 0.25), maxHeight: 80)
-                    .onTapGesture {
-                        showTallyLabelModal = true
-                    }
-            }
-            #else
+            // Talle Logo - adapts to light/dark mode (macOS only, iPad shows above, iPhone shows on Dashboard row)
+            #if os(macOS)
             Button(action: {
                 print("🎯 macOS Talle logo button tapped!")
                 print("🎯 Setting showTallyLabelModal to true")
@@ -721,6 +738,7 @@ private func deleteSelectedDocuments() {
             .buttonStyle(PlainButtonStyle())
             .help("About Tallē")
             #endif
+            }
         }
         .padding(.horizontal, 8)
         // Apply blur effect when DocumentDetailsCard or calendar modal is shown
@@ -730,34 +748,42 @@ private func deleteSelectedDocuments() {
     
     // Landscape-specific header with bigger greeting
     private var iPadLandscapeHeaderView: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 12) { // Increased spacing from 8 to 12 for more breathing room
-                Text("Dashboard")
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(theme.primary.opacity(0.7))
-                    .padding(.bottom, 2)
-                
-                Text(getTimeBasedGreeting())
-                    .font(.custom("InterTight-Regular", size: 62)) // Increased from 52 to 62 for bigger greeting
-                    .tracking(0.5)
-                    .foregroundStyle(theme.primary)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
-            }
-            Spacer()
-            
-            // Talle Logo - adapts to light/dark mode (iPad and macOS only, iPhone shows on Dashboard row)
+        VStack(spacing: 12) {
+            // Talle Logo row for iPad - positioned above everything
             #if os(iOS)
             if UIDevice.current.userInterfaceIdiom == .pad {
-                Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(maxWidth: min(200, UIScreen.main.bounds.width * 0.25), maxHeight: 80)
-                    .onTapGesture {
-                        showTallyLabelModal = true
-                    }
+                HStack {
+                    Spacer()
+                    Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(maxWidth: min(140, UIScreen.main.bounds.width * 0.18), maxHeight: 55)
+                        .onTapGesture {
+                            showTallyLabelModal = true
+                        }
+                }
+                .padding(.bottom, 8) // Breathing room between logo and content below
             }
-            #else
+            #endif
+            
+            HStack {
+                VStack(alignment: .leading, spacing: 12) { // Increased spacing from 8 to 12 for more breathing room
+                    Text("Dashboard")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(theme.primary.opacity(0.7))
+                        .padding(.bottom, 2)
+                    
+                    Text(getTimeBasedGreeting())
+                        .font(.custom("InterTight-Regular", size: 52)) // Reduced from 62 to 52 for smaller greeting
+                        .tracking(0.5)
+                        .foregroundStyle(theme.primary)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                }
+                Spacer()
+                
+                // Talle Logo - adapts to light/dark mode (macOS only, iPad shows above, iPhone shows on Dashboard row)
+                #if os(macOS)
             Button(action: {
                 print("🎯 macOS Talle logo button tapped!")
                 print("🎯 Setting showTallyLabelModal to true")
@@ -772,6 +798,7 @@ private func deleteSelectedDocuments() {
             .buttonStyle(PlainButtonStyle())
             .help("About Tallē")
             #endif
+            }
         }
         .padding(.horizontal, 8)
         // Apply blur effect when DocumentDetailsCard or calendar modal is shown
@@ -1152,10 +1179,10 @@ var body: some View {
                 }
             }
         )
-        // iPhone: Use sheet for Document Details
+        // iOS: Use sheet for Document Details (iPhone & iPad)
         #if os(iOS)
         .sheet(isPresented: Binding(
-            get: { UIDevice.current.userInterfaceIdiom == .phone && showDetailsCard && selectedDetailsDocument != nil },
+            get: { showDetailsCard && selectedDetailsDocument != nil },
             set: { show in
                 if !show {
                     showDetailsCard = false
@@ -1178,6 +1205,9 @@ var body: some View {
                     }
                 )
                 .id(selectedDoc.id)
+                .presentationBackground(.ultraThinMaterial)
+                .presentationDetents([.height(600)])
+                .presentationDragIndicator(.visible)
             }
         }
         #endif
@@ -1368,7 +1398,7 @@ var body: some View {
                                     #endif
                                     #endif
                                 }()) // Platform-specific alignment - iPhone centered, iPad aligned
-                                .animation(.spring(response: 0.6, dampingFraction: 0.75), value: showFloatingSidebar)
+                                // No floating sidebar animation needed
                             
                         // Remove Spacer to let All Documents fill remaining space
                         }
@@ -1425,7 +1455,7 @@ var body: some View {
                                 #endif
                                 #endif
                             }()) // Platform-specific alignment - iPhone centered, iPad aligned
-                            .animation(.spring(response: 0.6, dampingFraction: 0.75), value: showFloatingSidebar)
+                            // No floating sidebar animation needed
                             
                         // Remove Spacer to let All Documents fill remaining space
                     }
@@ -1500,7 +1530,7 @@ var body: some View {
                                     Spacer().frame(width: 20) // Fixed right margin
                                         #endif
                                 }
-                                    .animation(.spring(response: 0.6, dampingFraction: 0.75), value: showFloatingSidebar)
+                                    // No floating sidebar animation needed
                             }
 
                             // Top containers (top layer)
@@ -1540,7 +1570,7 @@ var body: some View {
     @ViewBuilder
     private var modalOverlayView: some View {
         // Overlay for DocumentDetailsCard (iPad and macOS only, iPhone uses sheet)
-        let shouldShowModal: Bool = {
+        let _: Bool = {
             #if os(iOS)
             return UIDevice.current.userInterfaceIdiom == .pad && showDetailsCard
             #else
@@ -1548,48 +1578,9 @@ var body: some View {
             #endif
         }()
         
-        if shouldShowModal, let selectedDoc = selectedDetailsDocument,
-           let currentIndex = documents.firstIndex(where: { $0.id == selectedDoc.id }) {
-            // Dismiss layer
-            Color.clear
-                .contentShape(Rectangle())
-                .ignoresSafeArea()
-                .onTapGesture {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        showDetailsCard = false
-                    }
-                }
 
-            // Modal Content
-            DocumentDetailsCard(
-                document: $documents[currentIndex],
-                allLocations: allLocations,
-                onNext: navigateToNextDocument,
-                onPrevious: navigateToPreviousDocument,
-                canNavigateNext: canNavigateNext,
-                canNavigatePrevious: canNavigatePrevious,
-                onDismiss: {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        showDetailsCard = false
-                    }
-                }
-            )
-            .frame(width: 600, height: 700)
-            #if os(macOS)
-            .background(Color(NSColor.windowBackgroundColor))
-            #elseif os(iOS)
-            .background(Color(UIColor.systemBackground))
-            #endif
-            .cornerRadius(12)
-            .shadow(color: Color.black.opacity(0.25), radius: 25, x: 0, y: 10)
-            .id(selectedDoc.id)
-            .transition(.asymmetric(
-                insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .center)),
-                removal: .opacity.combined(with: .scale(scale: 0.95, anchor: .center))
-            ))
-        }
         // Overlay for PresentationNotesModal (Calendar Modal)
-        else if let data = calendarModalData {
+        if let data = calendarModalData {
              // Dismiss layer
             Color.clear
                 .contentShape(Rectangle())
@@ -2768,7 +2759,9 @@ var body: some View {
             } else {
                 // iPad: Original layout without horizontal scrolling
             GeometryReader { geometry in
-                let columnWidths = calculateFlexibleColumnWidths(availableWidth: geometry.size.width)
+                // iPad: Use conservative width calculation to ensure Actions column is fully visible
+                let availableWidth = min(geometry.size.width * 0.92, geometry.size.width - 60) // 92% width or 60pt margin, whichever is smaller
+                let columnWidths = calculateFlexibleColumnWidths(availableWidth: availableWidth)
                 VStack(spacing: 0) {
                     // Column Header Row
                     iosColumnHeaderRow(columnWidths: columnWidths)
@@ -2801,8 +2794,8 @@ var body: some View {
                     #if os(iOS)
                     let isIPad = UIDevice.current.userInterfaceIdiom == .pad
                     if isIPad {
-                        // Adjust padding based on navigation bar state
-                        return showFloatingSidebar ? 24 : 16 // Less padding when nav bar is hidden
+                        // Remove horizontal padding on iPad to allow full width columns
+                        return 0
                     } else {
                         return 16
                     }

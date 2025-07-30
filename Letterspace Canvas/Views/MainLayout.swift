@@ -69,6 +69,19 @@ public enum SidebarMode {
     case recentlyDeleted
 }
 
+// Native sidebar destinations for iOS 26
+enum SidebarDestination: Hashable {
+    case dashboard
+    case search
+    case createDocument
+    case folders
+    case smartStudy
+    case bibleReader
+    case colorScheme
+    case recentlyDeleted
+    case userProfile
+}
+
 public enum ActivePopup {
     case none
     case search
@@ -128,7 +141,12 @@ struct MainLayout: View {
     @State private var isHovering = false
     @State private var isHoveringSettings = false
     @State private var isHoveringDistraction = false
+    @State private var isHoveringFullScreen = false
     @State private var isHoveringPopup = false
+    @State private var isHoveringBookmark = false
+    @State private var showBookmarksSheet = false
+    @Namespace private var buttonTransition
+    @Namespace private var documentToolsTransition
     @State private var documentsExpanded = true
     @State private var viewMode: ViewMode = .normal
     @State private var isHeaderExpanded: Bool = false
@@ -154,6 +172,7 @@ struct MainLayout: View {
     @State private var showUserProfileModal = false  // New state variable for user profile modal
     @State private var showSmartStudyModal = false   // New state variable for Smart Study modal
     @State private var smartStudyPreloaded = false // Track if Smart Study has been preloaded
+    @State private var selectedSidebarDestination: SidebarDestination? = nil // Native sidebar navigation state
     #if os(iOS)
     @State private var showSiriModal = false // iOS 26 Enhancement: Siri integration modal
     #endif
@@ -165,41 +184,17 @@ struct MainLayout: View {
     @State private var showExportModal = false // New state variable for Export modal
     @State private var showSettingsModal = false // New state variable for Settings modal
     @State private var showSearchModal = false // New state variable for Search modal on iPhone
+    @State private var showUserProfileSheet = false // New state variable for User Profile sheet
     
-    // Floating sidebar states for iPad/iPhone
-    @State private var showFloatingSidebar = {
-        #if os(iOS)
-        // Show floating sidebar on iPad only (iPhone uses circular menu)
-        return UIDevice.current.userInterfaceIdiom == .pad
-        #else
-        return false
-        #endif
-    }()
+    // Dummy state variables for compatibility (no longer used functionally)
+    @State private var showFloatingSidebar = false
     @State private var sidebarDragAmount = CGSize.zero
-    @State private var sidebarOffset: CGFloat = -140 // Start off-screen - updated for new width
-    @State private var isManuallyShown = false  // Track when user manually shows navigation
-    @State private var isDocked = {
-        #if os(iOS)
-        // Default to docked on both iPad and iPhone (iPhone now uses iPad interface)
-        return UserDefaults.standard.object(forKey: "sidebarIsDocked") as? Bool ?? true
-        #else
-        return UserDefaults.standard.bool(forKey: "sidebarIsDocked")
-        #endif
-    }()
-    @State private var isNavigationCollapsed = {
-        #if os(iOS)
-        // Default to not collapsed on both iPad and iPhone (iPhone now uses iPad interface)
-        return UserDefaults.standard.object(forKey: "navigationIsCollapsed") as? Bool ?? false
-        #else
-                    return UserDefaults.standard.object(forKey: "navigationIsCollapsed") as? Bool ?? false
-        #endif
-    }()
-    
-    // Floating contextual toolbar state for iPad
-    @State private var isFloatingToolbarCollapsed = {
-        UserDefaults.standard.object(forKey: "floatingToolbarIsCollapsed") as? Bool ?? false
-    }()
-    @State private var toolbarDragAmount: CGSize = .zero
+    @State private var isManuallyShown = false
+    @State private var isDocked = false
+    @State private var isNavigationCollapsed = false
+    // Floating toolbar state removed - now using Document Tools button instead
+    private var floatingSidebarWidth: CGFloat { 0 }
+    private var animatedFloatingNavigation: some View { EmptyView() }
     
     // iPhone Bottom Navigation State
     @State private var bottomNavOffset: CGFloat = 0
@@ -224,20 +219,7 @@ struct MainLayout: View {
     let rightSidebarWidth: CGFloat = 240
     let settingsWidth: CGFloat = 220
     let collapsedWidth: CGFloat = 56
-    // Responsive floating sidebar width based on iPad screen size
-    private var floatingSidebarWidth: CGFloat {
-        #if os(iOS)
-        let screenWidth = UIScreen.main.bounds.width
-        let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-        if isPhone {
-            return screenWidth * 0.06 // 6% of screen width for iPhone (more compact)
-        } else {
-            return screenWidth * 0.08 // 8% of screen width for iPad (existing)
-        }
-        #else
-        return 80 // Fixed width for macOS
-        #endif
-    }
+    // Removed floatingSidebarWidth - no longer needed
     
     private var effectiveContentWidth: CGFloat {
         var width: CGFloat = 0
@@ -260,7 +242,49 @@ struct MainLayout: View {
     }
     
     var body: some View {
-        content
+        Group {
+            #if os(iOS)
+            if UIDevice.current.userInterfaceIdiom == .pad {
+                // iPad: Use native NavigationSplitView for iOS 26
+                NavigationSplitView {
+                    // Sidebar content
+                    nativeSidebarContent
+                        .navigationDestination(for: SidebarDestination.self) { destination in
+                            // Handle navigation destinations
+                            switch destination {
+                            case .dashboard:
+                                EmptyView() // Dashboard is handled by sidebarMode
+                            case .search:
+                                EmptyView() // Search is handled by searchFieldFocused
+                            case .createDocument:
+                                EmptyView() // Document creation is handled by onTapGesture
+                            case .folders:
+                                EmptyView() // Folders modal is handled by showFoldersModal
+                            case .smartStudy:
+                                EmptyView() // Smart Study modal is handled by showSmartStudyModal
+                            case .bibleReader:
+                                EmptyView() // Bible Reader modal is handled by showBibleReaderModal
+                            case .colorScheme:
+                                EmptyView() // Color scheme is handled by onTapGesture
+                            case .recentlyDeleted:
+                                EmptyView() // Recently Deleted modal is handled by showRecentlyDeletedModal
+                            case .userProfile:
+                                EmptyView() // User Profile modal is handled by showUserProfileModal
+                            }
+                        }
+                } detail: {
+                    // Main content area
+                    content
+                }
+            } else {
+                // iPhone: Keep existing floating sidebar
+                content
+            }
+            #else
+            // macOS: Keep existing layout
+            content
+            #endif
+        }
             .sheet(isPresented: Binding(
                 get: { 
                     #if os(iOS)
@@ -285,6 +309,12 @@ struct MainLayout: View {
             .sheet(isPresented: $showSearchModal) {
                 SearchView(onDismiss: {
                     showSearchModal = false
+                })
+                .presentationBackground(.ultraThinMaterial)
+            }
+            .sheet(isPresented: $showUserProfileSheet) {
+                UserProfileView(onDismiss: {
+                    showUserProfileSheet = false
                 })
                 .presentationBackground(.ultraThinMaterial)
             }
@@ -599,7 +629,7 @@ struct MainLayout: View {
                                                 SidebarButton(
                                                     icon: "magnifyingglass",
                                                     action: {
-                                searchFieldFocused = true; 
+                                showSearchModal = true
                                 if horizontalSizeClass == .compact { showLeftSidebarSheet = false }
                             },
                             tooltip: "Search Documents", activePopup: $activePopup, document: $document,
@@ -626,6 +656,7 @@ struct MainLayout: View {
                         )
                                                 SidebarButton(
                             icon: "folder", action: { 
+                                showFoldersModal = true
                                 if horizontalSizeClass == .compact { showLeftSidebarSheet = false }
                             },
                             tooltip: "Folders", activePopup: $activePopup, document: $document,
@@ -700,9 +731,7 @@ struct MainLayout: View {
                         Divider().padding(.vertical, 4).padding(.horizontal, 16)
                                                 SidebarButton(
                             icon: "person.crop.circle.fill", action: { 
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                                        showUserProfileModal = true
-                                }
+                                showUserProfileSheet = true
                                 if horizontalSizeClass == .compact { showLeftSidebarSheet = false }
                             },
                             tooltip: "User Profile", activePopup: $activePopup, document: $document,
@@ -719,115 +748,140 @@ struct MainLayout: View {
                                 }
                             }
 
-    // New Left Sidebar for iPad using List
+    // Native iOS 26 Sidebar for iPad
     @ViewBuilder
-    private var leftSidebarContentForPad: some View {
+    private var nativeSidebarContent: some View {
         List {
             Section(header: Text("Actions").font(.caption).foregroundColor(.secondary)) {
-                NavigationLink(destination: EmptyView()) {
-                    Label("Dashboard", systemImage: "rectangle.3.group")
-                        .font(.system(size: 16))
-                }
-                .simultaneousGesture(TapGesture().onEnded {
-                    sidebarMode = .allDocuments
-                    isRightSidebarVisible = false
-                    viewMode = .normal
-                })
-                
-                NavigationLink(destination: EmptyView()) {
-                    Label("Search Documents", systemImage: "magnifyingglass")
-                        .font(.system(size: 16))
-                }
-                .simultaneousGesture(TapGesture().onEnded {
-                    searchFieldFocused = true
-                })
-                
-                NavigationLink(destination: EmptyView()) {
-                    Label("Create New Document", systemImage: "square.and.pencil")
-                        .font(.system(size: 16))
-                }
-                .simultaneousGesture(TapGesture().onEnded {
-                    let docId = UUID().uuidString
-                    var d = Letterspace_CanvasDocument(title: "Untitled", subtitle: "", elements: [DocumentElement(type: .textBlock, content: "", placeholder: "Start typing...")], id: docId, markers: [], series: nil, variations: [],isVariation: false, parentVariationId: nil, createdAt: Date(), modifiedAt: Date(), tags: nil, isHeaderExpanded: false, isSubtitleVisible: true, links: [])
-                    d.save()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                        document = d
-                        sidebarMode = .details
-                        isRightSidebarVisible = true
-                        activePopup = .none
+                Label {
+                    NavigationLink("Dashboard", value: SidebarDestination.dashboard)
+                        .onTapGesture {
+                            sidebarMode = .allDocuments
+                            isRightSidebarVisible = false
+                            viewMode = .normal
+                        }
+                } icon: {
+                    // Custom dashboard icon - sized to match system icons
+                    VStack(spacing: 1.5) {
+                        Rectangle()
+                            .fill(.black)
+                            .frame(width: 12, height: 4)
+                            .cornerRadius(1)
+                        Rectangle()
+                            .fill(.black)
+                            .frame(width: 16, height: 5)
+                            .cornerRadius(1)
+                        Rectangle()
+                            .fill(.black)
+                            .frame(width: 14, height: 4)
+                            .cornerRadius(1)
                     }
-                })
-                
-                NavigationLink(destination: EmptyView()) {
-                    Label("Folders", systemImage: "folder")
-                        .font(.system(size: 16))
+                    .frame(width: 16, height: 16) // Match system icon size
                 }
                 
-                NavigationLink(destination: EmptyView()) {
-                    Label("Smart Study", systemImage: "sparkles")
-                        .font(.system(size: 16))
+                Label {
+                    NavigationLink("Search Documents", value: SidebarDestination.search)
+                        .onTapGesture {
+                            showSearchModal = true
+                        }
+                } icon: {
+                    Image(systemName: "magnifyingglass")
                 }
-                .simultaneousGesture(TapGesture().onEnded {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        showSmartStudyModal = true
-                    }
-                })
                 
-                NavigationLink(destination: EmptyView()) {
-                    Label("Bible Reader", systemImage: "book.closed")
-                        .font(.system(size: 16))
+                Label {
+                    NavigationLink("Create New Document", value: SidebarDestination.createDocument)
+                        .onTapGesture {
+                            let docId = UUID().uuidString
+                            var d = Letterspace_CanvasDocument(title: "Untitled", subtitle: "", elements: [DocumentElement(type: .textBlock, content: "", placeholder: "Start typing...")], id: docId, markers: [], series: nil, variations: [],isVariation: false, parentVariationId: nil, createdAt: Date(), modifiedAt: Date(), tags: nil, isHeaderExpanded: false, isSubtitleVisible: true, links: [])
+                            d.save()
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                document = d
+                                sidebarMode = .details
+                                isRightSidebarVisible = true
+                                activePopup = .none
+                            }
+                        }
+                } icon: {
+                    Image(systemName: "square.and.pencil")
                 }
-                .simultaneousGesture(TapGesture().onEnded {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        showBibleReaderModal = true
-                    }
-                })
                 
-
+                Label {
+                    NavigationLink("Folders", value: SidebarDestination.folders)
+                        .onTapGesture {
+                            showFoldersModal = true
+                        }
+                } icon: {
+                    Image(systemName: "folder")
+                }
+                
+                Label {
+                    NavigationLink("Smart Study", value: SidebarDestination.smartStudy)
+                        .onTapGesture {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                showSmartStudyModal = true
+                            }
+                        }
+                } icon: {
+                    Image(systemName: "sparkles")
+                }
+                
+                Label {
+                    NavigationLink("Bible Reader", value: SidebarDestination.bibleReader)
+                        .onTapGesture {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                showBibleReaderModal = true
+                            }
+                        }
+                } icon: {
+                    Image(systemName: "book.closed")
+                }
             }
             .headerProminence(.increased)
 
             Section(header: Text("Settings").font(.caption).foregroundColor(.secondary)) {
-                NavigationLink(destination: EmptyView()) {
-                    Label("Color Scheme: \(appearanceController.selectedScheme.rawValue)", systemImage: appearanceController.selectedScheme.icon)
-                        .font(.system(size: 16))
-                }
-                .simultaneousGesture(TapGesture().onEnded {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        transitionOpacity = 0
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
-                            // Cycle through the color scheme options
-                            let allCases = AppColorScheme.allCases
-                            if let currentIndex = allCases.firstIndex(of: appearanceController.selectedScheme) {
-                                let nextIndex = (currentIndex + 1) % allCases.count
-                                appearanceController.selectedScheme = allCases[nextIndex]
-                            }
+                Label {
+                    NavigationLink("Color Scheme: \(appearanceController.selectedScheme.rawValue)", value: SidebarDestination.colorScheme)
+                        .onTapGesture {
                             withAnimation(.easeInOut(duration: 0.2)) {
-                                transitionOpacity = 1
+                                transitionOpacity = 0
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+                                    // Cycle through the color scheme options
+                                    let allCases = AppColorScheme.allCases
+                                    if let currentIndex = allCases.firstIndex(of: appearanceController.selectedScheme) {
+                                        let nextIndex = (currentIndex + 1) % allCases.count
+                                        appearanceController.selectedScheme = allCases[nextIndex]
+                                    }
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        transitionOpacity = 1
+                                    }
+                                }
                             }
                         }
-                    }
-                })
-                
-                NavigationLink(destination: EmptyView()) {
-                    Label("Recently Deleted", systemImage: "trash")
-                        .font(.system(size: 16))
+                } icon: {
+                    Image(systemName: appearanceController.selectedScheme.icon)
                 }
-                .simultaneousGesture(TapGesture().onEnded {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        showRecentlyDeletedModal = true
-                    }
-                })
                 
-                NavigationLink(destination: EmptyView()) {
-                    Label("User Profile", systemImage: "person.crop.circle.fill")
-                        .font(.system(size: 16))
+                Label {
+                    NavigationLink("Recently Deleted", value: SidebarDestination.recentlyDeleted)
+                        .onTapGesture {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                showRecentlyDeletedModal = true
+                            }
+                        }
+                } icon: {
+                    Image(systemName: "trash")
                 }
-                .simultaneousGesture(TapGesture().onEnded {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        showUserProfileModal = true
-                    }
-                })
+                
+                Label {
+                    NavigationLink("User Profile", value: SidebarDestination.userProfile)
+                        .onTapGesture {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                showUserProfileModal = true
+                            }
+                        }
+                } icon: {
+                    Image(systemName: "person.crop.circle.fill")
+                }
             }
             .headerProminence(.increased)
         }
@@ -850,78 +904,19 @@ struct MainLayout: View {
         return responsiveSize(base: shouldUseExpandedNavigation ? 40 : 32, min: 28, max: 44)
     }
     
-    // Compact floating navigation for document mode (current implementation)
-    @ViewBuilder
-    private var compactFloatingNavigation: some View {
-        floatingSidebarContent
-            .frame(width: 45)  // Ultra-compact for document mode
-            .scaleEffect(0.85)  // Additional scale reduction for minimal footprint
-    }
+    // Removed floating navigation views - now using native NavigationSplitView on iPad
     
-    // Expanded floating navigation for dashboard mode
-    @ViewBuilder
-    private var expandedFloatingNavigation: some View {
-        floatingSidebarContent
-            .frame(width: floatingSidebarWidth)  // Use responsive sidebar width
-            .scaleEffect(1.1)   // Subtle but noticeable scaling for dashboard
-    }
-    
-    // Animated floating navigation that smoothly transitions between compact and expanded states
-    @ViewBuilder
-    private var animatedFloatingNavigation: some View {
-        #if os(iOS)
-        let screenHeight = UIScreen.main.bounds.height
-        let screenWidth = UIScreen.main.bounds.width
-        let isLandscape = screenWidth > screenHeight
-        #else
-        let screenHeight: CGFloat = 900 // Default for macOS
-        let screenWidth: CGFloat = 1200 // Default for macOS
-        let isLandscape = true // macOS is typically landscape
-        #endif
-        
-        floatingSidebarContent
-            .frame(width: {
-                #if os(iOS)
-                if isLandscape && UIDevice.current.userInterfaceIdiom == .pad {
-                    // Wider width in iPad landscape for better visibility
-                    return responsiveSize(base: shouldUseExpandedNavigation ? 100 : 50, min: 45, max: 110) // Increased from 85/40 to 100/50
-                } else {
-                    // Original width for portrait and other devices
-                    return responsiveSize(base: shouldUseExpandedNavigation ? 105 : 45, min: 40, max: 120)
-                }
-                #else
-                // macOS default width
-                return responsiveSize(base: shouldUseExpandedNavigation ? 105 : 45, min: 40, max: 120)
-                #endif
-            }())
-            .scaleEffect({
-                #if os(iOS)
-                if isLandscape && UIDevice.current.userInterfaceIdiom == .pad {
-                    // Smaller scale in iPad landscape - further reduced for more compact appearance
-                    return shouldUseExpandedNavigation ? 0.8 : 0.65 // Reduced from 0.9/0.75 to 0.8/0.65
-                } else {
-                    // Original scale for portrait and other devices
-                    return shouldUseExpandedNavigation ? 1.1 : 0.85
-                }
-                #else
-                // macOS default scale
-                return shouldUseExpandedNavigation ? 1.1 : 0.85
-                #endif
-            }(), anchor: .center)  // Scale from center for better collapse animation
-            .animation(.spring(response: 0.6, dampingFraction: 0.75), value: shouldUseExpandedNavigation)
-            .animation(.spring(response: 1.8, dampingFraction: 0.85), value: sidebarMode)  // Slower transition for dashboard to document
-            .animation(.spring(response: 0.6, dampingFraction: 0.75), value: navigationCornerRadius)  // Animate corner radius changes
-    }
+    // Removed animatedFloatingNavigation - no longer needed
 
-    // Floating sidebar for iOS with glassmorphism
+    // Removed floatingSidebarContent - no longer needed since iPhone uses circular menu and iPad uses native NavigationSplitView
+    // Placeholder function to maintain compilation
     @ViewBuilder
     private var floatingSidebarContent: some View {
-        VStack(alignment: .center, spacing: 0) {
-            // Removed header section - no spacers or extra content
-            
-            VStack(spacing: shouldUseExpandedNavigation ? 4 : 2) {  // Minimal spacing between sections 
-                // Top buttons section
-                VStack(spacing: shouldUseExpandedNavigation ? 3 : 2) {  // Minimal spacing between buttons
+        EmptyView() // No longer used - iPhone uses circular menu, iPad uses native NavigationSplitView
+    }
+    
+    // Remove the rest of the old floatingSidebarContent function
+    /*
                     FloatingSidebarButton(
                         icon: "rectangle.3.group",
                         title: "Dashboard",
@@ -1221,9 +1216,7 @@ struct MainLayout: View {
                         icon: "person.crop.circle.fill",
                         title: "User Profile",
                         action: {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                showUserProfileModal = true
-                            }
+                            showUserProfileSheet = true
                             // Removed: // showFloatingSidebar = false - KEEP SIDEBAR OPEN
                         }
                     )
@@ -1513,7 +1506,7 @@ private var bottomNavigationItems: [(icon: String, title: String, action: () -> 
             icon: "magnifyingglass", 
             title: "Document Search",
             action: {
-                searchFieldFocused = true
+                showSearchModal = true
             }
         ),
         (
@@ -1546,13 +1539,11 @@ private var bottomNavigationItems: [(icon: String, title: String, action: () -> 
                 }
             }
         ),
-        (
+                    (
             icon: "folder",
             title: "Folders", 
             action: {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    showFoldersModal = true
-                }
+                showFoldersModal = true
             }
         ),
         (
@@ -1612,15 +1603,15 @@ private func BottomNavButton(icon: String, title: String, isSelected: Bool, acti
                     // Custom dashboard icon
                     VStack(spacing: 1) {
                         Rectangle()
-                            .fill(isSelected ? theme.accent : theme.primary)
+                            .fill(isSelected ? theme.accent : .black)
                             .frame(width: 8, height: 3)
                             .cornerRadius(0.5)
                         Rectangle()
-                            .fill(isSelected ? theme.accent : theme.primary)
+                            .fill(isSelected ? theme.accent : .black)
                             .frame(width: 12, height: 4)
                             .cornerRadius(0.5)
                         Rectangle()
-                            .fill(isSelected ? theme.accent : theme.primary)
+                            .fill(isSelected ? theme.accent : .black)
                             .frame(width: 10, height: 3)
                             .cornerRadius(0.5)
                     }
@@ -1642,6 +1633,7 @@ private func BottomNavButton(icon: String, title: String, isSelected: Bool, acti
     .buttonStyle(.plain)
     .frame(width: 60)
 }
+*/
 
 // Extracted Main Content View (original content)
 @ViewBuilder
@@ -1652,8 +1644,6 @@ private func mainContentView(availableWidth: CGFloat) -> some View {
                 onSelectDocument: { selectedDoc in
                                             self.loadAndOpenDocument(id: selectedDoc.id)
                                         },
-                showFloatingSidebar: $showFloatingSidebar, // Pass floating sidebar state
-                floatingSidebarWidth: floatingSidebarWidth, // Pass floating sidebar width
                 sidebarMode: $sidebarMode, // Pass sidebarMode binding
                 isRightSidebarVisible: $isRightSidebarVisible // Pass isRightSidebarVisible binding
                                     )
@@ -1891,8 +1881,8 @@ private func mainContentView(availableWidth: CGFloat) -> some View {
             }
             
             #if os(iOS)
-            // iOS: Add floating sidebar overlay for iPad only (iPhone uses bottom navigation)
-            if !viewMode.isDistractionFreeMode && UIDevice.current.userInterfaceIdiom == .pad {
+            // iOS: Both iPad and iPhone now use different navigation systems
+            if false { // Disabled: iPhone uses circular menu, iPad uses native NavigationSplitView
                                 VStack(alignment: .leading) {
                 HStack {
                         // Unified floating navigation with responsive size transitions
@@ -1903,39 +1893,21 @@ private func mainContentView(availableWidth: CGFloat) -> some View {
                                 let allDocumentsLeftEdge = screenWidth * 0.065 // Approximate left edge of All Documents (based on padding)
                                 let centerPoint = allDocumentsLeftEdge / 2 // Center between screen edge and All Documents
                                 
-                                #if os(iOS)
-                                let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-                                if isPhone {
-                                    // iPhone: Add more breathing room from left edge
-                                    return shouldUseExpandedNavigation ? centerPoint + 8 : 20
-                                } else {
-                                    // iPad: Keep original positioning
-                                    return shouldUseExpandedNavigation ? centerPoint : 20
-                                }
-                                #else
-                                return shouldUseExpandedNavigation ? centerPoint : 20
-                                #endif
+                                // iPhone: Add more breathing room from left edge
+                                return shouldUseExpandedNavigation ? centerPoint + 8 : 20
                             }())
                             .padding(.top, {
                                 // Responsive top padding based on screen height and orientation
                                 let screenHeight = UIScreen.main.bounds.height
                                 let screenWidth = UIScreen.main.bounds.width
                                 let isLandscape = screenWidth > screenHeight
-                                let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-                                
                                 if shouldUseExpandedNavigation {
-                                    if isLandscape && UIDevice.current.userInterfaceIdiom == .pad {
-                                        // In iPad landscape, move navigation lower
-                                        return screenHeight * 0.14 + 35 // Adjusted to 14% + 35 for optimal positioning
-                                    } else if isLandscape {
-                                        // Other landscape devices
-                                        return screenHeight * 0.05 + 10 // Original landscape value
-                                    } else if isPhone {
-                                        // iPhone portrait mode - positioned lower for better visual balance
-                                        return screenHeight * 0.26 + 40 // 26% + 40pt for iPhone (brought down from 22% + 35pt)
+                                    if isLandscape {
+                                        // iPhone landscape
+                                        return screenHeight * 0.05 + 10
                                     } else {
-                                        // iPad portrait mode - keep original calculation
-                                        return screenHeight * 0.28 // 28% of screen height when expanded for iPad
+                                        // iPhone portrait mode - positioned lower for better visual balance
+                                        return screenHeight * 0.26 + 40 // 26% + 40pt for iPhone
                                     }
                                 } else {
                                     return 20 // Compact mode
@@ -1945,9 +1917,7 @@ private func mainContentView(availableWidth: CGFloat) -> some View {
                             .animation(.spring(response: showFloatingSidebar ? 0.6 : 2.5, dampingFraction: showFloatingSidebar ? 0.75 : 0.9), value: showFloatingSidebar)
                             .animation(.spring(response: 0.6, dampingFraction: 0.75), value: shouldShowNavigationPanel)
                             .onChange(of: sidebarMode) { oldMode, newMode in
-                                // Automatically show/hide navigation based on mode (iPad only)
-                                #if os(iOS)
-                                if UIDevice.current.userInterfaceIdiom == .pad {
+                                // Automatically show/hide navigation based on mode (iPhone only)
                                 if newMode == .allDocuments {
                                     showFloatingSidebar = true  // Show when going to dashboard
                                     isManuallyShown = false  // Reset manual flag when auto-showing
@@ -1955,17 +1925,6 @@ private func mainContentView(availableWidth: CGFloat) -> some View {
                                     showFloatingSidebar = false // Hide when going to document mode
                                     isManuallyShown = false  // Reset manual flag when auto-hiding
                                 }
-                                }
-                                #else
-                                // macOS behavior
-                                if newMode == .allDocuments {
-                                    showFloatingSidebar = true
-                                    isManuallyShown = false
-                                } else {
-                                    showFloatingSidebar = false
-                                    isManuallyShown = false
-                                }
-                                #endif
                             }
                             .gesture(
                                 // Add swipe-to-dismiss gesture for iPad
@@ -1988,74 +1947,8 @@ private func mainContentView(availableWidth: CGFloat) -> some View {
                 }
                 .ignoresSafeArea()
                 
-                // Swipe indicator - interactive vertical bar on left edge
-                // Show on iPad only when navigation is dismissed (iPhone uses circular menu)
-                if UIDevice.current.userInterfaceIdiom == .pad && (!showFloatingSidebar || !shouldShowNavigationPanel) {
-                VStack {
-                    Spacer()
-                    HStack {
-                        RoundedRectangle(cornerRadius: 1.5)
-                            .fill(Color.primary.opacity(0.3))
-                            .frame(width: 3, height: 60)
-                            .padding(.leading, 8)
-                            .scaleEffect(sidebarDragAmount.width > 0 ? 1.2 : 1.0) // Visual feedback when dragging
-                            .opacity((showFloatingSidebar && (shouldShowNavigationPanel || isManuallyShown)) ? 0.0 : 1.0) // Fade away when sidebar is open (auto or manual)
-                            .animation(.easeOut(duration: 0.1), value: sidebarDragAmount.width)
-                            .animation(.easeInOut(duration: 0.3), value: showFloatingSidebar) // Smooth fade animation
-                            .gesture(
-                                DragGesture()
-                                    .onChanged { value in
-                                        if value.translation.width > 0 {
-                                            sidebarDragAmount = value.translation
-                                            if value.translation.width > 30 && !showFloatingSidebar {
-                                                withAnimation(.spring(response: 0.6, dampingFraction: 0.75)) {
-                                                    showFloatingSidebar = true
-                                                    isManuallyShown = true  // User manually showed navigation
-                                                }
-                                            }
-                                        }
-                                    }
-                                    .onEnded { value in
-                                        withAnimation(.spring(response: 0.6, dampingFraction: 0.75)) {
-                                            if value.translation.width > 50 {
-                                                showFloatingSidebar = true
-                                                isManuallyShown = true  // User manually showed navigation
-                                            }
-                                            sidebarDragAmount = .zero
-                                        }
-                                    }
-                            )
-                        
-                        Spacer()
-                    }
-                    Spacer()
-                }
-                .ignoresSafeArea()
-                .allowsHitTesting(true) // Allow interaction with the indicator
-                
-                    // Invisible gesture area for swiping from left edge
-                    // Show on iPhone when in floating mode, or on iPad when navigation is dismissed
-                HStack {
-                    Rectangle()
-                        .fill(Color.clear)
-                        .frame(width: 20)
-                        .contentShape(Rectangle())
-                        .gesture(
-                            DragGesture()
-                                .onEnded { value in
-                                    if value.translation.width > 50 {
-                                            withAnimation(.spring(response: 0.6, dampingFraction: 0.75)) {
-                                            showFloatingSidebar = true
-                                            isManuallyShown = true  // User manually showed navigation
-                                        }
-                                    }
-                                }
-                        )
-                    
-                    Spacer()
-                }
-                .ignoresSafeArea()
-                }
+                // No swipe indicators needed - iPad uses native sidebar, iPhone uses circular menu
+                // Removed all gesture code - no longer needed
             }
             
             // iPhone: Bottom Navigation Bar - Disabled (using circular menu instead)
@@ -2064,8 +1957,8 @@ private func mainContentView(availableWidth: CGFloat) -> some View {
             //         .zIndex(99) // Below floating sidebar but above content
             // }
             
-            // Swipe indicator when floating navigation is dismissed (iPad only)
-            if UIDevice.current.userInterfaceIdiom == .pad && !viewMode.isDistractionFreeMode && (!showFloatingSidebar || (!shouldShowNavigationPanel && !isManuallyShown)) {
+            // No swipe indicators needed - iPad uses native NavigationSplitView  
+            if false { // Disabled
                 VStack {
                     Spacer()
                     HStack {
@@ -2197,59 +2090,7 @@ private func mainContentView(availableWidth: CGFloat) -> some View {
                 .ignoresSafeArea()
             }
             
-            // Floating contextual toolbar for both iPad and iPhone - positioned in gutter area outside document
-            if (UIDevice.current.userInterfaceIdiom == .pad || UIDevice.current.userInterfaceIdiom == .phone) && sidebarMode != .allDocuments {
-                HStack {
-                    Spacer()
-                    
-                    // Position in gutter between document and screen edge
-                    FloatingContextualToolbar(
-                        document: $document,
-                        sidebarMode: .constant(.details),
-                        isRightSidebarVisible: .constant(false),
-                        isCollapsed: $isFloatingToolbarCollapsed,
-                        dragAmount: $toolbarDragAmount,
-                        isDistractionFreeMode: viewMode.isDistractionFreeMode
-                    )
-                    .padding(.trailing, isFloatingToolbarCollapsed ? 8 : 24) // Closer to edge when collapsed
-                }
-            }
-            
-            // Add swipe gesture area for showing collapsed toolbar
-            if (UIDevice.current.userInterfaceIdiom == .pad || UIDevice.current.userInterfaceIdiom == .phone) && sidebarMode != .allDocuments && isFloatingToolbarCollapsed {
-                HStack {
-                    Spacer()
-                    
-                    // Invisible gesture area for swiping from right edge
-                    Rectangle()
-                        .fill(Color.clear)
-                        .frame(width: 20)
-                        .contentShape(Rectangle())
-                        .gesture(
-                            DragGesture()
-                                .onChanged { value in
-                                    if value.translation.width < 0 {
-                                        // Slow down the manual drag by applying a damping factor
-                                        toolbarDragAmount = CGSize(
-                                            width: value.translation.width * 0.4, // 40% of actual drag distance
-                                            height: value.translation.height
-                                        )
-                                    }
-                                }
-                                .onEnded { value in
-                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                        toolbarDragAmount = .zero
-                                        // Swipe left to show toolbar (using original translation for threshold)
-                                        if value.translation.width < -50 {
-                                            isFloatingToolbarCollapsed = false
-                                            UserDefaults.standard.set(false, forKey: "floatingToolbarIsCollapsed")
-                                        }
-                                    }
-                                }
-                        )
-                }
-                .ignoresSafeArea()
-            }
+            // Floating contextual toolbar removed for iPhone/iPad - now using Document Tools button instead
             #endif
             }
             // Apply blur to main content area when any modal is shown
@@ -2262,11 +2103,11 @@ private func mainContentView(availableWidth: CGFloat) -> some View {
                     return isCircularMenuOpen ? 4 : 0
                 } else {
                     // iPad: Apply blur for all modals
-                    return showUserProfileModal || showRecentlyDeletedModal || showSmartStudyModal || showBibleReaderModal || showFoldersModal || showExportModal || showSettingsModal || showSearchModal || isCircularMenuOpen ? 4 : 0
+                    return showUserProfileModal || showUserProfileSheet || showRecentlyDeletedModal || showSmartStudyModal || showBibleReaderModal || showFoldersModal || showExportModal || showSettingsModal || showSearchModal || isCircularMenuOpen ? 4 : 0
                 }
                 #else
                 // macOS: Apply blur for all modals
-                return showUserProfileModal || showRecentlyDeletedModal || showSmartStudyModal || showBibleReaderModal || showFoldersModal || showExportModal || showSettingsModal || showSearchModal || isCircularMenuOpen ? 4 : 0
+                return showUserProfileModal || showUserProfileSheet || showRecentlyDeletedModal || showSmartStudyModal || showBibleReaderModal || showFoldersModal || showExportModal || showSettingsModal || showSearchModal || isCircularMenuOpen ? 4 : 0
                 #endif
             }())
             .opacity({
@@ -2276,14 +2117,14 @@ private func mainContentView(availableWidth: CGFloat) -> some View {
                     return isCircularMenuOpen ? 0.8 : 1.0
                 } else {
                     // iPad: Apply opacity change for all modals
-                    return showUserProfileModal || showRecentlyDeletedModal || showSmartStudyModal || showBibleReaderModal || showFoldersModal || showExportModal || showSettingsModal || showSearchModal || isCircularMenuOpen ? 0.8 : 1.0
+                    return showUserProfileModal || showUserProfileSheet || showRecentlyDeletedModal || showSmartStudyModal || showBibleReaderModal || showFoldersModal || showExportModal || showSettingsModal || showSearchModal || isCircularMenuOpen ? 0.8 : 1.0
                 }
                 #else
                 // macOS: Apply opacity change for all modals
-                return showUserProfileModal || showRecentlyDeletedModal || showSmartStudyModal || showBibleReaderModal || showFoldersModal || showExportModal || showSettingsModal || showSearchModal || isCircularMenuOpen ? 0.8 : 1.0
+                return showUserProfileModal || showUserProfileSheet || showRecentlyDeletedModal || showSmartStudyModal || showBibleReaderModal || showFoldersModal || showExportModal || showSettingsModal || showSearchModal || isCircularMenuOpen ? 0.8 : 1.0
                 #endif
             }())
-            .animation(.easeInOut(duration: 0.15), value: showUserProfileModal || showRecentlyDeletedModal || showSmartStudyModal || showBibleReaderModal || showFoldersModal || showExportModal || showSettingsModal || showSearchModal || isCircularMenuOpen)
+            .animation(.easeInOut(duration: 0.15), value: showUserProfileModal || showUserProfileSheet || showRecentlyDeletedModal || showSmartStudyModal || showBibleReaderModal || showFoldersModal || showExportModal || showSettingsModal || showSearchModal || isCircularMenuOpen)
             
             // Floating Action Buttons (iPhone only)
             #if os(iOS)
@@ -2294,8 +2135,8 @@ private func mainContentView(availableWidth: CGFloat) -> some View {
                         Spacer()
                         
                         VStack(spacing: 12) {
-                            // Show distraction-free button when in document mode (top position)
-                            if sidebarMode != .allDocuments {
+                            // DISABLED: Show distraction-free button when in document mode (top position) - now using inline button
+                            if false && sidebarMode != .allDocuments {
                                 Button(action: {
                                     HapticFeedback.impact(.medium)
                                     withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
@@ -2361,9 +2202,139 @@ private func mainContentView(availableWidth: CGFloat) -> some View {
                                 }
                             }
                             
-                            // Circular Menu Button (bottom position) - hidden in distraction-free mode
-                            if !viewMode.isDistractionFreeMode {
-                                CircularMenuButton(isMenuOpen: $isCircularMenuOpen)
+                            // iOS 26 Button Cluster (bottom position) - adaptive based on mode
+                            if viewMode.isDistractionFreeMode {
+                                HStack(spacing: 16) {
+                                    // Empty space where document tools button was (left position)
+                                    Color.clear.frame(width: 64, height: 64)
+                                    
+                                    // Bookmark launcher in middle position (where full screen was)
+                                    if sidebarMode != .allDocuments {
+                                        Button(action: {
+                                            HapticFeedback.impact(.light)
+                                            showBookmarksSheet = true
+                                        }) {
+                                            // Bookmark icon on top of glass
+                                            Image(systemName: "bookmark.fill")
+                                                .font(.system(size: 18, weight: .semibold))
+                                                .foregroundStyle(Color.primary)
+                                                .frame(width: 56, height: 56)
+                                                .background(
+                                                    Circle()
+                                                        .fill(.clear)
+                                                        .glassEffect(.regular, in: Circle())
+                                                )
+                                        }
+                                        .frame(width: 64, height: 64)
+                                        .contentShape(Circle())
+                                        .buttonStyle(.plain)
+                                        .scaleEffect(isHoveringBookmark ? 1.05 : 1.0)
+                                        .animation(.easeInOut(duration: 0.1), value: isHoveringBookmark)
+                                        .onHover { hovering in
+                                            withAnimation(.easeInOut(duration: 0.1)) {
+                                                isHoveringBookmark = hovering
+                                            }
+                                        }
+                                        .shadow(color: Color.black.opacity(0.2), radius: 8, x: 0, y: 2)
+                                        .matchedGeometryEffect(id: "documentToolsButton", in: documentToolsTransition)
+                                        .sheet(isPresented: $showBookmarksSheet) {
+                                            BookmarksSheet(document: $document)
+                                        }
+                                    } else {
+                                        // Empty space if no document tools
+                                        Color.clear.frame(width: 64, height: 64)
+                                    }
+                                    
+                                    // Exit button in exact menu position (rightmost)
+                                    Button(action: {
+                                        HapticFeedback.impact(.medium)
+                                        withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                                            viewMode = .normal
+                                            isRightSidebarVisible = true
+                                        }
+                                    }) {
+                                        // Exit full screen icon on top of glass
+                                        Image(systemName: "arrow.down.right.and.arrow.up.left")
+                                            .font(.system(size: 18, weight: .semibold))
+                                            .foregroundStyle(Color.primary)
+                                            .frame(width: 56, height: 56)
+                                            .background(
+                                                Circle()
+                                                    .fill(.clear)
+                                                    .glassEffect(.regular, in: Circle())
+                                            )
+                                    }
+                                    .frame(width: 64, height: 64)
+                                    .contentShape(Circle())
+                                    .buttonStyle(.plain)
+                                    .scaleEffect(isHoveringDistraction ? 1.05 : 1.0)
+                                    .animation(.easeInOut(duration: 0.1), value: isHoveringDistraction)
+                                    .onHover { hovering in
+                                        withAnimation(.easeInOut(duration: 0.1)) {
+                                            isHoveringDistraction = hovering
+                                        }
+                                    }
+                                    .shadow(color: Color.black.opacity(0.2), radius: 8, x: 0, y: 2)
+                                    .matchedGeometryEffect(id: "fullScreenButton", in: buttonTransition)
+                                }
+                            } else {
+                                // Normal mode: Show all buttons 
+                                HStack(spacing: 16) {
+                                    // Document Tools Button (left)
+                                    if sidebarMode != .allDocuments {
+                                        LiquidDocumentToolsButton(
+                                            document: $document,
+                                            selectedElement: $selectedElement,
+                                            scrollOffset: $scrollOffset,
+                                            documentHeight: $documentHeight,
+                                            viewportHeight: $viewportHeight,
+                                            viewMode: $viewMode,
+                                            isHeaderExpanded: $isHeaderExpanded,
+                                            isSubtitleVisible: Binding(
+                                                get: { document.isSubtitleVisible },
+                                                set: { newValue in document.isSubtitleVisible = newValue; document.save() }
+                                            )
+                                        )
+                                        .matchedGeometryEffect(id: "documentToolsButton", in: documentToolsTransition)
+                                    }
+                                    
+                                    // Full Screen Button (middle) - using existing distraction-free button
+                                    if sidebarMode != .allDocuments {
+                                        Button(action: {
+                                            HapticFeedback.impact(.medium)
+                                            withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                                                viewMode = .distractionFree
+                                                isRightSidebarVisible = false
+                                            }
+                                        }) {
+                                            // Enter full screen icon on top of glass
+                                            Image(systemName: "arrow.up.left.and.arrow.down.right")
+                                                .font(.system(size: 18, weight: .semibold))
+                                                .foregroundStyle(Color.primary)
+                                                .frame(width: 56, height: 56)
+                                                .background(
+                                                    Circle()
+                                                        .fill(.clear)
+                                                        .glassEffect(.regular, in: Circle())
+                                                )
+                                        }
+                                        .frame(width: 64, height: 64)
+                                        .contentShape(Circle())
+                                        .buttonStyle(.plain)
+                                        .scaleEffect(isHoveringFullScreen ? 1.05 : 1.0)
+                                        .animation(.easeInOut(duration: 0.1), value: isHoveringFullScreen)
+                                        .onHover { hovering in
+                                            withAnimation(.easeInOut(duration: 0.1)) {
+                                                isHoveringFullScreen = hovering
+                                            }
+                                        }
+                                        .shadow(color: Color.black.opacity(0.2), radius: 8, x: 0, y: 2)
+                                        .matchedGeometryEffect(id: "fullScreenButton", in: buttonTransition)
+                                    }
+                                    
+                                    // Menu Button (right)
+                                    CircularMenuButton(isMenuOpen: $isCircularMenuOpen)
+                                }
                             }
                         }
                         .padding(.trailing, 20)
@@ -2514,7 +2485,7 @@ private func mainContentView(availableWidth: CGFloat) -> some View {
                         showRecentlyDeletedModal = true
                     },
                     onSettings: {
-                        showUserProfileModal = true
+                        showUserProfileSheet = true
                     }
                 )
             }
@@ -2561,12 +2532,7 @@ private func mainContentView(availableWidth: CGFloat) -> some View {
                         .transition(.move(edge: .trailing))
                 }
                 #elseif os(iOS)
-                // Disable right sidebar for both iPhone and iPad since they both use floating toolbar
-                if false { // Disabled: Both iPad and iPhone use floating toolbar instead
-                    rightSidebarContent
-                        .frame(width: rightSidebarWidth)
-                        .transition(.move(edge: .trailing))
-                }
+                // iPad right sidebar removed - now using Document Tools button instead
                 #endif
             }
             
@@ -2711,24 +2677,7 @@ private func mainContentView(availableWidth: CGFloat) -> some View {
                     icon: "magnifyingglass",
                     title: "Search Documents",
                     action: {
-                        #if os(iOS)
-                        if UIDevice.current.userInterfaceIdiom == .pad {
-                            // Use popup system for iPad
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                if activePopup == .search {
-                                    activePopup = .none
-                                } else {
-                                    activePopup = .search
-                                }
-                            }
-                        } else {
-                            // Use direct search for iPhone
-                        searchFieldFocused = true
-                    }
-                        #else
-                        // Use direct search for macOS
-                        searchFieldFocused = true
-                        #endif
+                        showSearchModal = true
                     }
                 )
                 #if os(iOS)
@@ -2852,28 +2801,7 @@ private func mainContentView(availableWidth: CGFloat) -> some View {
                     icon: "folder",
                     title: "Folders",
                     action: {
-                        #if os(iOS)
-                        if UIDevice.current.userInterfaceIdiom == .pad {
-                            // Use popup system for iPad
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                if activePopup == .folders {
-                                    activePopup = .none
-                                } else {
-                                    activePopup = .folders
-                                }
-                            }
-                        } else {
-                            // Use modal for iPhone
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            showFoldersModal = true
-                        }
-                    }
-                        #else
-                        // Use modal for macOS
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            showFoldersModal = true
-                        }
-                        #endif
+                        showFoldersModal = true
                     }
                 )
                 #if os(iOS)
@@ -3442,6 +3370,7 @@ extension MainLayout {
         }
     }
 }
+
 
 
 

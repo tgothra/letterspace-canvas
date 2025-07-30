@@ -1448,7 +1448,7 @@ struct FoldersView: View {
             #if os(iOS)
             if isPhone {
                 // iPhone: iOS 26 exclusive - use NavigationStack directly
-                NavigationStack {
+                    NavigationStack {
                     FoldersPopupContent(
                         activePopup: $activePopup,
                         folders: $folders,
@@ -1460,10 +1460,10 @@ struct FoldersView: View {
                     )
                     .navigationTitle("Folders")
                     .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
+                        .toolbar {
                         ToolbarItem(placement: .navigationBarTrailing) {
-                            Button("Done", action: onDismiss)
-                        }
+                                Button("Done", action: onDismiss)
+                            }
                     }
                 }
             } else {

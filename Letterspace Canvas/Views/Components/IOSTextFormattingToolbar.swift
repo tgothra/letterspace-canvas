@@ -95,34 +95,42 @@ struct IOSTextFormattingToolbar: View {
     }
     
     var body: some View {
-        MainToolbarView()
-            .overlay(
-                // iOS 26 Enhancement: Better modal presentations
-                ZStack {
-                    if showStylePicker {
-                        StylePickerView()
+        VStack(spacing: 0) {
+            // Thin stroke at the top of the toolbar
+            Rectangle()
+                .fill(Color(UIColor.label).opacity(0.1))
+                .frame(height: 0.5)
+                .edgesIgnoringSafeArea(.horizontal)
+            
+            MainToolbarView()
+                .overlay(
+                    // iOS 26 Enhancement: Better modal presentations
+                    ZStack {
+                        if showStylePicker {
+                            StylePickerView()
+                        }
+                        if showColorPicker {
+                            ColorPickerView()
+                        }
+                        if showHighlightPicker {
+                            HighlightPickerView()
+                        }
+                        if showAlignmentPicker {
+                            AlignmentPickerView()
+                        }
+                        if showLinkPicker {
+                            LinkPickerView()
+                        }
                     }
-                    if showColorPicker {
-                        ColorPickerView()
-                    }
-                    if showHighlightPicker {
-                        HighlightPickerView()
-                    }
-                    if showAlignmentPicker {
-                        AlignmentPickerView()
-                    }
-                    if showLinkPicker {
-                        LinkPickerView()
-                    }
-                }
-                .animation(.spring(response: 0.4, dampingFraction: 0.8), value: showStylePicker)
-                .animation(.spring(response: 0.4, dampingFraction: 0.8), value: showColorPicker)
-                .animation(.spring(response: 0.4, dampingFraction: 0.8), value: showHighlightPicker)
-                .animation(.spring(response: 0.4, dampingFraction: 0.8), value: showAlignmentPicker)
-                .animation(.spring(response: 0.4, dampingFraction: 0.8), value: showLinkPicker)
-            )
+                    .animation(.spring(response: 0.4, dampingFraction: 0.8), value: showStylePicker)
+                    .animation(.spring(response: 0.4, dampingFraction: 0.8), value: showColorPicker)
+                    .animation(.spring(response: 0.4, dampingFraction: 0.8), value: showHighlightPicker)
+                    .animation(.spring(response: 0.4, dampingFraction: 0.8), value: showAlignmentPicker)
+                    .animation(.spring(response: 0.4, dampingFraction: 0.8), value: showLinkPicker)
+                )
+        }
     }
-    
+
     // MARK: - Main Toolbar View with iOS 26 Enhancements
     @ViewBuilder
     private func MainToolbarView() -> some View {
@@ -184,7 +192,7 @@ struct IOSTextFormattingToolbar: View {
                     HapticFeedback.impact(.medium, intensity: 0.8)
                     
                     // iOS 26 Enhancement: Smooth dismissal animation
-                    withAnimation(.interactiveSpring(response: 0.3, dampingFraction: 0.7)) {
+                    _ = withAnimation(.interactiveSpring(response: 0.3, dampingFraction: 0.7)) {
                         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
                     }
                 }
@@ -196,30 +204,30 @@ struct IOSTextFormattingToolbar: View {
         .scrollBounceBehavior(.basedOnSize)
         .scrollTargetBehavior(.viewAligned)
         .coordinateSpace(name: "toolbar")
-        // iOS 26 Enhancement: Advanced gesture tracking for better responsiveness
+        // Performance: Simplified gesture handling to prevent UI freezing
         .gesture(
             DragGesture()
-                .onChanged { value in
-                    let translation = value.translation
-                    let currentOffset: CGFloat = translation.width
-                    scrollVelocity = currentOffset - lastScrollOffset
-                    lastScrollOffset = currentOffset
-                    
-                    // iOS 26 Enhancement: Velocity-based scroll feedback
-                    if abs(scrollVelocity) > 5 {
-                        // Provide subtle haptic feedback for fast scrolling
-                        HapticFeedback.selection()
-                    }
-                }
                 .onEnded { _ in
-                    // Reset velocity tracking
+                    // Reset velocity tracking only on end to reduce overhead
                     scrollVelocity = 0
                     lastScrollOffset = 0
                 }
         )
         .frame(maxHeight: .infinity)
         .frame(maxWidth: .infinity)
-        .background(Color(UIColor.systemBackground).opacity(0.95))
+        .background(
+            Group {
+                if #available(iOS 26.0, *) {
+                    // iOS 26 Liquid Glass Effect
+                    RoundedRectangle(cornerRadius: 0)
+                        .fill(.ultraThinMaterial)
+                        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 0))
+                } else {
+                    // Fallback for older iOS
+                    Color(UIColor.systemBackground).opacity(0.95)
+                }
+            }
+        )
     }
     
     // MARK: - Action Handlers
@@ -709,7 +717,7 @@ private struct InlineColorButton: View {
         } onPressingChanged: { pressing in
             withAnimation(.easeInOut(duration: 0.1)) {
                 isPressed = pressing
-            }
+                }
         }
     }
 }
@@ -856,11 +864,22 @@ private struct IOSToolbarButton: View {
                 .foregroundColor(buttonForegroundColor)
                 .frame(width: 52, height: 44)
                 .background(
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(buttonBackgroundColor)
-                        // iOS 26 Enhancement: Dynamic shadow
-                        .shadow(color: isPressed ? .black.opacity(0.15) : .black.opacity(0.05), 
-                               radius: isPressed ? 4 : 2, x: 0, y: isPressed ? 2 : 1)
+                    Group {
+                        if #available(iOS 26.0, *) {
+                            // iOS 26 Liquid Glass Button
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(buttonBackgroundMaterial)
+                                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 8))
+                                .shadow(color: isPressed ? .black.opacity(0.1) : .black.opacity(0.05), 
+                                       radius: isPressed ? 3 : 1, x: 0, y: isPressed ? 1 : 0.5)
+                        } else {
+                            // Fallback for older iOS
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(buttonBackgroundColor)
+                                .shadow(color: isPressed ? .black.opacity(0.15) : .black.opacity(0.05), 
+                                       radius: isPressed ? 4 : 2, x: 0, y: isPressed ? 2 : 1)
+                        }
+                    }
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 // iOS 26 Enhancement: Micro-interaction scaling
@@ -882,7 +901,7 @@ private struct IOSToolbarButton: View {
             // iOS 26 Enhancement: Subtle selection feedback on press
             if pressing {
                 HapticFeedback.selection()
-            }
+        }
         }
         // iOS 26 Enhancement: Rich accessibility support
         .accessibilityLabel(accessibilityLabelForIcon(icon))
@@ -906,6 +925,17 @@ private struct IOSToolbarButton: View {
             return colorScheme == .dark ? Color.white.opacity(0.3) : Color.black.opacity(0.2)
         } else {
             return Color.gray.opacity(0.1)
+        }
+    }
+    
+    @available(iOS 26.0, *)
+    private var buttonBackgroundMaterial: Material {
+        if isActive {
+            return .regularMaterial
+        } else if isPressed {
+            return .thinMaterial
+        } else {
+            return .ultraThinMaterial
         }
     }
     
@@ -1017,7 +1047,6 @@ private struct LinkPickerView: View {
 
 // MARK: - UIKit Integration
 class IOSFormattingToolbarHostingController: UIHostingController<IOSTextFormattingToolbar> {
-    private var strokeView: UIView?
     
     init(toolbar: IOSTextFormattingToolbar) {
         super.init(rootView: toolbar)
@@ -1050,9 +1079,6 @@ class IOSFormattingToolbarHostingController: UIHostingController<IOSTextFormatti
         
         // Set up flexible height constraints to avoid conflicts
         setupFlexibleConstraints()
-        
-        // Add stroke at the top of the toolbar
-        setupStroke()
     }
     
     private func setupFlexibleConstraints() {
@@ -1061,26 +1087,8 @@ class IOSFormattingToolbarHostingController: UIHostingController<IOSTextFormatti
         // The preferredContentSize provides a hint to the system about our desired height
     }
     
-    private func setupStroke() {
-        // Remove existing stroke if any
-        strokeView?.removeFromSuperview()
-        
-        // Create stroke view
-        let stroke = UIView()
-        stroke.backgroundColor = UIColor.label.withAlphaComponent(0.1)
-        stroke.translatesAutoresizingMaskIntoConstraints = false
-        
-        view.addSubview(stroke)
-        
-        // Position stroke at the very top of the toolbar
-        NSLayoutConstraint.activate([
-            stroke.topAnchor.constraint(equalTo: view.topAnchor),
-            stroke.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            stroke.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            stroke.heightAnchor.constraint(equalToConstant: 0.5)
-        ])
-        
-        strokeView = stroke
+    func updateToolbar(_ newToolbar: IOSTextFormattingToolbar) {
+        rootView = newToolbar
     }
 }
 

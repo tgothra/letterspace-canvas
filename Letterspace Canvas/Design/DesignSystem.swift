@@ -75,6 +75,11 @@ enum DesignSystem {
             let buttonHover: Color
             let accent: Color
             
+            // Liquid Glass tints for iOS 26
+            var glassPrimary: Color { accent.opacity(0.15) }
+            var glassSecondary: Color { primary.opacity(0.08) }
+            var glassSubtle: Color { primary.opacity(0.05) }
+            
             static let dark = ThemeColors(
                 background: Color(red: 0.11, green: 0.11, blue: 0.12),
                 surface: Color(.sRGB, red: 0.15, green: 0.15, blue: 0.15, opacity: 1.0),

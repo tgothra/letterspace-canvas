@@ -156,7 +156,6 @@ struct DashboardDocumentRow: View {
         let isIPad = UIDevice.current.userInterfaceIdiom == .pad
         let isPortrait = UIScreen.main.bounds.height > UIScreen.main.bounds.width
         let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-        let widths = columnWidths ?? calculateFlexibleColumnWidths()
         
         mainContent
             .overlay(alignment: .bottom) {

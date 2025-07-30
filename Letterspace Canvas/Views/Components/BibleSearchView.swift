@@ -1,6 +1,8 @@
 import SwiftUI
 #if os(macOS)
 import AppKit
+#elseif os(iOS)
+import UIKit
 #endif
 
 #if os(macOS)
@@ -470,24 +472,43 @@ struct BibleSearchView: View {
             return Text(text)
         }
         
-        var finalText = Text("")
         let words = text.components(separatedBy: " ")
+        var resultText = ""
+        var highlightedRanges: [Range<String.Index>] = []
         
         for (index, word) in words.enumerated() {
+            if index > 0 {
+                resultText += " "
+            }
+            
+            let wordStart = resultText.endIndex
+            resultText += word
+            
             if word.lowercased().contains(keyword.lowercased()) {
-                if index > 0 {
-                    finalText = finalText + Text(" ")
-                }
-                finalText = finalText + Text(word).bold().foregroundColor(.blue)
-            } else {
-                if index > 0 {
-                    finalText = finalText + Text(" ")
-                }
-                finalText = finalText + Text(word)
+                let wordEnd = resultText.endIndex
+                highlightedRanges.append(wordStart..<wordEnd)
             }
         }
         
-        return finalText
+        // iOS 26 Enhancement: Use string interpolation with attributed text
+        let attributedString = NSMutableAttributedString(string: resultText)
+        
+        for range in highlightedRanges {
+            let nsRange = NSRange(range, in: resultText)
+            #if os(iOS)
+            attributedString.addAttributes([
+                .font: UIFont.boldSystemFont(ofSize: UIFont.systemFontSize),
+                .foregroundColor: UIColor.systemBlue
+            ], range: nsRange)
+            #elseif os(macOS)
+            attributedString.addAttributes([
+                .font: NSFont.boldSystemFont(ofSize: NSFont.systemFontSize),
+                .foregroundColor: NSColor.systemBlue
+            ], range: nsRange)
+            #endif
+        }
+        
+        return Text(AttributedString(attributedString))
     }
     
     private func getPlaceholderText() -> String {

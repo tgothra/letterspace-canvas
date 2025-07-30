@@ -260,7 +260,6 @@ struct DocumentDetailsCard: View {
             restOfContent
         }
         .padding(.horizontal, 16)
-        .background(theme.background)
         .overlay(
             RoundedRectangle(cornerRadius: 8)
                 .stroke(colorScheme == .dark ? Color.gray.opacity(0.3) : Color.clear, lineWidth: 1)

@@ -13,27 +13,27 @@ struct BibleGlobalSearchModal: View {
     
     var body: some View {
         // iOS 26 exclusive - use NavigationStack directly
-        #if os(iOS)
-        NavigationStack {
-            searchContentView
-                .navigationTitle("Bible Search")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
+            #if os(iOS)
+                NavigationStack {
+                    searchContentView
+                        .navigationTitle("Bible Search")
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar {
                     ToolbarItem(placement: .navigationBarTrailing) {
                         Button("Done", action: onDismiss)
                     }
                 }
-        }
-        #else
+            }
+            #else
         // macOS: Use NavigationStack (macOS 13.0+)
-        NavigationStack {
-            searchContentView
-                .navigationTitle("Bible Search")
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("Done", action: onDismiss)
-                    }
-                }
+                NavigationStack {
+                    searchContentView
+                        .navigationTitle("Bible Search")
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button("Done", action: onDismiss)
+                            }
+                        }
         }
         .onAppear {
             isJumpFieldFocused = true

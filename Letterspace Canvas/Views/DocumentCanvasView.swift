@@ -139,17 +139,40 @@ private struct CanvasBlockView: View {
                     }
                 )
                 #elseif os(iOS)
-                // iOS fallback using TextEditor with string conversion
-                TextEditor(text: Binding(
-                    get: { attributedString.string },
-                    set: { newValue in
-                        let newAttributedString = NSAttributedString(string: newValue)
-                        canvas.updateText(newAttributedString, at: block.position)
+                // iOS 26 Enhanced Text Editor
+                if #available(iOS 26.0, *) {
+                    iOS26NativeTextEditorWithToolbar(document: Binding(
+                        get: {
+                            // Create a temporary document with this text block
+                            var tempDoc = Letterspace_CanvasDocument()
+                            var element = DocumentElement(type: .textBlock)
+                            element.content = attributedString.string
+                            tempDoc.elements = [element]
+                            return tempDoc
+                        },
+                        set: { (newDoc: Letterspace_CanvasDocument) in
+                            if let updatedElement = newDoc.elements.first {
+                                let newAttributedString = updatedElement.attributedContent ?? NSAttributedString(string: updatedElement.content)
+                                canvas.updateText(newAttributedString, at: block.position)
+                            }
+                        }
+                    ))
+                    .onTapGesture {
+                        selectedElement = block.id
                     }
-                ))
-                .font(.body)
-                .onTapGesture {
-                    selectedElement = block.id
+                } else {
+                    // Fallback for older iOS versions
+                    TextEditor(text: Binding(
+                        get: { attributedString.string },
+                        set: { newValue in
+                            let newAttributedString = NSAttributedString(string: newValue)
+                            canvas.updateText(newAttributedString, at: block.position)
+                        }
+                    ))
+                    .font(.body)
+                    .onTapGesture {
+                        selectedElement = block.id
+                    }
                 }
                 #endif
             case .element(let element):

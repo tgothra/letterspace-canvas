@@ -175,19 +175,19 @@ struct SidebarButton: View {
             VStack(spacing: 1.5) {
                 // Top rectangle (small)
                 Rectangle()
-                    .fill(theme.primary)
+                    .fill(.black)
                     .frame(width: 8, height: 4.5)
                     .cornerRadius(1)
                 
                 // Middle rectangle (largest)
                 Rectangle()
-                    .fill(theme.primary)
+                    .fill(.black)
                     .frame(width: 13, height: 5.5)
                     .cornerRadius(1)
                 
                 // Bottom rectangle (medium)
                 Rectangle()
-                    .fill(theme.primary)
+                    .fill(.black)
                     .frame(width: 10, height: 4.5)
                     .cornerRadius(1)
             }
@@ -197,7 +197,7 @@ struct SidebarButton: View {
             VStack(spacing: responsiveSize(base: 2.6, min: 2, max: 3)) {  // Consistent spacing
                 // Top rectangle (small)
                 Rectangle()
-                    .fill(theme.primary)
+                    .fill(.black)
                     .frame(
                         width: responsiveSize(base: 13, min: 10, max: 16),
                         height: responsiveSize(base: 8, min: 6, max: 10)
@@ -206,7 +206,7 @@ struct SidebarButton: View {
                 
                 // Middle rectangle (largest)
                 Rectangle()
-                    .fill(theme.primary)
+                    .fill(.black)
                     .frame(
                         width: responsiveSize(base: 21, min: 16, max: 26),
                         height: responsiveSize(base: 9, min: 7, max: 11)
@@ -215,7 +215,7 @@ struct SidebarButton: View {
                 
                 // Bottom rectangle (medium)
                 Rectangle()
-                    .fill(theme.primary)
+                    .fill(.black)
                     .frame(
                         width: responsiveSize(base: 16, min: 12, max: 20),
                         height: responsiveSize(base: 8, min: 6, max: 10)
@@ -522,19 +522,19 @@ struct FloatingSidebarButton: View {
             VStack(spacing: 1.5) {
                 // Top rectangle (small)
                 Rectangle()
-                    .fill(theme.primary)
+                    .fill(.black)
                     .frame(width: 8, height: 4.5)
                     .cornerRadius(1)
                 
                 // Middle rectangle (largest)
                 Rectangle()
-                    .fill(theme.primary)
+                    .fill(.black)
                     .frame(width: 13, height: 5.5)
                     .cornerRadius(1)
                 
                 // Bottom rectangle (medium)
                 Rectangle()
-                    .fill(theme.primary)
+                    .fill(.black)
                     .frame(width: 10, height: 4.5)
                     .cornerRadius(1)
             }
@@ -548,7 +548,7 @@ struct FloatingSidebarButton: View {
                 VStack(spacing: responsiveSize(base: 2, min: 1.5, max: 2.5)) {  // Tighter spacing
                     // Top rectangle (small)
                     Rectangle()
-                        .fill(theme.primary)
+                        .fill(.black)
                         .frame(
                             width: responsiveSize(base: 10, min: 8, max: 12),
                             height: responsiveSize(base: 6, min: 5, max: 7)
@@ -557,7 +557,7 @@ struct FloatingSidebarButton: View {
                     
                     // Middle rectangle (largest)
                     Rectangle()
-                        .fill(theme.primary)
+                        .fill(.black)
                         .frame(
                             width: responsiveSize(base: 16, min: 12, max: 20),
                             height: responsiveSize(base: 7, min: 6, max: 8)
@@ -566,7 +566,7 @@ struct FloatingSidebarButton: View {
                     
                     // Bottom rectangle (medium)
                     Rectangle()
-                        .fill(theme.primary)
+                        .fill(.black)
                         .frame(
                             width: responsiveSize(base: 12, min: 10, max: 14),
                             height: responsiveSize(base: 6, min: 5, max: 7)
@@ -582,7 +582,7 @@ struct FloatingSidebarButton: View {
                 VStack(spacing: responsiveSize(base: 2.6, min: 2, max: 3)) {  // Consistent spacing
                     // Top rectangle (small)
                     Rectangle()
-                        .fill(theme.primary)
+                        .fill(.black)
                         .frame(
                             width: responsiveSize(base: 13, min: 10, max: 16),
                             height: responsiveSize(base: 8, min: 6, max: 10)
@@ -591,7 +591,7 @@ struct FloatingSidebarButton: View {
                     
                     // Middle rectangle (largest)
                     Rectangle()
-                        .fill(theme.primary)
+                        .fill(.black)
                         .frame(
                             width: responsiveSize(base: 21, min: 16, max: 26),
                             height: responsiveSize(base: 9, min: 7, max: 11)
@@ -600,7 +600,7 @@ struct FloatingSidebarButton: View {
                     
                     // Bottom rectangle (medium)
                     Rectangle()
-                        .fill(theme.primary)
+                        .fill(.black)
                         .frame(
                             width: responsiveSize(base: 16, min: 12, max: 20),
                             height: responsiveSize(base: 8, min: 6, max: 10)

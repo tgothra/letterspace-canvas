@@ -230,7 +230,6 @@ class SiriIntentService: NSObject, ObservableObject {
     
     // MARK: - Voice Shortcuts
     func createVoiceShortcuts() {
-        guard #available(iOS 12.0, *) else { return }
         
         // iOS 26 Enhancement: Use NSUserActivity-based shortcuts for better integration
         let shortcuts = [

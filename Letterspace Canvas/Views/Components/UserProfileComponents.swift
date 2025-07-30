@@ -636,3 +636,55 @@ struct UserProfilePopupContent: View {
         }
     }
 }
+
+// Sheet-based wrapper for UserProfilePopupContent to match other modals
+struct UserProfileView: View {
+    let onDismiss: () -> Void
+    @State private var activePopup: ActivePopup = .userProfile
+    @State private var isPresented = true
+    private let gradientManager = GradientWallpaperManager.shared
+    
+    var body: some View {
+        #if os(iOS)
+        NavigationStack {
+            UserProfilePopupContent(
+                activePopup: $activePopup,
+                isPresented: $isPresented,
+                gradientManager: gradientManager
+            )
+            .navigationTitle("User Profile")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done", action: onDismiss)
+                }
+            }
+            .onChange(of: isPresented) { _, newValue in
+                if !newValue {
+                    onDismiss()
+                }
+            }
+        }
+        #else
+        // macOS: Use NavigationStack
+        NavigationStack {
+            UserProfilePopupContent(
+                activePopup: $activePopup,
+                isPresented: $isPresented,
+                gradientManager: gradientManager
+            )
+            .navigationTitle("User Profile")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done", action: onDismiss)
+                }
+            }
+            .onChange(of: isPresented) { _, newValue in
+                if !newValue {
+                    onDismiss()
+                }
+            }
+        }
+        #endif
+    }
+}

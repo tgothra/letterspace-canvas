@@ -136,6 +136,11 @@ struct RightSidebar: View {
     @State private var showTranslationModal: Bool = false
     @State private var hoveredSeriesItem: String? = nil
     
+    // Liquid Glass touch tracking
+    @State private var dragLocation: CGPoint = .zero
+    @State private var isDragging: Bool = false
+    @State private var hoveredButtonIndex: Int? = nil
+    
     // Local environment values
     @Environment(\.themeColors) var theme
     @Environment(\.colorScheme) var colorScheme
@@ -617,52 +622,58 @@ struct RightSidebar: View {
             // Middle content area
             VStack(alignment: .leading, spacing: 0) {
                 if sidebarMode == .details {
-                    // Navigation buttons
-                    VStack(spacing: 24) {
-                        Button(action: { 
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                sidebarMode = .series
-                            }
-                        }) {
-                            SectionHeader(title: "Series", isExpanded: false, icon: "square.stack.3d.up")
+                    // Navigation buttons with Liquid Glass
+                    GlassEffectContainer {
+                        VStack(spacing: 16) {
+                            navigationButton(title: "Series", icon: "square.stack.3d.up", mode: .series, index: 0)
+                            navigationButton(title: "Tags", icon: "tag", mode: .tags, index: 1)
+                            navigationButton(title: "Variations", icon: "square.on.square", mode: .variations, index: 2)
+                            navigationButton(title: "Bookmarks", icon: "bookmark", mode: .bookmarks, index: 3)
+                            navigationButton(title: "Links", icon: "link", mode: .links, index: 4)
                         }
-                        .buttonStyle(.plain)
-                        
-                        Button(action: { 
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                sidebarMode = .tags
-                            }
-                        }) {
-                            SectionHeader(title: "Tags", isExpanded: false, icon: "tag")
-                        }
-                        .buttonStyle(.plain)
-                        
-                        Button(action: { 
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                sidebarMode = .variations
-                            }
-                        }) {
-                            SectionHeader(title: "Variations", isExpanded: false, icon: "square.on.square")
-                        }
-                        .buttonStyle(.plain)
-                        
-                        Button(action: { 
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                sidebarMode = .bookmarks
-                            }
-                        }) {
-                            SectionHeader(title: "Bookmarks", isExpanded: false, icon: "bookmark")
-                        }
-                        .buttonStyle(.plain)
-                        
-                        Button(action: { 
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                sidebarMode = .links
-                            }
-                        }) {
-                            SectionHeader(title: "Links", isExpanded: false, icon: "link")
-                        }
-                        .buttonStyle(.plain)
+                        .padding(.vertical, 20)
+                        .padding(.horizontal, 16)
+                        .glassEffect(
+                            .regular,
+                            in: RoundedRectangle(cornerRadius: isDragging ? 20 : 16)
+                        )
+                        .scaleEffect(isDragging ? 1.02 : 1.0)
+                        .offset(
+                            x: isDragging ? (dragLocation.x - 120) * 0.02 : 0,
+                            y: isDragging ? (dragLocation.y - 100) * 0.02 : 0
+                        )
+                        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isDragging)
+                        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: dragLocation)
+                        .simultaneousGesture(
+                            DragGesture(minimumDistance: 5, coordinateSpace: .local)
+                                .onChanged { value in
+                                    dragLocation = value.location
+                                    isDragging = true
+                                    
+                                    // Calculate which button is being hovered
+                                    let buttonHeight: CGFloat = 60 // Approximate button height with spacing
+                                    let startY: CGFloat = 20 // top padding
+                                    let adjustedY = value.location.y - startY
+                                    
+                                    let newButtonIndex = Int(adjustedY / buttonHeight)
+                                    let validIndex = newButtonIndex >= 0 && newButtonIndex < 5 ? newButtonIndex : nil
+                                    
+                                    // Only update if index actually changed
+                                    if validIndex != hoveredButtonIndex {
+                                        hoveredButtonIndex = validIndex
+                                        if validIndex != nil {
+                                            HapticFeedback.selection()
+                                        }
+                                    }
+                                }
+                                .onEnded { _ in
+                                    withAnimation(.easeOut(duration: 0.2)) {
+                                        isDragging = false
+                                        hoveredButtonIndex = nil
+                                        dragLocation = .zero
+                                    }
+                                }
+                        )
                     }
                     .padding(.vertical, 24)
                 } else if sidebarMode == .series {
@@ -2351,6 +2362,46 @@ struct SeriesItemButtonStyle: ButtonStyle {
             .onHover { hovering in
                 isHovering = hovering
             }
+    }
+}
+
+// MARK: - RightSidebar Extension for Liquid Glass
+extension RightSidebar {
+    // MARK: - Liquid Glass Navigation Button
+    @ViewBuilder
+    private func navigationButton(title: String, icon: String, mode: SidebarMode, index: Int) -> some View {
+        Button(action: { 
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                sidebarMode = mode
+            }
+        }) {
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(theme.accent)
+                    .frame(width: 24, height: 24)
+                
+                Text(title)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(theme.primary)
+                
+                Spacer()
+                
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(theme.secondary)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(hoveredButtonIndex == index && isDragging ? theme.accent.opacity(0.3) : Color.clear)
+            )
+            .scaleEffect(hoveredButtonIndex == index && isDragging ? 1.05 : 1.0)
+            .brightness(hoveredButtonIndex == index && isDragging ? 0.1 : 0)
+            .animation(.spring(response: 0.2, dampingFraction: 0.7), value: hoveredButtonIndex == index && isDragging)
+        }
+        .buttonStyle(.plain)
     }
 }
 

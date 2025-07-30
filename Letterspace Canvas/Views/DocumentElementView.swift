@@ -342,11 +342,22 @@ struct DocumentElementView: View {
                     )
                     .padding(.horizontal, 20)
                     #elseif os(iOS)
-                    // iOS text editor - simpler implementation for now
-                    TextEditor(text: $element.content)
-                        .font(.system(size: 16))
+                    // iOS 26 Native with Custom Toolbar
+                    if #available(iOS 26.0, *) {
+                        iOS26NativeElementEditor(element: Binding(
+                            get: { element },
+                            set: { newElement in
+                                element = newElement
+                            }
+                        ))
                         .padding(.horizontal, 20)
-                        .focused($isFocused)
+                    } else {
+                        // Fallback for older iOS versions
+                        TextEditor(text: $element.content)
+                            .font(.system(size: 16))
+                            .padding(.horizontal, 20)
+                            .focused($isFocused)
+                    }
                     #endif
                 }
             }
@@ -560,4 +571,55 @@ struct DocumentElementView: View {
         return ScriptureCard(content: scriptureElement)
     }
     #endif
+}
+
+// MARK: - iOS 26 Native AttributedString Element Editor
+@available(iOS 26.0, *)
+struct iOS26NativeElementTextEditor: View {
+    @Binding var element: DocumentElement
+    @State private var attributedText: AttributedString = AttributedString()
+    
+    var body: some View {
+        TextEditor(text: $attributedText)
+            .font(.system(size: 16))
+            .onChange(of: attributedText) { _, newValue in
+                updateElement(with: newValue)
+            }
+            .onAppear {
+                loadAttributedText()
+            }
+    }
+    
+    private func loadAttributedText() {
+        if let rtfData = element.rtfData {
+            // Try to convert RTF to AttributedString
+            if let nsAttributedString = try? NSAttributedString(
+                data: rtfData,
+                options: [.documentType: NSAttributedString.DocumentType.rtf],
+                documentAttributes: nil
+            ) {
+                attributedText = AttributedString(nsAttributedString)
+            } else {
+                attributedText = AttributedString(element.content)
+            }
+        } else {
+            attributedText = AttributedString(element.content)
+        }
+    }
+    
+    private func updateElement(with newAttributedText: AttributedString) {
+        let nsAttributedString = NSAttributedString(newAttributedText)
+        
+        // Create RTF data
+        let rtfData = try? nsAttributedString.data(
+            from: NSRange(location: 0, length: nsAttributedString.length),
+            documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf]
+        )
+        
+        // Update element
+        var updatedElement = element
+        updatedElement.content = String(newAttributedText.characters)
+        updatedElement.rtfData = rtfData
+        element = updatedElement
+    }
 } 

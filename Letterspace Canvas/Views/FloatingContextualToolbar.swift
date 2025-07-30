@@ -29,6 +29,11 @@ struct FloatingContextualToolbar: View {
     // Track which panel is currently open
     @State private var activePanel: ToolType? = nil
     
+    // Liquid Glass touch tracking
+    @State private var dragLocation: CGPoint = .zero
+    @State private var isDragging: Bool = false
+    @State private var hoveredButtonIndex: Int? = nil
+    
     // Computed property for available tools based on mode
     private var availableTools: [ToolType] {
         if isDistractionFreeMode {
@@ -118,9 +123,10 @@ struct FloatingContextualToolbar: View {
     
     // MARK: - Unified Floating Toolbar Bar
     private var floatingToolButtons: some View {
-        VStack(spacing: 12) {
-            // Show only bookmarks in distraction-free mode, all tools in normal mode
-            ForEach(availableTools, id: \.self) { toolType in
+        GlassEffectContainer {
+            VStack(spacing: 12) {
+                // Show only bookmarks in distraction-free mode, all tools in normal mode
+                ForEach(Array(availableTools.enumerated()), id: \.element) { index, toolType in
                 Button(action: { 
                     HapticFeedback.impact(.light)
                     toggleTool(toolType) 
@@ -131,12 +137,16 @@ struct FloatingContextualToolbar: View {
                         .frame(width: 40, height: 40)
                         .background(
                             Circle()
-                                .fill(activePanel == toolType ? Color.accentColor : Color.clear)
+                                .fill(activePanel == toolType ? Color.accentColor : (hoveredButtonIndex == index && isDragging ? theme.accent.opacity(0.3) : Color.clear))
                         )
                 }
                 .buttonStyle(PlainButtonStyle())
-                .scaleEffect(activePanel == toolType ? 0.95 : 1.0)
+                .scaleEffect(
+                    activePanel == toolType ? 0.95 : (hoveredButtonIndex == index && isDragging ? 1.08 : 1.0)
+                )
+                .brightness(hoveredButtonIndex == index && isDragging ? 0.1 : 0)
                 .animation(.spring(response: 0.2, dampingFraction: 0.7), value: activePanel == toolType)
+                .animation(.spring(response: 0.2, dampingFraction: 0.7), value: hoveredButtonIndex == index && isDragging)
             }
             
             // Show separator only if there are multiple tools (normal mode)
@@ -163,49 +173,57 @@ struct FloatingContextualToolbar: View {
                     .frame(width: 40, height: 24)
             }
             .buttonStyle(PlainButtonStyle())
-        }
-        .padding(.vertical, 16)
-        .padding(.horizontal, 8)
-        .background(
-            // Glassmorphism effect (matching left sidebar)
-            ZStack {
-                // Base blur
-                Rectangle()
-                    .fill(.ultraThinMaterial)
-                
-                // Gradient overlay
-                LinearGradient(
-                    gradient: Gradient(colors: [
-                        theme.background.opacity(0.3),
-                        theme.background.opacity(0.1)
-                    ]),
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
             }
-        )
-        .overlay(
-            // Border (matching left sidebar)
-            RoundedRectangle(cornerRadius: 24)
-                .stroke(
-                    LinearGradient(
-                        gradient: Gradient(colors: [
-                            Color.white.opacity(0.2),
-                            Color.white.opacity(0.05)
-                        ]),
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 1
-                )
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 24))
-        .shadow(color: Color.black.opacity(0.2), radius: 20, x: -5, y: 0) // Shadow to the left instead of right
-        // Add swipe gesture to hide toolbar when expanded
-        .gesture(
-            DragGesture()
+            .padding(.vertical, 16)
+            .padding(.horizontal, 8)
+            .glassEffect(
+                .regular,
+                in: RoundedRectangle(cornerRadius: isDragging ? 28 : 24)
+            )
+            .scaleEffect(isDragging ? 1.02 : 1.0)
+            .offset(
+                x: isDragging ? (dragLocation.x - 20) * 0.03 : 0,
+                y: isDragging ? (dragLocation.y - 100) * 0.02 : 0
+            )
+            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isDragging)
+            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: dragLocation)
+            .shadow(color: Color.black.opacity(0.2), radius: 20, x: -5, y: 0)
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 5, coordinateSpace: .local)
+                    .onChanged { value in
+                        dragLocation = value.location
+                        isDragging = true
+                        
+                        // Calculate which button is being hovered
+                        let buttonHeight: CGFloat = 52 // button + spacing
+                        let startY: CGFloat = 16 // top padding
+                        let adjustedY = value.location.y - startY
+                        
+                        let newButtonIndex = Int(adjustedY / buttonHeight)
+                        let validIndex = newButtonIndex >= 0 && newButtonIndex < availableTools.count ? newButtonIndex : nil
+                        
+                        // Only update if index actually changed
+                        if validIndex != hoveredButtonIndex {
+                            hoveredButtonIndex = validIndex
+                            if validIndex != nil {
+                                HapticFeedback.selection()
+                            }
+                        }
+                    }
+                    .onEnded { _ in
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            isDragging = false
+                            hoveredButtonIndex = nil
+                            dragLocation = .zero
+                        }
+                    }
+            )
+        }
+        // Add swipe gesture to hide toolbar when expanded  
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 20)
                 .onChanged { value in
-                    if value.translation.width > 0 {
+                    if value.translation.width > 0 && !isDragging {
                         // Slow down the manual drag by applying a damping factor
                         dragAmount = CGSize(
                             width: value.translation.width * 0.4, // 40% of actual drag distance
@@ -217,7 +235,7 @@ struct FloatingContextualToolbar: View {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                         dragAmount = .zero
                         // Swipe right to hide toolbar (using original translation for threshold)
-                        if value.translation.width > 50 {
+                        if value.translation.width > 50 && !isDragging {
                             isCollapsed = true
                             UserDefaults.standard.set(true, forKey: "floatingToolbarIsCollapsed")
                             // Close any active panel when collapsing

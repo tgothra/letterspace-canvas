@@ -24,26 +24,11 @@ struct CircularMenuButton: View {
             }
         }) {
             ZStack {
-                // Solid green background circle
+                // Liquid Glass background circle
                 Circle()
                     .fill(theme.accent)
                     .frame(width: 56, height: 56)
-                .overlay(
-                    Circle()
-                        .stroke(
-                            LinearGradient(
-                                gradient: Gradient(colors: [
-                                    Color.white.opacity(0.3),
-                                    Color.white.opacity(0.1)
-                                ]),
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 1
-                        )
-                        .frame(width: 56, height: 56)
-                )
-                .clipShape(Circle())
+                    .glassEffect(.regular.tint(theme.accent.opacity(0.3)).interactive())
                 
                 // Menu icon (hamburger or close) - white on green background
                 VStack(spacing: 3.5) {
@@ -106,6 +91,9 @@ struct CircularMenuOverlay: View {
     
     @State private var menuScale: CGFloat = 0.85
     @State private var menuOffset: CGFloat = 15
+    @State private var dragLocation: CGPoint = .zero
+    @State private var isDragging: Bool = false
+    @State private var hoveredButtonIndex: Int? = nil
     
     // Pre-cache user profile components to avoid first-load delays
     @State private var cachedUserProfile = UserProfileManager.shared.userProfile
@@ -128,54 +116,65 @@ struct CircularMenuOverlay: View {
                 HStack {
                     Spacer()
                     
-                    // Menu items
-                    VStack(spacing: 0) {
-                        // Menu items container - use VStack instead of LazyVStack for faster rendering
+                    // Menu items - Wrapped in GlassEffectContainer for Liquid Glass
+                    GlassEffectContainer {
                         VStack(spacing: 0) {
-                            menuItem(icon: "rectangle.3.group", title: "Dashboard", action: onDashboard)
-                            menuItem(icon: "magnifyingglass", title: "Search", action: onSearch)
-                            menuItem(icon: "plus.square", title: "New Document", action: onNewDocument)
-                            menuItem(icon: "folder", title: "Folders", action: onFolders)
-                            menuItem(icon: "book.closed", title: "Bible Reader", action: onBibleReader)
-                            menuItem(icon: "sparkles", title: "Smart Study", action: onSmartStudy)
-                            menuItem(icon: "trash", title: "Recently Deleted", action: onRecentlyDeleted)
-                            menuItem(icon: "person.crop.circle.fill", title: "Settings", action: onSettings, isUserProfile: true)
+                            // Menu items container - use VStack instead of LazyVStack for faster rendering
+                            VStack(spacing: 2) {
+                                menuItem(icon: "rectangle.3.group", title: "Dashboard", action: onDashboard, index: 0)
+                                menuItem(icon: "magnifyingglass", title: "Search", action: onSearch, index: 1)
+                                menuItem(icon: "plus.square", title: "New Document", action: onNewDocument, index: 2)
+                                menuItem(icon: "folder", title: "Folders", action: onFolders, index: 3)
+                                menuItem(icon: "book.closed", title: "Bible Reader", action: onBibleReader, index: 4)
+                                menuItem(icon: "sparkles", title: "Smart Study", action: onSmartStudy, index: 5)
+                                menuItem(icon: "trash", title: "Recently Deleted", action: onRecentlyDeleted, index: 6)
+                                menuItem(icon: "person.crop.circle.fill", title: "Settings", action: onSettings, index: 7, isUserProfile: true)
+                            }
+                            .padding(.vertical, 8) // Add breathing room above and below menu items
+                            .frame(width: 240)
+                            .glassEffect(
+                                .regular,
+                                in: RoundedRectangle(cornerRadius: isDragging ? 20 : 16)
+                            )
+                            .scaleEffect(isDragging ? 1.02 : 1.0)
+                            .offset(
+                                x: isDragging ? (dragLocation.x - 120) * 0.05 : 0,
+                                y: isDragging ? (dragLocation.y - 160) * 0.03 : 0
+                            )
+                            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isDragging)
+                            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: dragLocation)
+                            .shadow(color: Color.black.opacity(0.2), radius: 20, x: 0, y: 10)
+                                                        .simultaneousGesture(
+                                DragGesture(minimumDistance: 5, coordinateSpace: .local)
+                                    .onChanged { value in
+                                        dragLocation = value.location
+                                        isDragging = true
+                                        
+                                        // Calculate which button is being hovered
+                                        let startY: CGFloat = 8 // top padding
+                                        let buttonHeight: CGFloat = 40 // button height including padding
+                                        let adjustedY = value.location.y - startY
+                                        
+                                        let newButtonIndex = Int(adjustedY / buttonHeight)
+                                        let validIndex = newButtonIndex >= 0 && newButtonIndex < 8 ? newButtonIndex : nil
+                                        
+                                        // Only update if index actually changed
+                                        if validIndex != hoveredButtonIndex {
+                                            hoveredButtonIndex = validIndex
+                                            if validIndex != nil {
+                                                HapticFeedback.selection()
+                                            }
+                                        }
+                                    }
+                                    .onEnded { _ in
+                                        withAnimation(.easeOut(duration: 0.2)) {
+                                            isDragging = false
+                                            hoveredButtonIndex = nil
+                                            dragLocation = .zero
+                                        }
+                                    }
+                            )
                         }
-                        .padding(.vertical, 10) // Add breathing room above and below menu items
-                        .frame(width: 250)
-                        .background(
-                            RoundedRectangle(cornerRadius: 20)
-                                .fill(.thinMaterial)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 20)
-                                        .fill(
-                                            LinearGradient(
-                                                gradient: Gradient(colors: [
-                                                    Color.white.opacity(0.4),
-                                                    Color.white.opacity(0.2)
-                                                ]),
-                                                startPoint: .topLeading,
-                                                endPoint: .bottomTrailing
-                                            )
-                                        )
-                                )
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 20)
-                                        .stroke(
-                                            LinearGradient(
-                                                gradient: Gradient(colors: [
-                                                    Color.white.opacity(0.5),
-                                                    Color.white.opacity(0.2)
-                                                ]),
-                                                startPoint: .topLeading,
-                                                endPoint: .bottomTrailing
-                                            ),
-                                            lineWidth: 1
-                                        )
-                                )
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: 20))
-                        .shadow(color: Color.black.opacity(0.2), radius: 20, x: 0, y: 10)
                     }
                     .scaleEffect(menuScale)
                     .offset(y: menuOffset)
@@ -201,7 +200,7 @@ struct CircularMenuOverlay: View {
         .zIndex(isMenuOpen ? 1000 : -1)
     }
     
-    private func menuItem(icon: String, title: String, action: @escaping () -> Void, isUserProfile: Bool = false) -> some View {
+    private func menuItem(icon: String, title: String, action: @escaping () -> Void, index: Int, isUserProfile: Bool = false) -> some View {
         Button(action: {
             HapticFeedback.safeTrigger(.light)
             // Close menu first, then execute action to prevent gesture conflicts
@@ -238,15 +237,15 @@ struct CircularMenuOverlay: View {
                     // Custom dashboard icon
                     VStack(spacing: 1) {
                         Rectangle()
-                            .fill(theme.primary)
+                            .fill(.black)
                             .frame(width: 8, height: 3)
                             .cornerRadius(0.5)
                         Rectangle()
-                            .fill(theme.primary)
+                            .fill(.black)
                             .frame(width: 12, height: 4)
                             .cornerRadius(0.5)
                         Rectangle()
-                            .fill(theme.primary)
+                            .fill(.black)
                             .frame(width: 10, height: 3)
                             .cornerRadius(0.5)
                     }
@@ -266,10 +265,20 @@ struct CircularMenuOverlay: View {
                 Spacer()
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.vertical, 8)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(theme.accent)
+                .opacity(hoveredButtonIndex == index && isDragging ? 0.3 : 0)
+                .animation(.easeInOut(duration: 0.1), value: hoveredButtonIndex == index && isDragging)
+        )
+        .scaleEffect(hoveredButtonIndex == index && isDragging ? 1.08 : 1.0)
+        .animation(.spring(response: 0.2, dampingFraction: 0.7), value: hoveredButtonIndex == index && isDragging)
+        .brightness(hoveredButtonIndex == index && isDragging ? 0.1 : 0)
+        .animation(.easeInOut(duration: 0.1), value: hoveredButtonIndex == index && isDragging)
     }
     
     private func closeMenu() {

@@ -671,6 +671,7 @@ struct SmartStudyView: View {
                         }
                         .background(theme.surface)
                         .navigationTitle("Past Studies")
+                        #if os(iOS)
                         .navigationBarTitleDisplayMode(.inline)
                         .toolbar {
                             ToolbarItem(placement: .navigationBarTrailing) {
@@ -689,6 +690,25 @@ struct SmartStudyView: View {
                                 .buttonStyle(.plain)
                             }
                         }
+                        #elseif os(macOS)
+                        .toolbar {
+                            ToolbarItem {
+                                Button(action: {
+                                    showingPastStudiesSheet = false
+                                }) {
+                                    Image(systemName: "xmark")
+                                        .font(.system(size: 10, weight: .bold))
+                                        .foregroundColor(.white)
+                                        .frame(width: 22, height: 22)
+                                        .background(
+                                            Circle()
+                                                .fill(Color.gray.opacity(0.5))
+                                        )
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        #endif
                     }
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)

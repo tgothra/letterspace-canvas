@@ -32,16 +32,39 @@ struct TitleBlockView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 24)
             #elseif os(iOS)
-            TextEditor(text: Binding(
-                get: { title },
-                set: { newValue in onUpdate(newValue) }
-            ))
-            .font(.system(size: 32, weight: .bold))
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 24)
-            .scrollContentBackground(.hidden)
-            .background(Color.clear)
+            // iOS 26 Native with Custom Toolbar for titles
+            if #available(iOS 26.0, *) {
+                iOS26NativeTextEditorWithToolbar(document: Binding(
+                    get: {
+                        var tempDoc = Letterspace_CanvasDocument()
+                        var element = DocumentElement(type: .textBlock)
+                        element.content = title
+                        tempDoc.elements = [element]
+                        return tempDoc
+                    },
+                    set: { (newDoc: Letterspace_CanvasDocument) in
+                        if let updatedElement = newDoc.elements.first {
+                            onUpdate(updatedElement.content)
+                        }
+                    }
+                ))
+                .font(.system(size: 32, weight: .bold))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 24)
+            } else {
+                // Fallback for older iOS versions
+                TextEditor(text: Binding(
+                    get: { title },
+                    set: { newValue in onUpdate(newValue) }
+                ))
+                .font(.system(size: 32, weight: .bold))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 24)
+                .scrollContentBackground(.hidden)
+                .background(Color.clear)
+            }
             #endif
         }
     }
 } 
+

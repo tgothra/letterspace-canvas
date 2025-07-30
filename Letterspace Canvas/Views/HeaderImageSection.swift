@@ -318,25 +318,27 @@ struct HeaderImageSection: View {
         // Apply scroll-based scaling using headerCollapseProgress
         // When progress = 0.0 (fully expanded), use full height
         // When progress = 1.0 (fully collapsed), use collapsed height
+        // When progress > 1.0, continue shrinking to 0 height
         let collapsedHeight: CGFloat = 80 // Target collapsed height (matches collapsed bar)
-        let currentHeight = baseHeaderHeight - (headerCollapseProgress * (baseHeaderHeight - collapsedHeight))
         
-        // Calculate staggered transition timing for smoother effect
+        let currentHeight: CGFloat = {
+            if headerCollapseProgress <= 1.0 {
+                // Normal collapse: full height -> collapsed height
+                return baseHeaderHeight - (headerCollapseProgress * (baseHeaderHeight - collapsedHeight))
+            } else {
+                // Extended collapse: collapsed height -> 0 height
+                let extendedProgress = headerCollapseProgress - 1.0  // Progress beyond 1.0
+                let remainingHeight = collapsedHeight * (1.0 - min(1.0, extendedProgress / 0.2))  // Shrink over 0.2 progress units
+                return remainingHeight
+            }
+        }()
+        
+        // Calculate fade out timing for image
         let imageExitThreshold: CGFloat = 0.7 // Image starts fading out at 70%
-        let barEntryThreshold: CGFloat = 0.85 // Collapsed bar starts fading in at 85%
         
         // Image fades out from 70% to 80%
         let imageExitProgress = max(0, min(1, (headerCollapseProgress - imageExitThreshold) / 0.1))
         let expandedOpacity = 1.0 - imageExitProgress
-        
-        // Bar fades in from 85% to 95%
-        let barEntryProgress = max(0, min(1, (headerCollapseProgress - barEntryThreshold) / 0.1))
-        let collapsedOpacity = barEntryProgress
-        
-        // Colors for collapsed state
-        let collapsedBarColor = colorScheme == .dark ? Color(.sRGB, red: 0.15, green: 0.15, blue: 0.15, opacity: 1.0) : Color(.sRGB, red: 0.95, green: 0.95, blue: 0.95, opacity: 1.0)
-        let textColor = colorScheme == .dark ? Color.white : Color.black
-        let subtitleColor = colorScheme == .dark ? Color.white.opacity(0.8) : Color.black.opacity(0.7)
         
         // Calculate scroll-based visual effects based on collapse progress
 
@@ -379,79 +381,7 @@ struct HeaderImageSection: View {
             }
             .opacity(expandedOpacity)
             
-            // Collapsed state: solid bar with image thumbnail on left + title on right
-            if collapsedOpacity > 0 {
-                ZStack {
-                                         // Background bar
-                     RoundedRectangle(cornerRadius: 12)
-                         .fill(collapsedBarColor)
-                         .frame(height: 80)
-                    
-                    HStack(spacing: 12) {
-                        // Image thumbnail on the left - make it clickable
-                        Button(action: {
-                            #if os(iOS)
-                            print("📸 iOS: User tapped collapsed header image thumbnail - showing action sheet")
-                            showImageActionSheet = true
-                            #endif
-                        }) {
-                            #if os(macOS)
-                            Image(nsImage: image)
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                                .frame(width: 40, height: 40)
-                                .clipShape(RoundedRectangle(cornerRadius: 6))
-                            #elseif os(iOS)
-                            Image(uiImage: image)
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                                .frame(width: 40, height: 40)
-                                .clipShape(RoundedRectangle(cornerRadius: 6))
-                            #endif
-                        }
-                        .buttonStyle(.plain)
-                        
-                                                 // Title and subtitle on the right - make them editable
-                         VStack(alignment: .leading, spacing: 2) {
-                                                           // Editable title
-                              TextField("Untitled", text: Binding(
-                                  get: { document.title.isEmpty ? "" : document.title },
-                                  set: { newValue in
-                                      document.title = newValue
-                                      document.save()
-                                  }
-                              ))
-                              .font(.system(size: 18, weight: .semibold))
-                              .foregroundColor(textColor)
-                              .textFieldStyle(.plain)
-                              .onSubmit {
-                                  // Move focus away when done
-                              }
-                              
-                              // Editable subtitle
-                              TextField("Add subtitle...", text: Binding(
-                                  get: { document.subtitle },
-                                  set: { newValue in
-                                      document.subtitle = newValue
-                                      document.save()
-                                  }
-                              ))
-                              .font(.system(size: 14, weight: .regular))
-                              .foregroundColor(subtitleColor)
-                              .textFieldStyle(.plain)
-                              .onSubmit {
-                                  // Move focus away when done
-                              }
-                         }
-                        
-                        Spacer()
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 12)
-                                 }
-                 .frame(height: 80)
-                 .opacity(collapsedOpacity)
-            }
+
         }
         .frame(width: paperWidth, height: currentHeight)
         .clipShape(RoundedRectangle(cornerRadius: 12))

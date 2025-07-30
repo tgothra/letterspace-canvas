@@ -31,7 +31,7 @@ struct DocumentSeries: Codable, Identifiable, Equatable {
     }
 }
 
-struct DocumentVariation: Codable, Identifiable {
+struct DocumentVariation: Codable, Identifiable, Equatable {
     let id: UUID
     var name: String
     var documentId: String  // ID of the variation document
@@ -60,6 +60,18 @@ struct DocumentVariation: Codable, Identifiable {
         self.location = location
         self.serviceTime = serviceTime
         self.notes = notes
+    }
+    
+    static func == (lhs: DocumentVariation, rhs: DocumentVariation) -> Bool {
+        return lhs.id == rhs.id &&
+               lhs.name == rhs.name &&
+               lhs.documentId == rhs.documentId &&
+               lhs.parentDocumentId == rhs.parentDocumentId &&
+               lhs.createdAt == rhs.createdAt &&
+               lhs.datePresented == rhs.datePresented &&
+               lhs.location == rhs.location &&
+               lhs.serviceTime == rhs.serviceTime &&
+               lhs.notes == rhs.notes
     }
 }
 
@@ -175,7 +187,7 @@ struct AnyCodable: Codable {
     }
 }
 
-struct Letterspace_CanvasDocument: FileDocument, Codable, Identifiable {
+struct Letterspace_CanvasDocument: FileDocument, Codable, Identifiable, Equatable {
     var elements: [DocumentElement]
     var title: String
     var subtitle: String
@@ -715,6 +727,28 @@ struct Letterspace_CanvasDocument: FileDocument, Codable, Identifiable {
             print("📢 Posted document update notification")
         }
     }
+    
+    static func == (lhs: Letterspace_CanvasDocument, rhs: Letterspace_CanvasDocument) -> Bool {
+        return lhs.elements == rhs.elements &&
+               lhs.title == rhs.title &&
+               lhs.subtitle == rhs.subtitle &&
+               lhs.id == rhs.id &&
+               lhs.markers == rhs.markers &&
+               lhs.series == rhs.series &&
+               lhs.variations == rhs.variations &&
+               lhs.isVariation == rhs.isVariation &&
+               lhs.parentVariationId == rhs.parentVariationId &&
+               lhs.createdAt == rhs.createdAt &&
+               lhs.modifiedAt == rhs.modifiedAt &&
+               lhs.tags == rhs.tags &&
+               lhs.isHeaderExpanded == rhs.isHeaderExpanded &&
+               lhs.isSubtitleVisible == rhs.isSubtitleVisible &&
+               lhs.links == rhs.links &&
+               lhs.summary == rhs.summary &&
+               // For metadata, use NSDictionary for comparison to handle Any equality:
+               ((lhs.metadata == nil && rhs.metadata == nil) ||
+                (lhs.metadata != nil && rhs.metadata != nil && NSDictionary(dictionary: lhs.metadata!).isEqual(to: rhs.metadata!)))
+    }
 }
 
 // Define document save errors
@@ -724,3 +758,4 @@ enum DocumentSaveError: Error {
     case writeError(Error)
     case encodingError(Error)
 } 
+

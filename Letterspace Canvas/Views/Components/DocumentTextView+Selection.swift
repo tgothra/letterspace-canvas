@@ -3,33 +3,40 @@ import AppKit
 import SwiftUI
 
 extension DocumentTextView {
+    // MARK: - Performance Properties
+    private static var pendingHasSelectionKey: UInt8 = 0
+    
+    var pendingHasSelection: Bool {
+        get {
+            return objc_getAssociatedObject(self, &DocumentTextView.pendingHasSelectionKey) as? Bool ?? false
+        }
+        set {
+            objc_setAssociatedObject(self, &DocumentTextView.pendingHasSelectionKey, newValue, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+        }
+    }
+    
     // MARK: - Selection Change Handling
     
     override func setSelectedRange(_ charRange: NSRange, affinity: NSSelectionAffinity = .downstream, stillSelecting: Bool = false) {
         // Call the original implementation first
         super.setSelectedRange(charRange, affinity: affinity, stillSelecting: stillSelecting)
 
-        // Handle toolbar visibility based on selection length
+        // Performance: Debounce toolbar updates to prevent excessive UI updates
         let hasSelection = charRange.length > 0
-        print("📍 Selection changed: length=\(charRange.length), location=\(charRange.location)")
-        if hasSelection {
-            print("📢 Selection detected - showing formatting toolbar")
-            DispatchQueue.main.async { [weak self] in
-                self?.showFormattingToolbar()
-            }
-        } else {
-            DispatchQueue.main.async { [weak self] in
-                self?.hideFormattingToolbar()
-            }
+        
+        // Cancel previous delayed toolbar updates
+        NSObject.cancelPreviousPerformRequests(withTarget: self, selector: #selector(updateToolbarVisibility), object: nil)
+        
+        // Store selection state for delayed update
+        self.pendingHasSelection = hasSelection
+        
+        // Delay toolbar updates to prevent UI freezing
+        self.perform(#selector(updateToolbarVisibility), with: nil, afterDelay: 0.1)
+        
+        // Only scroll if not currently selecting (performance optimization)
+        if !stillSelecting {
+            self.scrollRangeToVisible(charRange)
         }
-
-        // --- FIX ---
-        // After super call and toolbar logic, explicitly call our controlled scroll method.
-        // This ensures *our* logic (which prevents scrolling if already visible)
-        // is the last thing to run regarding scrolling for this selection change.
-        print("🖱️ Explicitly calling scrollRangeToVisible from setSelectedRange override...")
-        self.scrollRangeToVisible(charRange)
-        // --- END FIX ---
 
         // Update toolbar with current formatting if it exists AND there is still a selection
         if let panel = formattingToolbarPanel, panel.isVisible, self.selectedRange().length > 0 {
@@ -90,12 +97,21 @@ extension DocumentTextView {
         // --- END FIX ---
     }
     
+    // MARK: - Performance Optimized Toolbar Updates
+    @objc private func updateToolbarVisibility() {
+        let hasSelection = pendingHasSelection
+        
+        if hasSelection {
+            showFormattingToolbar()
+        } else {
+            hideFormattingToolbar()
+        }
+    }
+    
     override func didChangeText() {
         super.didChangeText()
-        print("📝 Text changed to: \\(string)")
         
-        // --- REMOVE THIS CALL --- Likely causing scroll jump on newline
-        // resetParagraphIndentation()
+        // Performance: Remove excessive logging
         
         // Clear scripture line rectangle cache when text changes
         cachedScriptureLineRects.removeAll()
@@ -105,11 +121,11 @@ extension DocumentTextView {
             NotificationCenter.default.post(name: NSText.didChangeNotification, object: self)
         }
         
-        // Apply proper indentation to scripture blocks
-        fixScriptureIndentation()
-        
-        // EMERGENCY COLOR OVERRIDE: Force text color based on current appearance
-        forceTextColorForCurrentAppearance()
+        // Defer expensive operations to prevent UI freezing
+        DispatchQueue.main.async { [weak self] in
+            self?.fixScriptureIndentation()
+            self?.forceTextColorForCurrentAppearance()
+        }
         
         // Force redraw to ensure highlights and colors are visible
         needsDisplay = true
