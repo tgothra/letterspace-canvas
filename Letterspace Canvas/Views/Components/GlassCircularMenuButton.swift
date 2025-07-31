@@ -85,41 +85,30 @@ struct GlassCircularMenuButton: View {
                     }
             )
         } label: {
-            // The green circular button that morphs into the menu (no nested button)
-            ZStack {
-                // Solid green background circle (no glass effect here to avoid morphing issues)
-                Circle()
-                    .fill(theme.accent)
-                    .frame(width: 56, height: 56)
-                    .overlay(
-                        Circle()
-                            .stroke(Color.white.opacity(0.2), lineWidth: 1)
-                    )
+            // The green circular button that morphs into the menu (glass effect with green tint)
+            VStack(spacing: 3.5) {
+                RoundedRectangle(cornerRadius: 1)
+                    .fill(Color.white)
+                    .frame(width: 16, height: 2.5)
+                    .rotationEffect(.degrees(isMenuOpen ? 45 : 0))
+                    .offset(y: isMenuOpen ? 3 : 0)
                 
-                // Menu icon (hamburger or close) - white on green background
-                VStack(spacing: 3.5) {
+                if !isMenuOpen {
                     RoundedRectangle(cornerRadius: 1)
                         .fill(Color.white)
                         .frame(width: 16, height: 2.5)
-                        .rotationEffect(.degrees(isMenuOpen ? 45 : 0))
-                        .offset(y: isMenuOpen ? 3 : 0)
-                    
-                    if !isMenuOpen {
-                        RoundedRectangle(cornerRadius: 1)
-                            .fill(Color.white)
-                            .frame(width: 16, height: 2.5)
-                            .opacity(isMenuOpen ? 0 : 1)
-                    }
-                    
-                    RoundedRectangle(cornerRadius: 1)
-                        .fill(Color.white)
-                        .frame(width: 16, height: 2.5)
-                        .rotationEffect(.degrees(isMenuOpen ? -45 : 0))
-                        .offset(y: isMenuOpen ? -3 : 0)
+                        .opacity(isMenuOpen ? 0 : 1)
                 }
-                .animation(.easeInOut(duration: 0.2), value: isMenuOpen)
+                
+                RoundedRectangle(cornerRadius: 1)
+                    .fill(Color.white)
+                    .frame(width: 16, height: 2.5)
+                    .rotationEffect(.degrees(isMenuOpen ? -45 : 0))
+                    .offset(y: isMenuOpen ? -3 : 0)
             }
+            .animation(.easeInOut(duration: 0.2), value: isMenuOpen)
             .frame(width: 56, height: 56)
+            .glassEffect(.regular.tint(theme.accent.opacity(0.8)).interactive())
             .shadow(color: Color.black.opacity(0.2), radius: 8, x: 0, y: 2)
             .contentShape(Circle())
             .onTapGesture {
