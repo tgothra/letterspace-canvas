@@ -54,8 +54,12 @@ struct iOS26ScrollDetectingTextEditor: UIViewRepresentable {
     }
     
     func updateUIView(_ uiView: UITextView, context: Context) {
-        // Load attributed content if available, otherwise use plain text
-        loadDocumentContentWithFormatting(into: uiView)
+        // CRITICAL FIX: Only load document content if text view is not first responder (not being edited)
+        // This prevents cursor jumping during line breaks and active text editing
+        if !uiView.isFirstResponder {
+            // Load attributed content if available, otherwise use plain text
+            loadDocumentContentWithFormatting(into: uiView)
+        }
         
         // Update coordinator bindings
         context.coordinator.headerCollapseProgress = $headerCollapseProgress
@@ -63,7 +67,7 @@ struct iOS26ScrollDetectingTextEditor: UIViewRepresentable {
         context.coordinator.document = $document
         
         // Let coordinator handle content inset updates
-        context.coordinator.updateContentInsets(for: uiView)
+        context.coordinator.updateCombinedInsets()
     }
     
     private func loadDocumentContentWithFormatting(into textView: UITextView) {
@@ -112,6 +116,7 @@ struct iOS26ScrollDetectingTextEditor: UIViewRepresentable {
         weak var textView: UITextView?
         private var isApplyingFormatting = false  // Flag to prevent recursive updates
         private var userIntendedScrollPosition: CGPoint?  // Store user's intended position
+        private var currentKeyboardHeight: CGFloat = 0 // Store the current keyboard height
         
         init(_ parent: iOS26ScrollDetectingTextEditor, document: Binding<Letterspace_CanvasDocument>) {
             self.parent = parent
@@ -120,21 +125,8 @@ struct iOS26ScrollDetectingTextEditor: UIViewRepresentable {
             self.document = document
             super.init()
             
-            // Set up keyboard notifications for toolbar dismissal
-            NotificationCenter.default.addObserver(
-                self,
-                selector: #selector(keyboardWillShow),
-                name: UIResponder.keyboardWillShowNotification,
-                object: nil
-            )
-            
-            NotificationCenter.default.addObserver(
-                self,
-                selector: #selector(keyboardWillHide),
-                name: UIResponder.keyboardWillHideNotification,
-                object: nil
-            )
-            
+            // Set up a single, robust notification handler for all keyboard frame changes.
+            // This is more reliable than using separate willShow/willHide notifications.
             NotificationCenter.default.addObserver(
                 self,
                 selector: #selector(keyboardWillChangeFrame),
@@ -186,6 +178,40 @@ struct iOS26ScrollDetectingTextEditor: UIViewRepresentable {
             textView.verticalScrollIndicatorInsets.top = interpolatedInset
         }
         
+        // This new, unified function calculates and applies both top and bottom insets simultaneously,
+        // ensuring that updates from the collapsing header and the keyboard don't conflict.
+        func updateCombinedInsets() {
+            guard let textView = textView else { return }
+
+            // Calculate the dynamic top inset based on header collapse progress.
+            let currentProgress = headerCollapseProgress.wrappedValue
+            let transitionStart: CGFloat = 0.70
+            let transitionEnd: CGFloat = 1.20
+            let normalInset: CGFloat = 16
+            let floatingInset: CGFloat = 160
+            
+            let interpolatedTopInset: CGFloat
+            if currentProgress < transitionStart {
+                interpolatedTopInset = normalInset
+            } else if currentProgress > transitionEnd {
+                interpolatedTopInset = floatingInset
+            } else {
+                let transitionProgress = (currentProgress - transitionStart) / (transitionEnd - transitionStart)
+                let easedProgress = pow(transitionProgress, 0.7)
+                interpolatedTopInset = normalInset + (floatingInset - normalInset) * easedProgress
+            }
+
+            // Apply both the top and bottom insets in a single, atomic operation.
+            let newInsets = UIEdgeInsets(top: interpolatedTopInset, left: 0, bottom: currentKeyboardHeight, right: 0)
+            
+            // We use a transaction with disabled actions to prevent unwanted animations.
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            textView.contentInset = newInsets
+            textView.scrollIndicatorInsets = newInsets
+            CATransaction.commit()
+        }
+        
         // MARK: - Scroll Detection
         func scrollViewDidScroll(_ scrollView: UIScrollView) {
             let scrollY = scrollView.contentOffset.y
@@ -224,7 +250,7 @@ struct iOS26ScrollDetectingTextEditor: UIViewRepresentable {
                     // Disable implicit animations for smooth content inset updates
                     CATransaction.begin()
                     CATransaction.setDisableActions(true)
-                    self.updateContentInsets(for: textView)
+                    self.updateCombinedInsets()
                     CATransaction.commit()
                 }
             }
@@ -958,9 +984,17 @@ struct iOS26ScrollDetectingTextEditor: UIViewRepresentable {
             let attributedText = NSMutableAttributedString(attributedString: textView.attributedText)
             
             if color == .clear {
+                // Remove highlight and reset text color to default
                 attributedText.removeAttribute(.backgroundColor, range: selectedRange)
+                attributedText.removeAttribute(.foregroundColor, range: selectedRange)
             } else {
-                attributedText.addAttribute(.backgroundColor, value: UIColor(color), range: selectedRange)
+                // Apply highlight with modern pastel opacity
+                let highlightColor = UIColor(color).withAlphaComponent(0.4)
+                attributedText.addAttribute(.backgroundColor, value: highlightColor, range: selectedRange)
+                
+                // Apply darker text color of the same hue (Apple's approach)
+                let darkerTextColor = getDarkerTextColor(for: color)
+                attributedText.addAttribute(.foregroundColor, value: UIColor(darkerTextColor), range: selectedRange)
             }
             
             CATransaction.begin()
@@ -970,6 +1004,36 @@ struct iOS26ScrollDetectingTextEditor: UIViewRepresentable {
             textView.contentOffset = originalContentOffset
             CATransaction.commit()
             updateParentTextSafely(textView)
+        }
+        
+        // Helper function to get darker text color for the same hue (UIKit version)
+        private func getDarkerTextColor(for highlightColor: Color) -> Color {
+            switch highlightColor {
+            case Color(red: 1.0, green: 0.95, blue: 0.7):   // Soft Pastel Yellow
+                return Color(red: 0.6, green: 0.5, blue: 0.2)
+            case Color(red: 0.8, green: 0.95, blue: 0.8):    // Soft Pastel Green
+                return Color(red: 0.2, green: 0.5, blue: 0.2)
+            case Color(red: 0.8, green: 0.9, blue: 1.0):     // Soft Pastel Blue
+                return Color(red: 0.2, green: 0.4, blue: 0.6)
+            case Color(red: 1.0, green: 0.85, blue: 0.9):    // Soft Pastel Pink
+                return Color(red: 0.6, green: 0.3, blue: 0.4)
+            case Color(red: 0.9, green: 0.85, blue: 1.0):    // Soft Pastel Purple
+                return Color(red: 0.4, green: 0.3, blue: 0.6)
+            case Color(red: 1.0, green: 0.9, blue: 0.8):     // Soft Pastel Orange
+                return Color(red: 0.6, green: 0.4, blue: 0.2)
+            case Color(red: 0.85, green: 0.95, blue: 0.9):   // Soft Pastel Mint
+                return Color(red: 0.2, green: 0.5, blue: 0.4)
+            case Color(red: 1.0, green: 0.8, blue: 0.85):    // Soft Pastel Rose
+                return Color(red: 0.6, green: 0.3, blue: 0.3)
+            case Color(red: 0.9, green: 0.8, blue: 0.9):     // Soft Pastel Lavender
+                return Color(red: 0.4, green: 0.3, blue: 0.5)
+            case Color(red: 0.8, green: 0.9, blue: 0.95):    // Soft Pastel Cyan
+                return Color(red: 0.2, green: 0.4, blue: 0.5)
+            case Color(red: 1.0, green: 0.85, blue: 0.75):   // Soft Pastel Peach
+                return Color(red: 0.6, green: 0.4, blue: 0.3)
+            default:
+                return .primary
+            }
         }
         
         private func applyTextStyle(_ style: String) {
@@ -1254,9 +1318,149 @@ struct iOS26ScrollDetectingTextEditor: UIViewRepresentable {
         }
         
         private func toggleBookmark() {
-            // TODO: Implement bookmark
-            print("📝 Bookmark toggled")
+            guard let textView = textView else { 
+                print("🔖 No text view available for bookmark")
+                return 
+            }
+            
+            let selectedRange = textView.selectedRange
+            guard selectedRange.length > 0 else {
+                print("🔖 No text selected for bookmark")
+                return
+            }
+            
+            print("🔖 Bookmark toggled for range: \(selectedRange)")
+            
+            // 🚀 NUCLEAR SCROLL JUMP PREVENTION
+            // Store the user's current scroll position as their intended position
+            userIntendedScrollPosition = textView.contentOffset
+            let originalSelectedRange = textView.selectedRange
+            
+            print("💾 Stored user intended position: \(userIntendedScrollPosition!)")
+            
+            // Set flag to activate aggressive scroll position enforcement
+            isApplyingFormatting = true
+            
+            // Get selected text for the bookmark title
+            let selectedText = (textView.text as NSString).substring(with: selectedRange).trimmingCharacters(in: .whitespacesAndNewlines)
+            let title = selectedText.isEmpty ? "Bookmark" : String(selectedText.prefix(30))
+            
+            // Calculate line number for bookmark positioning
+            let textUpToCursor = (textView.text as NSString).substring(to: selectedRange.location)
+            let lineNumber = textUpToCursor.components(separatedBy: .newlines).count
+            
+            // Check if bookmark already exists at this position
+            let existingBookmark = parent.document.markers.first { marker in
+                marker.type == "bookmark" && marker.position == lineNumber
+            }
+            
+            // Get current attributed text
+            let mutableAttributedText = NSMutableAttributedString(attributedString: textView.attributedText)
+            
+            if let existingBookmark = existingBookmark {
+                // Remove existing bookmark
+                print("🔖 Removing bookmark with ID: \(existingBookmark.id)")
+                parent.document.removeMarker(id: existingBookmark.id)
+                
+                // Find and remove the bookmark icon (⍟ ) from the text
+                let fullText = mutableAttributedText.string
+                let starText = "⍟ "
+                if let iconRange = fullText.range(of: starText) {
+                    let nsIconRange = NSRange(iconRange, in: fullText)
+                    mutableAttributedText.deleteCharacters(in: nsIconRange)
+                }
+                
+                // Remove peach/orange highlight from the bookmarked text
+                let adjustedRange = NSRange(location: max(0, selectedRange.location - starText.count), 
+                                          length: selectedRange.length)
+                mutableAttributedText.removeAttribute(.backgroundColor, range: adjustedRange)
+                
+            } else {
+                // Add new bookmark
+                let uuid = UUID()
+                print("🔖 Adding bookmark with ID: \(uuid)")
+                
+                // Add to document markers
+                parent.document.addMarker(
+                    id: uuid,
+                    title: title,
+                    type: "bookmark",
+                    position: lineNumber,
+                    metadata: [
+                        "charPosition": selectedRange.location,
+                        "charLength": selectedRange.length,
+                        "snippet": selectedText
+                    ]
+                )
+                
+                // Apply peach/orange highlight to selected text
+                let peachColor = UIColor.systemOrange.withAlphaComponent(0.15)
+                mutableAttributedText.addAttribute(.backgroundColor, value: peachColor, range: selectedRange)
+                
+                // Insert bookmark icon (⍟ ) at the start of the selection with orange background
+                let bookmarkIcon = NSAttributedString(string: "⍟ ", attributes: [
+                    .backgroundColor: UIColor.systemOrange.withAlphaComponent(0.2),
+                    .font: textView.font ?? UIFont.systemFont(ofSize: 16)
+                ])
+                mutableAttributedText.insert(bookmarkIcon, at: selectedRange.location)
+                
+                print("🔖 Added bookmark with title: '\(title)' at line \(lineNumber)")
+            }
+            
+            // Update the text view with changes using nuclear scroll prevention
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            
+            textView.attributedText = mutableAttributedText
+            textView.selectedRange = originalSelectedRange
+            textView.contentOffset = userIntendedScrollPosition!
+            
+            CATransaction.commit()
+            
+            // Update parent binding
+            updateDocumentWithFormatting()
+            
+            // Update toolbar IMMEDIATELY for instant visual feedback
             updateFormattingToolbar()
+            
+            // 🚀 NUCLEAR SCROLL POSITION ENFORCEMENT
+            // Continue aggressive scroll position enforcement
+            var checkCount = 0
+            let maxChecks = 20
+            
+            func enforceScrollPosition() {
+                checkCount += 1
+                
+                DispatchQueue.main.async {
+                    // Force scroll position back aggressively
+                    if let intendedPosition = self.userIntendedScrollPosition {
+                        textView.contentOffset = intendedPosition
+                        textView.selectedRange = originalSelectedRange
+                        print("🔒 BOOKMARK: Enforcing scroll position (check \(checkCount)/\(maxChecks)): \(intendedPosition)")
+                    }
+                    
+                    // Continue checking for a few more cycles
+                    if checkCount < maxChecks {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.016) { // ~60fps
+                            enforceScrollPosition()
+                        }
+                    } else {
+                        // Finally disable formatting flag and clear stored position
+                        print("🔓 BOOKMARK: Disabling isApplyingFormatting after \(maxChecks) checks")
+                        self.isApplyingFormatting = false
+                        self.userIntendedScrollPosition = nil
+                    }
+                }
+            }
+            
+            // Start enforcement
+            enforceScrollPosition()
+            
+            // Save document to persist markers
+            DispatchQueue.main.async {
+                self.parent.document.save()
+                print("🔖 Document saved with markers count: \(self.parent.document.markers.count)")
+            }
         }
         
         private func getCurrentTextStyle() -> String {
@@ -1322,6 +1526,7 @@ struct iOS26ScrollDetectingTextEditor: UIViewRepresentable {
             var hasLink = false
             var hasTextColor = false
             var hasHighlight = false
+            var hasBookmark = false
             var textColor: Color? = nil
             var highlightColor: Color? = nil
             
@@ -1349,14 +1554,42 @@ struct iOS26ScrollDetectingTextEditor: UIViewRepresentable {
                     textColor = Color(foregroundColor)
                 }
                 
-                // Check highlight color
+                // Check highlight color (bookmark detection)
                 if let backgroundColor = attributes[.backgroundColor] as? UIColor {
                     hasHighlight = true
                     highlightColor = Color(backgroundColor)
+                    
+                    // Check if this is specifically bookmark highlighting (orange/peach color)
+                    let orangeColor = UIColor.systemOrange.withAlphaComponent(0.15)
+                    let orangeIconColor = UIColor.systemOrange.withAlphaComponent(0.2)
+                    
+                    // Convert colors to compare RGB values
+                    var bgRed: CGFloat = 0, bgGreen: CGFloat = 0, bgBlue: CGFloat = 0, bgAlpha: CGFloat = 0
+                    backgroundColor.getRed(&bgRed, green: &bgGreen, blue: &bgBlue, alpha: &bgAlpha)
+                    
+                    // Check if this matches our bookmark orange color (approximately)
+                    if (bgRed > 0.8 && bgGreen > 0.4 && bgBlue < 0.4) || 
+                       backgroundColor.isEqual(orangeColor) || 
+                       backgroundColor.isEqual(orangeIconColor) {
+                        hasBookmark = true
+                    }
                 }
             }
             
-            return (isBold, isItalic, isUnderlined, hasLink, false, hasTextColor, hasHighlight, false, textColor, highlightColor)
+            // Also check if the text around selection contains bookmark icon (⍟)
+            if !hasBookmark {
+                let fullText = attributedText.string
+                let extendedRange = NSRange(
+                    location: max(0, rangeToCheck.location - 10),
+                    length: min(rangeToCheck.length + 20, fullText.count - max(0, rangeToCheck.location - 10))
+                )
+                let textToCheck = (fullText as NSString).substring(with: extendedRange)
+                if textToCheck.contains("⍟") {
+                    hasBookmark = true
+                }
+            }
+            
+            return (isBold, isItalic, isUnderlined, hasLink, false, hasTextColor, hasHighlight, hasBookmark, textColor, highlightColor)
         }
         
         private func updateFormattingToolbar() {
@@ -1433,59 +1666,59 @@ struct iOS26ScrollDetectingTextEditor: UIViewRepresentable {
         }
         
         // MARK: - Keyboard Notification Handlers
-        @objc private func keyboardWillShow(_ notification: Notification) {
-            guard let animationDuration = notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double else {
-                return
-            }
-            
-            // Animate toolbar fade-in
-            if let toolbar = toolbarHostingController?.view {
-                toolbar.alpha = 0.0
-                UIView.animate(withDuration: animationDuration, delay: 0, options: [.curveEaseInOut]) {
-                    toolbar.alpha = 1.0
-                }
-            }
-        }
         
-        @objc private func keyboardWillHide(_ notification: Notification) {
-            guard let animationDuration = notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double else {
-                return
-            }
-            
-            // Check if this is a swipe-to-dismiss gesture (very fast animation)
-            let isSwipeToDismiss = animationDuration < 0.3
-            
-            if let toolbar = toolbarHostingController?.view {
-                if isSwipeToDismiss {
-                    // For swipe-to-dismiss, immediately hide toolbar
-                    toolbar.alpha = 0.0
-                } else {
-                    // For normal dismissal, animate with keyboard
-                    UIView.animate(withDuration: animationDuration, delay: 0, options: [.curveEaseInOut]) {
-                        toolbar.alpha = 0.0
-                    }
-                }
-            }
-        }
-        
+        // This single, unified handler replaces the separate willShow/willHide methods.
+        // It correctly calculates the text view's bottom inset based on the keyboard's final frame,
+        // preventing text from rendering behind the keyboard and ensuring the cursor is always visible.
         @objc private func keyboardWillChangeFrame(_ notification: Notification) {
-            guard let keyboardFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect,
-                  let _ = notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double else {
+            guard let userInfo = notification.userInfo,
+                  let keyboardFrameEnd = userInfo[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect,
+                  let animationDuration = userInfo[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double,
+                  let animationCurveRawValue = userInfo[UIResponder.keyboardAnimationCurveUserInfoKey] as? Int,
+                  let textView = textView
+            else {
                 return
             }
+
+            let animationCurve = UIView.AnimationOptions(rawValue: UInt(animationCurveRawValue << 16))
+
+            // The keyboard frame is in screen coordinates. We need to know where it is in relation to our text view.
+            let keyboardFrameInView = textView.convert(keyboardFrameEnd, from: nil)
             
-            let keyboardHeight = keyboardFrame.height
+            // Calculate the height of the keyboard that is actually obscuring the text view.
+            let obscuredHeight = textView.bounds.intersection(keyboardFrameInView).height
             
-            // If keyboard is moving off screen (height is very small or zero)
-            if keyboardHeight < 50 {
-                // Make sure toolbar is hidden immediately
-                if let toolbar = toolbarHostingController?.view {
-                    toolbar.alpha = 0.0
-                    
-                    // Reset alpha for next appearance after a short delay
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                        toolbar.alpha = 1.0
-                    }
+            // Update our stored keyboard height.
+            self.currentKeyboardHeight = max(0, obscuredHeight)
+            
+            // Determine if the keyboard is showing or hiding by checking its final position.
+            let isKeyboardHiding = keyboardFrameEnd.origin.y >= UIScreen.main.bounds.height
+            
+            // If the keyboard is appearing, make sure the toolbar is not hidden before we animate it in.
+            if !isKeyboardHiding {
+                self.toolbarHostingController?.view.isHidden = false
+            }
+            
+            // Animate the inset change and toolbar alpha to match the keyboard's movement.
+            UIView.animate(withDuration: animationDuration, delay: 0, options: [animationCurve], animations: {
+                // By calling our unified function, we ensure that both top and bottom insets are considered.
+                self.updateCombinedInsets()
+                
+                // Animate the toolbar's alpha.
+                // It should be visible when the keyboard is visible, and hidden otherwise.
+                self.toolbarHostingController?.view.alpha = isKeyboardHiding ? 0.0 : 1.0
+            }) { _ in
+                // After the animation completes, set isHidden to match the alpha state.
+                // This ensures the toolbar doesn't block touch events when it's invisible.
+                self.toolbarHostingController?.view.isHidden = isKeyboardHiding
+            }
+
+            // If the keyboard is appearing or visible, ensure the cursor is scrolled into view.
+            // This is the fix for problem #1. We use our more robust "Cursor Guardian".
+            if !isKeyboardHiding {
+                // Using a small delay ensures that the layout has settled before we scroll.
+                DispatchQueue.main.async {
+                    self.ensureCursorIsVisible(textView)
                 }
             }
         }
@@ -1515,6 +1748,10 @@ struct iOS26ScrollDetectingTextEditor: UIViewRepresentable {
             parent.text = textView.text
             
             // Save changes back to document with formatting
+            
+            // IMPORTANT: Do NOT restore or forcibly change scroll position here during normal typing
+            // This allows natural typing and line breaks without scroll jumps
+            
             updateDocumentWithFormatting()
             
             // Update formatting toolbar after text changes
@@ -1528,8 +1765,54 @@ struct iOS26ScrollDetectingTextEditor: UIViewRepresentable {
                 return
             }
             
+            // Call our new "Cursor Guardian" function to ensure the cursor never gets lost.
+            ensureCursorIsVisible(textView)
+
             // Update formatting toolbar when selection changes
             updateFormattingToolbar()
+        }
+        
+        // This is the "Cursor Guardian". It ensures the cursor never goes behind the keyboard.
+        private func ensureCursorIsVisible(_ textView: UITextView) {
+            // We only need to act when the keyboard is actually visible.
+            guard currentKeyboardHeight > 0, let window = textView.window else { return }
+
+            // Get the cursor's rectangle in the text view's own coordinates.
+            guard let cursorRange = textView.selectedTextRange else { return }
+            let cursorRect = textView.caretRect(for: cursorRange.start)
+            
+            // If the rect is infinity, it means the cursor is not yet rendered.
+            // This can happen during rapid layout changes. We should ignore these cases.
+            guard !cursorRect.isInfinite, !cursorRect.isNull else { return }
+
+            // Convert the cursor's rectangle to the window's coordinate system.
+            let cursorRectInWindow = textView.convert(cursorRect, to: window)
+
+            // The top of the "danger zone" is the top of the keyboard.
+            let keyboardTopY = window.bounds.height - currentKeyboardHeight
+
+            // We want a small margin so the cursor isn't right at the edge.
+            let safeAreaMargin: CGFloat = 12.0
+            let safeAreaBottomY = keyboardTopY - safeAreaMargin
+
+            // Is the cursor's bottom edge inside the danger zone?
+            if cursorRectInWindow.maxY > safeAreaBottomY {
+                // Yes. We need to scroll up.
+                // Calculate precisely how much we need to scroll.
+                let scrollOffsetNeeded = cursorRectInWindow.maxY - safeAreaBottomY
+                
+                // Add this amount to the current scroll position.
+                let newContentOffset = CGPoint(
+                    x: textView.contentOffset.x,
+                    y: textView.contentOffset.y + scrollOffsetNeeded
+                )
+
+                // Animate the scroll smoothly. We set animated to false inside the animation block
+                // for more direct control and to avoid conflicting with other system animations.
+                UIView.animate(withDuration: 0.1, delay: 0, options: .curveEaseOut, animations: {
+                    textView.setContentOffset(newContentOffset, animated: false)
+                })
+            }
         }
         
         func textViewDidBeginEditing(_ textView: UITextView) {
@@ -1841,4 +2124,5 @@ struct iOS26ScrollDetectingTextEditor: UIViewRepresentable {
     }
 }
 #endif 
+
 

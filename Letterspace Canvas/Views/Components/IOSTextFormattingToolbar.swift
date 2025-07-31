@@ -1174,7 +1174,20 @@ private struct HighlightPickerView: View {
     var body: some View {
         InlineColorPickerView(
             title: "Highlight",
-            colors: [.clear, .yellow, .green, .blue, .pink, .purple, .orange],
+            colors: [
+                .clear,
+                Color(red: 1.0, green: 0.95, blue: 0.7),   // Soft Pastel Yellow
+                Color(red: 0.8, green: 0.95, blue: 0.8),    // Soft Pastel Green
+                Color(red: 0.8, green: 0.9, blue: 1.0),     // Soft Pastel Blue
+                Color(red: 1.0, green: 0.85, blue: 0.9),    // Soft Pastel Pink
+                Color(red: 0.9, green: 0.85, blue: 1.0),    // Soft Pastel Purple
+                Color(red: 1.0, green: 0.9, blue: 0.8),     // Soft Pastel Orange
+                Color(red: 0.85, green: 0.95, blue: 0.9),   // Soft Pastel Mint
+                Color(red: 1.0, green: 0.8, blue: 0.85),    // Soft Pastel Rose
+                Color(red: 0.9, green: 0.8, blue: 0.9),     // Soft Pastel Lavender
+                Color(red: 0.8, green: 0.9, blue: 0.95),    // Soft Pastel Cyan
+                Color(red: 1.0, green: 0.85, blue: 0.75)    // Soft Pastel Peach
+            ],
             onColorSelect: { color in
                 onHighlight(color)
                 onBack()

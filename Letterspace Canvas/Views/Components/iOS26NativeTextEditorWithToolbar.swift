@@ -39,7 +39,20 @@ struct iOS26NativeTextEditorWithToolbar: View {
     }
     
     private var highlightColors: [Color] {
-        [.clear, .yellow, .green, .blue, .pink, .purple, .orange]
+        [
+            .clear,
+            Color(red: 1.0, green: 0.95, blue: 0.7),   // Soft Pastel Yellow
+            Color(red: 0.8, green: 0.95, blue: 0.8),    // Soft Pastel Green
+            Color(red: 0.8, green: 0.9, blue: 1.0),     // Soft Pastel Blue
+            Color(red: 1.0, green: 0.85, blue: 0.9),    // Soft Pastel Pink
+            Color(red: 0.9, green: 0.85, blue: 1.0),    // Soft Pastel Purple
+            Color(red: 1.0, green: 0.9, blue: 0.8),     // Soft Pastel Orange
+            Color(red: 0.85, green: 0.95, blue: 0.9),   // Soft Pastel Mint
+            Color(red: 1.0, green: 0.8, blue: 0.85),    // Soft Pastel Rose
+            Color(red: 0.9, green: 0.8, blue: 0.9),     // Soft Pastel Lavender
+            Color(red: 0.8, green: 0.9, blue: 0.95),    // Soft Pastel Cyan
+            Color(red: 1.0, green: 0.85, blue: 0.75)    // Soft Pastel Peach
+        ]
     }
     
     private var underlineColors: [Color] {
@@ -503,16 +516,51 @@ struct iOS26NativeTextEditorWithToolbar: View {
         
         attributedText.transform(updating: &selection) { text in
             if color == .clear {
-                // Remove highlight
+                // Remove highlight and reset text color to default
                 text[ranges].backgroundColor = nil
+                text[ranges].foregroundColor = nil
             } else {
-                // Apply highlight with opacity
-                text[ranges].backgroundColor = color.opacity(0.3)
+                // Apply highlight with modern pastel opacity
+                text[ranges].backgroundColor = color.opacity(0.4)
+                
+                // Apply darker text color of the same hue (Apple's approach)
+                let darkerTextColor = getDarkerTextColor(for: color)
+                text[ranges].foregroundColor = darkerTextColor
             }
         }
         
         // Save changes
         saveToDocument(attributedText)
+    }
+    
+    // Helper function to get darker text color for the same hue
+    private func getDarkerTextColor(for highlightColor: Color) -> Color {
+        switch highlightColor {
+        case Color(red: 1.0, green: 0.95, blue: 0.7):   // Soft Pastel Yellow
+            return Color(red: 0.6, green: 0.5, blue: 0.2)
+        case Color(red: 0.8, green: 0.95, blue: 0.8):    // Soft Pastel Green
+            return Color(red: 0.2, green: 0.5, blue: 0.2)
+        case Color(red: 0.8, green: 0.9, blue: 1.0):     // Soft Pastel Blue
+            return Color(red: 0.2, green: 0.4, blue: 0.6)
+        case Color(red: 1.0, green: 0.85, blue: 0.9):    // Soft Pastel Pink
+            return Color(red: 0.6, green: 0.3, blue: 0.4)
+        case Color(red: 0.9, green: 0.85, blue: 1.0):    // Soft Pastel Purple
+            return Color(red: 0.4, green: 0.3, blue: 0.6)
+        case Color(red: 1.0, green: 0.9, blue: 0.8):     // Soft Pastel Orange
+            return Color(red: 0.6, green: 0.4, blue: 0.2)
+        case Color(red: 0.85, green: 0.95, blue: 0.9):   // Soft Pastel Mint
+            return Color(red: 0.2, green: 0.5, blue: 0.4)
+        case Color(red: 1.0, green: 0.8, blue: 0.85):    // Soft Pastel Rose
+            return Color(red: 0.6, green: 0.3, blue: 0.3)
+        case Color(red: 0.9, green: 0.8, blue: 0.9):     // Soft Pastel Lavender
+            return Color(red: 0.4, green: 0.3, blue: 0.5)
+        case Color(red: 0.8, green: 0.9, blue: 0.95):    // Soft Pastel Cyan
+            return Color(red: 0.2, green: 0.4, blue: 0.5)
+        case Color(red: 1.0, green: 0.85, blue: 0.75):   // Soft Pastel Peach
+            return Color(red: 0.6, green: 0.4, blue: 0.3)
+        default:
+            return .primary
+        }
     }
     
     private func applyUnderlineColor(_ color: Color) {
