@@ -361,8 +361,8 @@ struct DocumentArea: View {
                     let translation = value.translation
                     let startLocation = value.startLocation
                     
-                    // Check if swipe started in the header area (top 300pt of screen)
-                    let isInHeaderArea = startLocation.y < 300
+                    // Check if swipe started in the header area (top 280pt of screen)
+                    let isInHeaderArea = startLocation.y < 280
                     
                     if isInHeaderArea && translation.height > 0 {
                         // Swipe down in header area - handle dismiss gesture
@@ -381,9 +381,9 @@ struct DocumentArea: View {
                     let translation = value.translation
                     let _ = value.predictedEndTranslation
                     let startLocation = value.startLocation
-                    let isInHeaderArea = startLocation.y < 300
+                    let isInHeaderArea = startLocation.y < 280
                     
-                    if isInHeaderArea && translation.height > 100 && swipeDownProgress > 0 {
+                    if isInHeaderArea && translation.height > 55 && swipeDownProgress > 0 {
                         // Swipe down dismiss from header area
                         HapticFeedback.impact(.medium)
                         
@@ -395,7 +395,7 @@ struct DocumentArea: View {
                         
                         // Animate document sliding down off screen
                         withAnimation(.easeInOut(duration: 0.4)) {
-                            slideDownOffset = UIScreen.main.bounds.height
+                            slideDownOffset = UIScreen.main.bounds.height // Slide down off screen
                         }
                         
                         // Navigate back to dashboard after slide-down completes
@@ -680,9 +680,9 @@ struct DocumentArea: View {
                         .padding(.top, {
                             #if os(iOS)
                             let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-                            return isPhone ? 40 : 16 // Reduced from 60/24 to 40/16 to lift higher
+                            return isPhone ? 20 : 8 // Reduced from 40/16 to 20/8 to move higher
                             #else
-                            return 16 // Reduced from 24 to 16
+                            return 8 // Reduced from 16 to 8
                             #endif
                         }())
                         // Smooth opacity transition
@@ -1796,16 +1796,16 @@ struct DocumentArea: View {
                 ZStack {
                     if #available(iOS 26.0, *) {
                         // Enhanced liquid glass background for floating state
-                        RoundedRectangle(cornerRadius: 16)
+                        RoundedRectangle(cornerRadius: 20) // Increased from 16 to 20 to match toolbar
                             .fill(.clear) // No material fill - let glass effect do the work
-                            .frame(width: paperWidth - 16, height: 80)
-                            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16)) // Pure glass effect without material interference
+                            .frame(width: paperWidth - 16, height: 60) // Reduced from 80 to 60 to match toolbar height
+                            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 20)) // Pure glass effect without material interference
                             .shadow(color: colorScheme == .dark ? Color.white.opacity(0.04) : Color.black.opacity(0.05), radius: 8, x: 0, y: 4) // Very minimal shadow
                     } else {
                         // Fallback
-                        RoundedRectangle(cornerRadius: 16)
+                        RoundedRectangle(cornerRadius: 20) // Increased from 16 to 20 to match toolbar
                             .fill(colorScheme == .dark ? Color(.sRGB, red: 0.15, green: 0.15, blue: 0.15, opacity: 0.25) : Color(.sRGB, red: 0.95, green: 0.95, blue: 0.95, opacity: 0.25)) // Extremely transparent fallback
-                            .frame(width: paperWidth - 16, height: 80)
+                            .frame(width: paperWidth - 16, height: 60) // Reduced from 80 to 60 to match toolbar height
                             .shadow(color: colorScheme == .dark ? Color.white.opacity(0.02) : Color.black.opacity(0.02), radius: 6, x: 0, y: 2) // Minimal shadow
                     }
                     

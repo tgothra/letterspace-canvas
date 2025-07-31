@@ -54,10 +54,8 @@ struct iOS26ScrollDetectingTextEditor: UIViewRepresentable {
     }
     
     func updateUIView(_ uiView: UITextView, context: Context) {
-        // Use the text binding instead of getDocumentText()
-        if uiView.text != text {
-            uiView.text = text
-        }
+        // Load attributed content if available, otherwise use plain text
+        loadDocumentContentWithFormatting(into: uiView)
         
         // Update coordinator bindings
         context.coordinator.headerCollapseProgress = $headerCollapseProgress
@@ -68,8 +66,34 @@ struct iOS26ScrollDetectingTextEditor: UIViewRepresentable {
         context.coordinator.updateContentInsets(for: uiView)
     }
     
+    private func loadDocumentContentWithFormatting(into textView: UITextView) {
+        guard let textElement = document.elements.first(where: { $0.type == .textBlock }) else {
+            // No text element exists, set empty text
+            if textView.text != "" {
+                textView.text = ""
+            }
+            return
+        }
+        
+        // Check if we have attributed content (formatting)
+        if let attributedContent = textElement.attributedContent {
+            // Use attributed content with formatting
+            if !textView.attributedText.isEqual(to: attributedContent) {
+                textView.attributedText = attributedContent
+                print("📄 Loaded document with formatting - attributed text length: \(attributedContent.length)")
+            }
+        } else {
+            // Fall back to plain text
+            let plainText = textElement.content
+            if textView.text != plainText {
+                textView.text = plainText
+                print("📄 Loaded document with plain text - length: \(plainText.count)")
+            }
+        }
+    }
+    
     func makeCoordinator() -> Coordinator {
-        Coordinator(self)
+        Coordinator(self, document: $document)
     }
     
     private func getDocumentText() -> String {
@@ -86,12 +110,14 @@ struct iOS26ScrollDetectingTextEditor: UIViewRepresentable {
         var document: Binding<Letterspace_CanvasDocument>
         private var toolbarHostingController: IOSFormattingToolbarHostingController?
         weak var textView: UITextView?
+        private var isApplyingFormatting = false  // Flag to prevent recursive updates
+        private var userIntendedScrollPosition: CGPoint?  // Store user's intended position
         
-        init(_ parent: iOS26ScrollDetectingTextEditor) {
+        init(_ parent: iOS26ScrollDetectingTextEditor, document: Binding<Letterspace_CanvasDocument>) {
             self.parent = parent
             self.headerCollapseProgress = parent.$headerCollapseProgress
             self.maxScrollForCollapse = parent.maxScrollForCollapse
-            self.document = parent.$document
+            self.document = document
             super.init()
             
             // Set up keyboard notifications for toolbar dismissal
@@ -163,6 +189,20 @@ struct iOS26ScrollDetectingTextEditor: UIViewRepresentable {
         // MARK: - Scroll Detection
         func scrollViewDidScroll(_ scrollView: UIScrollView) {
             let scrollY = scrollView.contentOffset.y
+            
+            // If we're applying formatting and have a stored user position, force back to it
+            if isApplyingFormatting, let intendedPosition = userIntendedScrollPosition {
+                print("🔒 FORCING scroll back to user intended position: \(intendedPosition)")
+                scrollView.contentOffset = intendedPosition
+                return
+            }
+            
+            // Prevent normal scroll detection during formatting operations
+            if isApplyingFormatting {
+                print("🚫 Ignoring scroll event during formatting to prevent jump")
+                return
+            }
+            
             print("🔍 SCROLL DETECTED - Y offset: \(scrollY)")
             
             // Calculate header collapse progress
@@ -197,35 +237,47 @@ struct iOS26ScrollDetectingTextEditor: UIViewRepresentable {
         func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
             print("🏁 User ended dragging, will decelerate: \(decelerate)")
             
+            // Only snap if not decelerating, and only for very gentle adjustments
             if !decelerate {
-                snapToNearestState()
+                gentleSnapIfNeeded()
             }
         }
         
         func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
             print("🛑 Scroll deceleration ended")
-            snapToNearestState()
+            // Apply gentle snap only if we're very close to a natural position
+            gentleSnapIfNeeded()
         }
         
-        private func snapToNearestState() {
+        private func gentleSnapIfNeeded() {
             let currentProgress = headerCollapseProgress.wrappedValue
             
-            // Adjust snap logic to preserve extended collapse state
-            let targetProgress: CGFloat
-            if currentProgress < 0.3 {
-                targetProgress = 0.0  // Snap to fully expanded
-            } else if currentProgress < 1.0 {
-                targetProgress = 1.0  // Snap to normal collapsed
+            // Only snap if we're very close to natural positions (within 5%)
+            // This preserves the natural feel while providing subtle magnetic behavior
+            let snapThreshold: CGFloat = 0.05
+            let targetProgress: CGFloat?
+            
+            if abs(currentProgress - 0.0) < snapThreshold {
+                targetProgress = 0.0  // Snap to fully expanded only if very close
+            } else if abs(currentProgress - 1.0) < snapThreshold {
+                targetProgress = 1.0  // Snap to collapsed only if very close
+            } else if currentProgress > 1.0 && abs(currentProgress - 1.2) < snapThreshold {
+                targetProgress = 1.2  // Snap to extended collapse only if very close
             } else {
-                targetProgress = 1.2  // Snap to fully extended collapse (maintains text position)
+                targetProgress = nil  // No snapping - let it rest naturally
             }
             
-            print("📍 Snapping from \(currentProgress) to \(targetProgress)")
-            
-            DispatchQueue.main.async {
-                withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                    self.headerCollapseProgress.wrappedValue = targetProgress
+            if let target = targetProgress {
+                print("📍 Gentle snap from \(currentProgress) to \(target)")
+                
+                DispatchQueue.main.async {
+                    // Use a very gentle spring animation for subtle correction
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) {
+                        self.headerCollapseProgress.wrappedValue = target
+                    }
                 }
+            } else {
+                print("🌊 Natural rest at \(currentProgress) - no snapping needed")
             }
         }
         
@@ -282,6 +334,47 @@ struct iOS26ScrollDetectingTextEditor: UIViewRepresentable {
             textView.inputAccessoryView = toolbarHostingController?.view
         }
         
+        // MARK: - Document Update Methods
+        private func updateDocumentWithFormatting() {
+            guard let textView = textView else { return }
+            
+            let plainText = textView.text ?? ""
+            let attributedText = textView.attributedText ?? NSAttributedString()
+            
+            print("💾 Updating document with formatting - text length: \(plainText.count), attributed text length: \(attributedText.length)")
+            
+            // Create a mutable copy of the document
+            var updatedDocument = parent.document
+            
+            // Update the document element with both plain text and formatting
+            if let index = updatedDocument.elements.firstIndex(where: { $0.type == .textBlock }) {
+                var newElement = DocumentElement(type: .textBlock, content: plainText)
+                newElement.attributedContent = attributedText
+                updatedDocument.elements[index] = newElement
+                print("💾 Updated existing text block element at index \(index)")
+            } else {
+                var element = DocumentElement(type: .textBlock, content: plainText)
+                element.attributedContent = attributedText
+                updatedDocument.elements.append(element)
+                print("💾 Created new text block element")
+            }
+            
+            // Update modification date
+            updatedDocument.modifiedAt = Date()
+            updatedDocument.updateCanvasDocument()
+            
+            // Update the binding and text binding
+            parent.document = updatedDocument
+            parent.text = plainText
+            
+            // Save the document asynchronously
+            DispatchQueue.global(qos: .userInitiated).async {
+                var documentToSave = updatedDocument
+                documentToSave.save()
+                print("💾 Document saved with formatting")
+            }
+        }
+        
         // MARK: - Formatting Methods
         private func toggleBold() {
             guard let textView = textView else { 
@@ -291,10 +384,57 @@ struct iOS26ScrollDetectingTextEditor: UIViewRepresentable {
             
             print("🔥 toggleBold called - selectedRange: \(textView.selectedRange)")
             
-            // Use UIKit formatting for all cases - it's more reliable
-            print("🔥 Using UIKit bold formatting")
-            applyUIKitBoldFormatting()
+            // Store the user's current scroll position as their intended position
+            userIntendedScrollPosition = textView.contentOffset
+            let originalSelectedRange = textView.selectedRange
+            
+            print("💾 Stored user intended position: \(userIntendedScrollPosition!)")
+            
+            // Set flag to activate aggressive scroll position enforcement
+            isApplyingFormatting = true
+            
+            // Apply bold formatting
+            applyBoldFormattingDirect(textView: textView, selectedRange: originalSelectedRange)
+            
+            // Force scroll position back immediately and aggressively
+            textView.contentOffset = userIntendedScrollPosition!
+            textView.selectedRange = originalSelectedRange
+            
+            // Update parent binding
+            updateDocumentWithFormatting()
+            
+            // Update toolbar IMMEDIATELY for instant visual feedback
             updateFormattingToolbar()
+            
+            // Continue aggressive scroll position enforcement
+            var checkCount = 0
+            let maxChecks = 20
+            
+            func enforceScrollPosition() {
+                checkCount += 1
+                if checkCount > maxChecks {
+                    self.isApplyingFormatting = false
+                    self.userIntendedScrollPosition = nil
+                    print("🔓 Released scroll position enforcement for bold")
+                    return
+                }
+                
+                if let intended = self.userIntendedScrollPosition, textView.contentOffset != intended {
+                    print("🔧 Correcting bold scroll drift: \(textView.contentOffset) -> \(intended)")
+                    textView.contentOffset = intended
+                    textView.selectedRange = originalSelectedRange
+                }
+                
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    enforceScrollPosition()
+                }
+            }
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                enforceScrollPosition()
+            }
+            
+            print("✅ Bold formatting complete, aggressive scroll enforcement active")
         }
         
         @available(iOS 26.0, *)
@@ -441,34 +581,256 @@ struct iOS26ScrollDetectingTextEditor: UIViewRepresentable {
                 
                 CATransaction.commit()
                 
-                // Update parent text binding
-                parent.text = textView.text
+                // Update parent text binding with scroll position protection
+                updateParentTextSafely(textView)
                 print("🔥 UIKit: Updated attributed text and parent binding")
             }
         }
         
         private func toggleItalic() {
-            print("🔥 Using UIKit italic formatting")
-            applyUIKitItalicFormatting()
+            guard let textView = textView else { 
+                print("❌ toggleItalic: no textView")
+                return 
+            }
+            
+            print("🔥 toggleItalic called")
+            
+            // Store the user's current scroll position as their intended position
+            userIntendedScrollPosition = textView.contentOffset
+            let originalSelectedRange = textView.selectedRange
+            
+            print("💾 Stored user intended position: \(userIntendedScrollPosition!)")
+            
+            // Set flag to activate aggressive scroll position enforcement
+            isApplyingFormatting = true
+            
+            // Apply italic formatting
+            applyItalicFormattingDirect(textView: textView, selectedRange: originalSelectedRange)
+            
+            // Force scroll position back immediately and aggressively
+            textView.contentOffset = userIntendedScrollPosition!
+            textView.selectedRange = originalSelectedRange
+            
+            // Update parent binding
+            updateDocumentWithFormatting()
+            
+            // Update toolbar IMMEDIATELY for instant visual feedback
             updateFormattingToolbar()
+            
+            // Continue aggressive scroll position enforcement
+            var checkCount = 0
+            let maxChecks = 20
+            
+            func enforceScrollPosition() {
+                checkCount += 1
+                if checkCount > maxChecks {
+                    self.isApplyingFormatting = false
+                    self.userIntendedScrollPosition = nil
+                    print("🔓 Released scroll position enforcement for italic")
+                    return
+                }
+                
+                if let intended = self.userIntendedScrollPosition, textView.contentOffset != intended {
+                    print("🔧 Correcting italic scroll drift: \(textView.contentOffset) -> \(intended)")
+                    textView.contentOffset = intended
+                    textView.selectedRange = originalSelectedRange
+                }
+                
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    enforceScrollPosition()
+                }
+            }
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                enforceScrollPosition()
+            }
+            
+            print("✅ Italic formatting complete, aggressive scroll enforcement active")
         }
         
         private func toggleUnderline() {
-            print("🔥 Using UIKit underline formatting")
-            applyUIKitUnderlineFormatting()
+            guard let textView = textView else { 
+                print("❌ toggleUnderline: no textView")
+                return 
+            }
+            
+            print("🔥 toggleUnderline called")
+            
+            // Store the user's current scroll position as their intended position
+            userIntendedScrollPosition = textView.contentOffset
+            let originalSelectedRange = textView.selectedRange
+            
+            print("💾 Stored user intended position: \(userIntendedScrollPosition!)")
+            
+            // Set flag to activate aggressive scroll position enforcement
+            isApplyingFormatting = true
+            
+            // Apply underline formatting
+            applyUnderlineFormattingDirect(textView: textView, selectedRange: originalSelectedRange)
+            
+            // Force scroll position back immediately and aggressively
+            textView.contentOffset = userIntendedScrollPosition!
+            textView.selectedRange = originalSelectedRange
+            
+            // Update parent binding
+            updateDocumentWithFormatting()
+            
+            // Update toolbar IMMEDIATELY for instant visual feedback
             updateFormattingToolbar()
+            
+            // Continue aggressive scroll position enforcement
+            var checkCount = 0
+            let maxChecks = 20
+            
+            func enforceScrollPosition() {
+                checkCount += 1
+                if checkCount > maxChecks {
+                    self.isApplyingFormatting = false
+                    self.userIntendedScrollPosition = nil
+                    print("🔓 Released scroll position enforcement for underline")
+                    return
+                }
+                
+                if let intended = self.userIntendedScrollPosition, textView.contentOffset != intended {
+                    print("🔧 Correcting underline scroll drift: \(textView.contentOffset) -> \(intended)")
+                    textView.contentOffset = intended
+                    textView.selectedRange = originalSelectedRange
+                }
+                
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    enforceScrollPosition()
+                }
+            }
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                enforceScrollPosition()
+            }
+            
+            print("✅ Underline formatting complete, aggressive scroll enforcement active")
         }
         
         private func applyTextColor(_ color: Color) {
+            guard let textView = textView else { 
+                print("❌ applyTextColor: no textView")
+                return 
+            }
+            
+            print("🔥 applyTextColor called with color: \(color)")
+            
+            // Store the user's current scroll position as their intended position
+            userIntendedScrollPosition = textView.contentOffset
+            let originalSelectedRange = textView.selectedRange
+            
+            print("💾 Stored user intended position: \(userIntendedScrollPosition!)")
+            
+            // Set flag to activate aggressive scroll position enforcement
+            isApplyingFormatting = true
+            
+            // Apply text color formatting
             print("🔥 Using UIKit text color formatting")
             applyUIKitTextColor(color)
+            
+            // Force scroll position back immediately and aggressively
+            textView.contentOffset = userIntendedScrollPosition!
+            textView.selectedRange = originalSelectedRange
+            
+            // Update parent binding
+            updateDocumentWithFormatting()
+            
+            // Update toolbar IMMEDIATELY for instant visual feedback
             updateFormattingToolbar()
+            
+            // Continue aggressive scroll position enforcement
+            var checkCount = 0
+            let maxChecks = 20
+            
+            func enforceScrollPosition() {
+                checkCount += 1
+                if checkCount > maxChecks {
+                    self.isApplyingFormatting = false
+                    self.userIntendedScrollPosition = nil
+                    print("🔓 Released scroll position enforcement for text color")
+                    return
+                }
+                
+                if let intended = self.userIntendedScrollPosition, textView.contentOffset != intended {
+                    print("🔧 Correcting text color scroll drift: \(textView.contentOffset) -> \(intended)")
+                    textView.contentOffset = intended
+                    textView.selectedRange = originalSelectedRange
+                }
+                
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    enforceScrollPosition()
+                }
+            }
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                enforceScrollPosition()
+            }
+            
+            print("✅ Text color formatting complete, aggressive scroll enforcement active")
         }
         
         private func applyHighlight(_ color: Color) {
+            guard let textView = textView else { 
+                print("❌ applyHighlight: no textView")
+                return 
+            }
+            
+            print("🔥 applyHighlight called with color: \(color)")
+            
+            // Store the user's current scroll position as their intended position
+            userIntendedScrollPosition = textView.contentOffset
+            let originalSelectedRange = textView.selectedRange
+            
+            print("💾 Stored user intended position: \(userIntendedScrollPosition!)")
+            
+            // Set flag to activate aggressive scroll position enforcement
+            isApplyingFormatting = true
+            
+            // Apply highlight formatting
             print("🔥 Using UIKit highlight formatting")
             applyUIKitHighlight(color)
+            
+            // Force scroll position back immediately and aggressively
+            textView.contentOffset = userIntendedScrollPosition!
+            textView.selectedRange = originalSelectedRange
+            
+            // Update parent binding
+            updateDocumentWithFormatting()
+            
+            // Update toolbar IMMEDIATELY for instant visual feedback
             updateFormattingToolbar()
+            
+            // Continue aggressive scroll position enforcement
+            var checkCount = 0
+            let maxChecks = 20
+            
+            func enforceScrollPosition() {
+                checkCount += 1
+                if checkCount > maxChecks {
+                    self.isApplyingFormatting = false
+                    self.userIntendedScrollPosition = nil
+                    print("🔓 Released scroll position enforcement for highlight")
+                    return
+                }
+                
+                if let intended = self.userIntendedScrollPosition, textView.contentOffset != intended {
+                    print("🔧 Correcting highlight scroll drift: \(textView.contentOffset) -> \(intended)")
+                    textView.contentOffset = intended
+                    textView.selectedRange = originalSelectedRange
+                }
+                
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    enforceScrollPosition()
+                }
+            }
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                enforceScrollPosition()
+            }
+            
+            print("✅ Highlight formatting complete, aggressive scroll enforcement active")
         }
         
         // MARK: - UIKit Fallback Methods
@@ -539,7 +901,7 @@ struct iOS26ScrollDetectingTextEditor: UIViewRepresentable {
                 textView.selectedRange = selectedRange
                 textView.contentOffset = originalContentOffset
                 CATransaction.commit()
-                parent.text = textView.text
+                updateParentTextSafely(textView)
                 print("🔥 UIKit: Updated italic attributed text")
             }
         }
@@ -563,7 +925,7 @@ struct iOS26ScrollDetectingTextEditor: UIViewRepresentable {
             textView.selectedRange = selectedRange
             textView.contentOffset = originalContentOffset
             CATransaction.commit()
-            parent.text = textView.text
+            updateParentTextSafely(textView)
         }
         
         private func applyUIKitTextColor(_ color: Color) {
@@ -585,7 +947,7 @@ struct iOS26ScrollDetectingTextEditor: UIViewRepresentable {
             textView.selectedRange = selectedRange
             textView.contentOffset = originalContentOffset
             CATransaction.commit()
-            parent.text = textView.text
+            updateParentTextSafely(textView)
         }
         
         private func applyUIKitHighlight(_ color: Color) {
@@ -607,22 +969,137 @@ struct iOS26ScrollDetectingTextEditor: UIViewRepresentable {
             textView.selectedRange = selectedRange
             textView.contentOffset = originalContentOffset
             CATransaction.commit()
-            parent.text = textView.text
+            updateParentTextSafely(textView)
         }
         
         private func applyTextStyle(_ style: String) {
-            // TODO: Implement text style application
-            print("📝 Text style applied: \(style)")
+            guard let textView = textView else { 
+                print("❌ applyTextStyle: no textView")
+                return 
+            }
+            
+            print("🔥 applyTextStyle called with style: \(style)")
+            
+            // Store the user's current scroll position as their intended position
+            userIntendedScrollPosition = textView.contentOffset
+            let originalSelectedRange = textView.selectedRange
+            
+            print("💾 Stored user intended position: \(userIntendedScrollPosition!)")
+            
+            // Set flag to activate aggressive scroll position enforcement
+            isApplyingFormatting = true
+            
+            // Apply text style formatting
+            applyUIKitTextStyle(style)
+            
+            // Force scroll position back immediately and aggressively
+            textView.contentOffset = userIntendedScrollPosition!
+            textView.selectedRange = originalSelectedRange
+            
+            // Update parent binding
+            updateDocumentWithFormatting()
+            
+            // Update toolbar IMMEDIATELY for instant visual feedback
             updateFormattingToolbar()
+            
+            // Continue aggressive scroll position enforcement
+            var checkCount = 0
+            let maxChecks = 20
+            
+            func enforceScrollPosition() {
+                checkCount += 1
+                if checkCount > maxChecks {
+                    self.isApplyingFormatting = false
+                    self.userIntendedScrollPosition = nil
+                    print("🔓 Released scroll position enforcement for text style")
+                    return
+                }
+                
+                if let intended = self.userIntendedScrollPosition, textView.contentOffset != intended {
+                    print("🔧 Correcting text style scroll drift: \(textView.contentOffset) -> \(intended)")
+                    textView.contentOffset = intended
+                    textView.selectedRange = originalSelectedRange
+                }
+                
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    enforceScrollPosition()
+                }
+            }
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                enforceScrollPosition()
+            }
+            
+            print("✅ Text style formatting complete, aggressive scroll enforcement active")
         }
         
-        private func insertLink(linkText: String = "", linkURL: String = "") {
+        private func applyUIKitTextStyle(_ style: String) {
             guard let textView = textView else { return }
             
             let selectedRange = textView.selectedRange
+            let originalContentOffset = textView.contentOffset
             let attributedText = NSMutableAttributedString(attributedString: textView.attributedText)
             
-            let selectedText = selectedRange.length > 0 ? (textView.text as NSString).substring(with: selectedRange) : ""
+            // Define font styles
+            let font: UIFont
+            switch style.lowercased() {
+            case "title":
+                font = UIFont.systemFont(ofSize: 28, weight: .bold)
+            case "heading":
+                font = UIFont.systemFont(ofSize: 22, weight: .semibold)
+            case "strong":
+                font = UIFont.systemFont(ofSize: 16, weight: .bold)
+            case "caption":
+                font = UIFont.systemFont(ofSize: 12, weight: .regular)
+            case "body":
+                font = UIFont.systemFont(ofSize: 16, weight: .regular)
+            default:
+                font = UIFont.systemFont(ofSize: 16, weight: .regular)
+            }
+            
+            if selectedRange.length == 0 {
+                // No selection - update typing attributes for new text
+                var typingAttributes = textView.typingAttributes
+                typingAttributes[.font] = font
+                textView.typingAttributes = typingAttributes
+                print("🔤 Updated typing attributes for style: \(style)")
+            } else {
+                // Selection exists - apply style to selected text
+                attributedText.addAttribute(.font, value: font, range: selectedRange)
+                
+                CATransaction.begin()
+                CATransaction.setDisableActions(true)
+                textView.attributedText = attributedText
+                textView.selectedRange = selectedRange
+                textView.contentOffset = originalContentOffset
+                CATransaction.commit()
+                print("🔤 Applied \(style) style to selected text range: \(selectedRange)")
+            }
+            
+            updateParentTextSafely(textView)
+        }
+        
+        private func insertLink(linkText: String = "", linkURL: String = "") {
+            guard let textView = textView else { 
+                print("❌ insertLink: no textView")
+                return 
+            }
+            
+            print("🔥 insertLink called with text: \(linkText), URL: \(linkURL)")
+            
+            // Store the user's current scroll position as their intended position
+            userIntendedScrollPosition = textView.contentOffset
+            let originalSelectedRange = textView.selectedRange
+            
+            print("💾 Stored user intended position: \(userIntendedScrollPosition!)")
+            
+            // Set flag to activate aggressive scroll position enforcement
+            isApplyingFormatting = true
+            
+            // Apply link insertion
+            let attributedText = NSMutableAttributedString(attributedString: textView.attributedText)
+            
+            let selectedText = originalSelectedRange.length > 0 ? (textView.text as NSString).substring(with: originalSelectedRange) : ""
             let finalLinkText = linkText.isEmpty ? (selectedText.isEmpty ? "Link" : selectedText) : linkText
             let finalLinkURL = linkURL.isEmpty ? "https://example.com" : linkURL
             
@@ -635,10 +1112,49 @@ struct iOS26ScrollDetectingTextEditor: UIViewRepresentable {
                 ]
             )
             
-            attributedText.replaceCharacters(in: selectedRange, with: linkString)
+            attributedText.replaceCharacters(in: originalSelectedRange, with: linkString)
             textView.attributedText = attributedText
-            textView.selectedRange = NSRange(location: selectedRange.location, length: linkString.length)
+            let newSelectedRange = NSRange(location: originalSelectedRange.location, length: linkString.length)
+            
+            // Force scroll position back immediately and aggressively
+            textView.contentOffset = userIntendedScrollPosition!
+            textView.selectedRange = newSelectedRange
+            
+            // Update parent binding
+            updateDocumentWithFormatting()
+            
+            // Update toolbar IMMEDIATELY for instant visual feedback
             updateFormattingToolbar()
+            
+            // Continue aggressive scroll position enforcement
+            var checkCount = 0
+            let maxChecks = 20
+            
+            func enforceScrollPosition() {
+                checkCount += 1
+                if checkCount > maxChecks {
+                    self.isApplyingFormatting = false
+                    self.userIntendedScrollPosition = nil
+                    print("🔓 Released scroll position enforcement for link insertion")
+                    return
+                }
+                
+                if let intended = self.userIntendedScrollPosition, textView.contentOffset != intended {
+                    print("🔧 Correcting link insertion scroll drift: \(textView.contentOffset) -> \(intended)")
+                    textView.contentOffset = intended
+                    textView.selectedRange = newSelectedRange
+                }
+                
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    enforceScrollPosition()
+                }
+            }
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                enforceScrollPosition()
+            }
+            
+            print("✅ Link insertion complete, aggressive scroll enforcement active")
         }
         
         private func toggleBulletList() {
@@ -648,9 +1164,65 @@ struct iOS26ScrollDetectingTextEditor: UIViewRepresentable {
         }
         
         private func applyAlignment(_ alignment: TextAlignment) {
+            guard let textView = textView else { 
+                print("❌ applyAlignment: no textView")
+                return 
+            }
+            
+            print("🔥 applyAlignment called with alignment: \(alignment)")
+            
+            // Store the user's current scroll position as their intended position
+            userIntendedScrollPosition = textView.contentOffset
+            let originalSelectedRange = textView.selectedRange
+            
+            print("💾 Stored user intended position: \(userIntendedScrollPosition!)")
+            
+            // Set flag to activate aggressive scroll position enforcement
+            isApplyingFormatting = true
+            
+            // Apply alignment formatting
             print("🔥 Using UIKit alignment formatting")
             applyUIKitAlignment(alignment)
+            
+            // Force scroll position back immediately and aggressively
+            textView.contentOffset = userIntendedScrollPosition!
+            textView.selectedRange = originalSelectedRange
+            
+            // Update parent binding
+            updateDocumentWithFormatting()
+            
+            // Update toolbar IMMEDIATELY for instant visual feedback
             updateFormattingToolbar()
+            
+            // Continue aggressive scroll position enforcement
+            var checkCount = 0
+            let maxChecks = 20
+            
+            func enforceScrollPosition() {
+                checkCount += 1
+                if checkCount > maxChecks {
+                    self.isApplyingFormatting = false
+                    self.userIntendedScrollPosition = nil
+                    print("🔓 Released scroll position enforcement for alignment")
+                    return
+                }
+                
+                if let intended = self.userIntendedScrollPosition, textView.contentOffset != intended {
+                    print("🔧 Correcting alignment scroll drift: \(textView.contentOffset) -> \(intended)")
+                    textView.contentOffset = intended
+                    textView.selectedRange = originalSelectedRange
+                }
+                
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    enforceScrollPosition()
+                }
+            }
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                enforceScrollPosition()
+            }
+            
+            print("✅ Alignment formatting complete, aggressive scroll enforcement active")
         }
         
         private func applyUIKitAlignment(_ alignment: TextAlignment) {
@@ -688,8 +1260,39 @@ struct iOS26ScrollDetectingTextEditor: UIViewRepresentable {
         }
         
         private func getCurrentTextStyle() -> String {
-            // TODO: Implement text style detection
-            return "body"
+            guard let textView = textView else { return "Body" }
+            
+            let selectedRange = textView.selectedRange
+            let currentFont: UIFont
+            
+            if selectedRange.length > 0 {
+                // Check font of selected text
+                if let attributedText = textView.attributedText, attributedText.length > 0 {
+                    let attributes = attributedText.attributes(at: selectedRange.location, effectiveRange: nil)
+                    currentFont = attributes[.font] as? UIFont ?? UIFont.systemFont(ofSize: 16)
+                } else {
+                    currentFont = UIFont.systemFont(ofSize: 16)
+                }
+            } else {
+                // Check typing attributes at cursor
+                currentFont = textView.typingAttributes[.font] as? UIFont ?? UIFont.systemFont(ofSize: 16)
+            }
+            
+            // Determine style based on font size and weight
+            let fontSize = currentFont.pointSize
+            let fontWeight = currentFont.fontDescriptor.symbolicTraits
+            
+            if fontSize >= 26 {
+                return "Title"
+            } else if fontSize >= 20 {
+                return "Heading"
+            } else if fontSize <= 13 {
+                return "Caption"
+            } else if fontWeight.contains(.traitBold) && fontSize == 16 {
+                return "Strong"
+            } else {
+                return "Body"
+            }
         }
         
         private func getCurrentFormatting() -> (isBold: Bool, isItalic: Bool, isUnderlined: Bool, hasLink: Bool, hasBulletList: Bool, hasTextColor: Bool, hasHighlight: Bool, hasBookmark: Bool, textColor: Color?, highlightColor: Color?) {
@@ -810,6 +1413,25 @@ struct iOS26ScrollDetectingTextEditor: UIViewRepresentable {
             toolbarHostingController?.updateToolbar(toolbar)
         }
         
+        private func updateFormattingToolbarSafely() {
+            updateFormattingToolbar()
+        }
+        
+        private func updateParentTextSafely(_ textView: UITextView) {
+            // Store current scroll position before updating parent binding
+            let currentContentOffset = textView.contentOffset
+            let currentSelectedRange = textView.selectedRange
+            
+            // Update parent text binding
+            parent.text = textView.text
+            
+            // Immediately restore scroll position after SwiftUI update
+            DispatchQueue.main.async {
+                textView.contentOffset = currentContentOffset
+                textView.selectedRange = currentSelectedRange
+            }
+        }
+        
         // MARK: - Keyboard Notification Handlers
         @objc private func keyboardWillShow(_ notification: Notification) {
             guard let animationDuration = notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double else {
@@ -883,23 +1505,29 @@ struct iOS26ScrollDetectingTextEditor: UIViewRepresentable {
         
         // MARK: - Text View Delegate
         func textViewDidChange(_ textView: UITextView) {
+            // If we're currently applying formatting, skip the update to prevent scroll jumps
+            if isApplyingFormatting {
+                print("🚫 Skipping textViewDidChange during formatting to prevent scroll jump")
+                return
+            }
+            
             // Update SwiftUI binding
             parent.text = textView.text
             
-            // Save changes back to document
-            if let index = document.wrappedValue.elements.firstIndex(where: { $0.type == .textBlock }) {
-                document.wrappedValue.elements[index].content = textView.text
-            } else {
-                var newElement = DocumentElement(type: .textBlock)
-                newElement.content = textView.text
-                document.wrappedValue.elements.append(newElement)
-            }
+            // Save changes back to document with formatting
+            updateDocumentWithFormatting()
             
             // Update formatting toolbar after text changes
             updateFormattingToolbar()
         }
         
         func textViewDidChangeSelection(_ textView: UITextView) {
+            // If we're currently applying formatting, skip toolbar update to prevent interference
+            if isApplyingFormatting {
+                print("🚫 Skipping selection change update during formatting")
+                return
+            }
+            
             // Update formatting toolbar when selection changes
             updateFormattingToolbar()
         }
@@ -911,6 +1539,306 @@ struct iOS26ScrollDetectingTextEditor: UIViewRepresentable {
         func textViewDidEndEditing(_ textView: UITextView) {
             print("✅ Text editing ended")
         }
+        
+        private enum FormattingType {
+            case bold, italic, underline
+        }
+        
+        private func applyFormattingWithoutScrollJump(textView: UITextView, formattingType: FormattingType) {
+            // Capture current state
+            let originalContentOffset = textView.contentOffset
+            let originalSelectedRange = textView.selectedRange
+            let originalText = textView.text
+            
+            print("🛡️ Applying \(formattingType) with scroll protection")
+            print("🛡️ Original offset: \(originalContentOffset), range: \(originalSelectedRange)")
+            
+            // Temporarily disable delegate to prevent textViewDidChange from firing
+            let originalDelegate = textView.delegate
+            textView.delegate = nil
+            
+            // Apply formatting based on type
+            switch formattingType {
+            case .bold:
+                applyBoldFormattingDirect(textView: textView, selectedRange: originalSelectedRange)
+            case .italic:
+                applyItalicFormattingDirect(textView: textView, selectedRange: originalSelectedRange)
+            case .underline:
+                applyUnderlineFormattingDirect(textView: textView, selectedRange: originalSelectedRange)
+            }
+            
+            // Force restore scroll position and selection immediately
+            textView.selectedRange = originalSelectedRange
+            textView.contentOffset = originalContentOffset
+            
+            // Re-enable delegate
+            textView.delegate = originalDelegate
+            
+            // Update parent text binding manually without triggering delegates
+            DispatchQueue.main.async {
+                // Ensure scroll position is still correct after any SwiftUI updates
+                textView.contentOffset = originalContentOffset
+                textView.selectedRange = originalSelectedRange
+                
+                // Update parent binding
+                self.parent.text = textView.text
+                
+                // Update document manually
+                if let index = self.document.wrappedValue.elements.firstIndex(where: { $0.type == .textBlock }) {
+                    self.document.wrappedValue.elements[index].content = textView.text
+                }
+                
+                // Update toolbar
+                self.updateFormattingToolbar()
+                
+                print("🛡️ Final offset: \(textView.contentOffset), range: \(textView.selectedRange)")
+            }
+        }
+        
+        private func applyBoldFormattingDirect(textView: UITextView, selectedRange: NSRange) {
+            let attributedText = NSMutableAttributedString(attributedString: textView.attributedText)
+            
+            if selectedRange.length == 0 {
+                // Handle cursor position - modify typing attributes
+                var typingAttributes = textView.typingAttributes
+                if let currentFont = typingAttributes[.font] as? UIFont {
+                    let traits = currentFont.fontDescriptor.symbolicTraits
+                    let isBold = traits.contains(.traitBold)
+                    
+                    let newFont: UIFont
+                    if isBold {
+                        if let descriptor = currentFont.fontDescriptor.withSymbolicTraits(traits.subtracting(.traitBold)) {
+                            newFont = UIFont(descriptor: descriptor, size: currentFont.pointSize)
+                        } else {
+                            newFont = currentFont
+                        }
+                    } else {
+                        if let descriptor = currentFont.fontDescriptor.withSymbolicTraits(traits.union(.traitBold)) {
+                            newFont = UIFont(descriptor: descriptor, size: currentFont.pointSize)
+                        } else {
+                            newFont = currentFont
+                        }
+                    }
+                    typingAttributes[.font] = newFont
+                    textView.typingAttributes = typingAttributes
+                }
+            } else {
+                // Handle text selection
+                attributedText.enumerateAttribute(.font, in: selectedRange) { fontAttribute, range, _ in
+                    if let currentFont = fontAttribute as? UIFont {
+                        let traits = currentFont.fontDescriptor.symbolicTraits
+                        let isBold = traits.contains(.traitBold)
+                        
+                        let newFont: UIFont
+                        if isBold {
+                            if let descriptor = currentFont.fontDescriptor.withSymbolicTraits(traits.subtracting(.traitBold)) {
+                                newFont = UIFont(descriptor: descriptor, size: currentFont.pointSize)
+                            } else {
+                                newFont = currentFont
+                            }
+                        } else {
+                            if let descriptor = currentFont.fontDescriptor.withSymbolicTraits(traits.union(.traitBold)) {
+                                newFont = UIFont(descriptor: descriptor, size: currentFont.pointSize)
+                            } else {
+                                newFont = currentFont
+                            }
+                        }
+                        attributedText.addAttribute(.font, value: newFont, range: range)
+                    }
+                }
+                textView.attributedText = attributedText
+            }
+        }
+        
+        private func applyItalicFormattingDirect(textView: UITextView, selectedRange: NSRange) {
+            let attributedText = NSMutableAttributedString(attributedString: textView.attributedText)
+            
+            if selectedRange.length == 0 {
+                // Handle cursor position
+                var typingAttributes = textView.typingAttributes
+                if let currentFont = typingAttributes[.font] as? UIFont {
+                    let traits = currentFont.fontDescriptor.symbolicTraits
+                    let isItalic = traits.contains(.traitItalic)
+                    
+                    let newFont: UIFont
+                    if isItalic {
+                        if let descriptor = currentFont.fontDescriptor.withSymbolicTraits(traits.subtracting(.traitItalic)) {
+                            newFont = UIFont(descriptor: descriptor, size: currentFont.pointSize)
+                        } else {
+                            newFont = currentFont
+                        }
+                    } else {
+                        if let descriptor = currentFont.fontDescriptor.withSymbolicTraits(traits.union(.traitItalic)) {
+                            newFont = UIFont(descriptor: descriptor, size: currentFont.pointSize)
+                        } else {
+                            newFont = currentFont
+                        }
+                    }
+                    typingAttributes[.font] = newFont
+                    textView.typingAttributes = typingAttributes
+                }
+            } else {
+                // Handle text selection
+                attributedText.enumerateAttribute(.font, in: selectedRange) { fontAttribute, range, _ in
+                    if let currentFont = fontAttribute as? UIFont {
+                        let traits = currentFont.fontDescriptor.symbolicTraits
+                        let isItalic = traits.contains(.traitItalic)
+                        
+                        let newFont: UIFont
+                        if isItalic {
+                            if let descriptor = currentFont.fontDescriptor.withSymbolicTraits(traits.subtracting(.traitItalic)) {
+                                newFont = UIFont(descriptor: descriptor, size: currentFont.pointSize)
+                            } else {
+                                newFont = currentFont
+                            }
+                        } else {
+                            if let descriptor = currentFont.fontDescriptor.withSymbolicTraits(traits.union(.traitItalic)) {
+                                newFont = UIFont(descriptor: descriptor, size: currentFont.pointSize)
+                            } else {
+                                newFont = currentFont
+                            }
+                        }
+                        attributedText.addAttribute(.font, value: newFont, range: range)
+                    }
+                }
+                textView.attributedText = attributedText
+            }
+        }
+        
+        private func applyUnderlineFormattingDirect(textView: UITextView, selectedRange: NSRange) {
+            let attributedText = NSMutableAttributedString(attributedString: textView.attributedText)
+            
+            attributedText.enumerateAttribute(.underlineStyle, in: selectedRange) { underlineAttribute, range, _ in
+                let currentUnderline = underlineAttribute as? Int ?? 0
+                let newUnderline = currentUnderline == 0 ? NSUnderlineStyle.single.rawValue : 0
+                attributedText.addAttribute(.underlineStyle, value: newUnderline, range: range)
+            }
+            
+            textView.attributedText = attributedText
+        }
+        
+        private func debugScrollJumpIssue(textView: UITextView, operation: String) {
+            print("🐛 === DEBUG SCROLL JUMP for \(operation) ===")
+            print("🐛 BEFORE: contentOffset = \(textView.contentOffset)")
+            print("🐛 BEFORE: selectedRange = \(textView.selectedRange)")
+            print("🐛 BEFORE: contentSize = \(textView.contentSize)")
+            print("🐛 BEFORE: bounds = \(textView.bounds)")
+            
+            // Store original state
+            let originalOffset = textView.contentOffset
+            let originalRange = textView.selectedRange
+            
+            // Create observer to track all scroll changes
+            var scrollChanges: [CGPoint] = []
+            
+            // Method to track scroll changes
+            func trackScrollChange(reason: String) {
+                let currentOffset = textView.contentOffset
+                scrollChanges.append(currentOffset)
+                print("🐛 SCROLL CHANGE (\(reason)): \(currentOffset)")
+                
+                if currentOffset != originalOffset {
+                    print("⚠️ SCROLL POSITION CHANGED! Original: \(originalOffset), New: \(currentOffset)")
+                }
+            }
+            
+            // Track initial state
+            trackScrollChange(reason: "initial")
+            
+            // Apply simple bold formatting without any scroll protection
+            print("🐛 Applying simple bold formatting...")
+            
+            if originalRange.length == 0 {
+                // Cursor position - just update typing attributes
+                var typingAttributes = textView.typingAttributes
+                if let currentFont = typingAttributes[.font] as? UIFont {
+                    let traits = currentFont.fontDescriptor.symbolicTraits
+                    let isBold = traits.contains(.traitBold)
+                    
+                    let newFont: UIFont
+                    if isBold {
+                        if let descriptor = currentFont.fontDescriptor.withSymbolicTraits(traits.subtracting(.traitBold)) {
+                            newFont = UIFont(descriptor: descriptor, size: currentFont.pointSize)
+                        } else {
+                            newFont = currentFont
+                        }
+                    } else {
+                        if let descriptor = currentFont.fontDescriptor.withSymbolicTraits(traits.union(.traitBold)) {
+                            newFont = UIFont(descriptor: descriptor, size: currentFont.pointSize)
+                        } else {
+                            newFont = currentFont
+                        }
+                    }
+                    
+                    print("🐛 Updating typing attributes...")
+                    trackScrollChange(reason: "before typing attributes")
+                    typingAttributes[.font] = newFont
+                    textView.typingAttributes = typingAttributes
+                    trackScrollChange(reason: "after typing attributes")
+                }
+            } else {
+                // Text selection - update attributed text
+                print("🐛 Updating attributed text for selection...")
+                let attributedText = NSMutableAttributedString(attributedString: textView.attributedText)
+                
+                trackScrollChange(reason: "before attributedText creation")
+                
+                attributedText.enumerateAttribute(.font, in: originalRange) { fontAttribute, range, _ in
+                    if let currentFont = fontAttribute as? UIFont {
+                        let traits = currentFont.fontDescriptor.symbolicTraits
+                        let isBold = traits.contains(.traitBold)
+                        
+                        let newFont: UIFont
+                        if isBold {
+                            if let descriptor = currentFont.fontDescriptor.withSymbolicTraits(traits.subtracting(.traitBold)) {
+                                newFont = UIFont(descriptor: descriptor, size: currentFont.pointSize)
+                            } else {
+                                newFont = currentFont
+                            }
+                        } else {
+                            if let descriptor = currentFont.fontDescriptor.withSymbolicTraits(traits.union(.traitBold)) {
+                                newFont = UIFont(descriptor: descriptor, size: currentFont.pointSize)
+                            } else {
+                                newFont = currentFont
+                            }
+                        }
+                        attributedText.addAttribute(.font, value: newFont, range: range)
+                    }
+                }
+                
+                trackScrollChange(reason: "before setting attributedText")
+                textView.attributedText = attributedText
+                trackScrollChange(reason: "after setting attributedText")
+                
+                print("🐛 Restoring selection...")
+                textView.selectedRange = originalRange
+                trackScrollChange(reason: "after restoring selection")
+            }
+            
+            // Check if parent.text update causes issues
+            print("🐛 Updating parent.text...")
+            trackScrollChange(reason: "before parent.text update")
+            parent.text = textView.text
+            trackScrollChange(reason: "after parent.text update")
+            
+            // Final state
+            print("🐛 FINAL: contentOffset = \(textView.contentOffset)")
+            print("🐛 FINAL: selectedRange = \(textView.selectedRange)")
+            print("🐛 === END DEBUG ===")
+            
+            // If scroll position changed, try to identify the culprit
+            if textView.contentOffset != originalOffset {
+                print("🚨 SCROLL JUMP DETECTED!")
+                print("🚨 All scroll changes: \(scrollChanges)")
+                print("🚨 Original: \(originalOffset), Final: \(textView.contentOffset)")
+                
+                // Try to force it back
+                print("🚨 Attempting to force scroll position back...")
+                textView.contentOffset = originalOffset
+                print("🚨 After force restore: \(textView.contentOffset)")
+            }
+        }
     }
 }
 #endif 
+

@@ -85,8 +85,8 @@ struct iOS26HeaderScrollTextEditor: View {
                     }
                     .onEnded { value in
                         isDragging = false
-                        // Snap to nearest state (expanded or collapsed)
-                        snapToNearestState()
+                        // Apply gentle snap only if very close to natural positions
+                        gentleSnapIfNeeded()
                     }
             )
             .onAppear {
@@ -116,6 +116,29 @@ struct iOS26HeaderScrollTextEditor: View {
         
         withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
             headerCollapseProgress = targetProgress
+        }
+    }
+    
+    private func gentleSnapIfNeeded() {
+        let currentProgress = headerCollapseProgress
+        
+        // Only snap if we're very close to natural positions (within 5%)
+        // This preserves the natural feel while providing subtle magnetic behavior
+        let snapThreshold: CGFloat = 0.05
+        let targetProgress: CGFloat?
+        
+        if abs(currentProgress - 0.0) < snapThreshold {
+            targetProgress = 0.0  // Snap to fully expanded only if very close
+        } else if abs(currentProgress - 1.0) < snapThreshold {
+            targetProgress = 1.0  // Snap to collapsed only if very close
+        } else {
+            targetProgress = nil  // No snapping - let it rest naturally
+        }
+        
+        if let target = targetProgress {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) {
+                headerCollapseProgress = target
+            }
         }
     }
     

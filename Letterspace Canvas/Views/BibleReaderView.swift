@@ -626,9 +626,11 @@ struct BibleReaderView: View {
             loadCurrentChapter()
             #endif
         }
+        // Uses Dynamic Zoom sheet transition for iOS 26
         .sheet(isPresented: $showingAddBookmarkSheet) {
             addBookmarkView
         }
+        // Uses Dynamic Zoom sheet transition for iOS 26
         .sheet(isPresented: $showingSearchModal) {
             BibleGlobalSearchModal(
                 onSelectReference: { book, chapter, verse in
@@ -856,6 +858,7 @@ struct BibleReaderView: View {
                 .padding(.top, 4) // Add breathing room at the top for iPhone
                 .background(theme.surface)
                 // SEARCH MODAL
+                // Uses Dynamic Zoom sheet transition for iOS 26
                 .sheet(isPresented: $showingSearchModal) {
                     BibleGlobalSearchModal(
                         onSelectReference: { book, chapter, verse in
@@ -996,23 +999,6 @@ struct BibleReaderView: View {
                     }
                     .buttonStyle(.plain)
                     .help("Bookmark this chapter")
-                    
-                    // Home button
-                    Button(action: {
-                        readerData.saveLastRead(book: selectedBook, chapter: selectedChapter, translation: selectedTranslation)
-                        withAnimation(.easeInOut(duration: 0.3)) {
-                            showingSplashPage = true
-                        }
-                    }) {
-                        Image(systemName: "house")
-                            .font(.system(size: 16))
-                            .foregroundColor(.blue)
-                            .frame(width: 44, height: 44)
-                            .background(Circle().fill(Color.blue.opacity(0.1)))
-                            .contentShape(Circle())
-                    }
-                    .buttonStyle(.plain)
-                    .help("Return to home")
                 }
             } else {
                 Spacer()
@@ -2332,3 +2318,4 @@ extension View {
 #Preview {
     BibleReaderView(onDismiss: {})
 } 
+

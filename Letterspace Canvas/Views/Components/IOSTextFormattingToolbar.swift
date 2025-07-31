@@ -96,30 +96,70 @@ struct IOSTextFormattingToolbar: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            // Thin stroke at the top of the toolbar
-            Rectangle()
-                .fill(Color(UIColor.label).opacity(0.1))
-                .frame(height: 0.5)
-                .edgesIgnoringSafeArea(.horizontal)
-            
             MainToolbarView()
                 .overlay(
                     // iOS 26 Enhancement: Better modal presentations
                     ZStack {
                         if showStylePicker {
-                            StylePickerView()
+                            StylePickerView(
+                                currentTextStyle: currentTextStyle,
+                                onTextStyle: onTextStyle,
+                                onBack: {
+                                    showStylePicker = false
+                                    showColorPicker = false
+                                    showHighlightPicker = false
+                                    showAlignmentPicker = false
+                                    showLinkPicker = false
+                                }
+                            )
                         }
                         if showColorPicker {
-                            ColorPickerView()
+                            ColorPickerView(
+                                onTextColor: onTextColor,
+                                onBack: {
+                                    showColorPicker = false
+                                    showStylePicker = false
+                                    showHighlightPicker = false
+                                    showAlignmentPicker = false
+                                    showLinkPicker = false
+                                }
+                            )
                         }
                         if showHighlightPicker {
-                            HighlightPickerView()
+                            HighlightPickerView(
+                                onHighlight: onHighlight,
+                                onBack: {
+                                    showHighlightPicker = false
+                                    showStylePicker = false
+                                    showColorPicker = false
+                                    showAlignmentPicker = false
+                                    showLinkPicker = false
+                                }
+                            )
                         }
                         if showAlignmentPicker {
-                            AlignmentPickerView()
+                            AlignmentPickerView(
+                                onAlignment: onAlignment,
+                                onBack: {
+                                    showAlignmentPicker = false
+                                    showStylePicker = false
+                                    showColorPicker = false
+                                    showHighlightPicker = false
+                                    showLinkPicker = false
+                                }
+                            )
                         }
                         if showLinkPicker {
-                            LinkPickerView()
+                            LinkPickerView(
+                                onLinkCreate: onLinkCreate,
+                                onBack: {
+                                    showLinkPicker = false
+                                    showStylePicker = false
+                                    showColorPicker = false
+                                    showHighlightPicker = false
+                                    showAlignmentPicker = false
+                                }
+                            )
                         }
                     }
                     .animation(.spring(response: 0.4, dampingFraction: 0.8), value: showStylePicker)
@@ -129,105 +169,109 @@ struct IOSTextFormattingToolbar: View {
                     .animation(.spring(response: 0.4, dampingFraction: 0.8), value: showLinkPicker)
                 )
         }
+        .background(Color.clear)  // 0% opacity container background
     }
 
     // MARK: - Main Toolbar View with iOS 26 Enhancements
     @ViewBuilder
     private func MainToolbarView() -> some View {
+        // Compact Capsulated Liquid Glass Toolbar (Scrollable)
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                // Styles section
-                HStack(spacing: 12) {
-                    IOSTextButton(text: currentTextStyle ?? "Normal", action: onShowStylePicker)
-                    IOSToolbarButton(icon: "textformat.abc", action: onShowStylePicker)
-                }
-                
-                // Separator 1
-                Rectangle()
-                    .fill(Color.primary.opacity(0.2))
-                    .frame(width: 1, height: 30)
-                    .padding(.horizontal, 20)
-                
-                // Basic formatting
-                HStack(spacing: 12) {
-                    IOSToolbarButton(icon: "bold", isActive: isBold, action: onBold)
-                    IOSToolbarButton(icon: "italic", isActive: isItalic, action: onItalic)
-                    IOSToolbarButton(icon: "underline", isActive: isUnderlined, action: onUnderline)
-                }
-                
-                // Separator 2
-                Rectangle()
-                    .fill(Color.primary.opacity(0.2))
-                    .frame(width: 1, height: 30)
-                    .padding(.horizontal, 20)
-                
-                // Colors
-                HStack(spacing: 12) {
-                    IOSToolbarButton(icon: "textformat", isActive: hasTextColor, action: onShowColorPicker)
-                    IOSToolbarButton(icon: "highlighter", isActive: hasHighlight, action: onShowHighlightPicker)
-                }
-                
-                // Separator 3
-                Rectangle()
-                    .fill(Color.primary.opacity(0.2))
-                    .frame(width: 1, height: 30)
-                    .padding(.horizontal, 20)
-                
-                // Actions
-                HStack(spacing: 12) {
-                    IOSTextButton(text: "Link", isActive: hasLink, action: onShowLinkPicker)
-                    IOSTextButton(text: "Bullet", isActive: hasBulletList, action: onBulletList)
-                    IOSTextButton(text: "Alignment", action: onShowAlignmentPicker)
-                }
-                
-                // Separator 4
-                Rectangle()
-                    .fill(Color.primary.opacity(0.2))
-                    .frame(width: 1, height: 30)
-                    .padding(.horizontal, 20)
-                
-                // Keyboard dismissal button with iOS 26 enhanced animation
-                IOSToolbarButton(icon: "keyboard.chevron.compact.down") {
-                    // iOS 26 Enhancement: Improved keyboard dismissal with haptic feedback
-                    HapticFeedback.impact(.medium, intensity: 0.8)
-                    
-                    // iOS 26 Enhancement: Smooth dismissal animation
-                    _ = withAnimation(.interactiveSpring(response: 0.3, dampingFraction: 0.7)) {
-                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+            HStack(spacing: 12) {
+                // Text style button
+                Button(action: onShowStylePicker) {
+                    HStack(spacing: 4) {
+                        Text(currentTextStyle ?? "Body")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.primary)
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(.secondary)
                     }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(.ultraThinMaterial)
+                            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16))
+                    )
+                }
+                
+                // Separator
+                Rectangle()
+                    .fill(Color(UIColor.systemGray4))
+                    .frame(width: 0.5, height: 24)
+                
+                // Basic formatting buttons (compact)
+                HStack(spacing: 8) {
+                    liquidGlassFormattingButton(icon: "bold", isActive: isBold, action: onBold)
+                    liquidGlassFormattingButton(icon: "italic", isActive: isItalic, action: onItalic)
+                    liquidGlassFormattingButton(icon: "underline", isActive: isUnderlined, action: onUnderline)
+                }
+                
+                // Separator
+                Rectangle()
+                    .fill(Color(UIColor.systemGray4))
+                    .frame(width: 0.5, height: 24)
+                
+                // Color controls (compact)
+                HStack(spacing: 8) {
+                    liquidGlassColorButton(icon: "paintbrush", isActive: hasTextColor, action: onShowColorPicker)
+                    liquidGlassColorButton(icon: "highlighter", isActive: hasHighlight, action: onShowHighlightPicker)
+                }
+                
+                // Separator
+                Rectangle()
+                    .fill(Color(UIColor.systemGray4))
+                    .frame(width: 0.5, height: 24)
+                
+                // Actions (compact)
+                HStack(spacing: 8) {
+                    liquidGlassActionButton(text: "Link", isActive: hasLink, action: onShowLinkPicker)
+                    liquidGlassActionButton(text: "List", isActive: hasBulletList, action: onBulletList)
+                    liquidGlassActionButton(text: "Align", isActive: false, action: onShowAlignmentPicker)
+                }
+                
+                // Separator
+                Rectangle()
+                    .fill(Color(UIColor.systemGray4))
+                    .frame(width: 0.5, height: 24)
+                
+                // Bookmark button
+                liquidGlassFormattingButton(icon: "bookmark", isActive: hasBookmark, action: onBookmark)
+                
+                // Separator
+                Rectangle()
+                    .fill(Color(UIColor.systemGray4))
+                    .frame(width: 0.5, height: 24)
+                
+                // Keyboard dismiss button
+                Button(action: {
+                    HapticFeedback.impact(.light, intensity: 0.6)
+                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                }) {
+                    Image(systemName: "keyboard.chevron.compact.down")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(.secondary)
+                        .frame(width: 32, height: 32)
+                        .background(
+                            Circle()
+                                .fill(.ultraThinMaterial)
+                                .glassEffect(.regular, in: Circle())
+                        )
                 }
             }
             .padding(.horizontal, 16)
+            .padding(.vertical, 12)
         }
-        // iOS 26 Enhancement: Improved scroll behavior
-        .scrollDisabled(false)
-        .scrollBounceBehavior(.basedOnSize)
-        .scrollTargetBehavior(.viewAligned)
-        .coordinateSpace(name: "toolbar")
-        // Performance: Simplified gesture handling to prevent UI freezing
-        .gesture(
-            DragGesture()
-                .onEnded { _ in
-                    // Reset velocity tracking only on end to reduce overhead
-                    scrollVelocity = 0
-                    lastScrollOffset = 0
-                }
-        )
-        .frame(maxHeight: .infinity)
-        .frame(maxWidth: .infinity)
         .background(
-            Group {
-                if #available(iOS 26.0, *) {
-                    // iOS 26 Liquid Glass Effect
-                    RoundedRectangle(cornerRadius: 0)
-                        .fill(.ultraThinMaterial)
-                        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 0))
-                } else {
-                    // Fallback for older iOS
-                    Color(UIColor.systemBackground).opacity(0.95)
-                }
-            }
+            // Pure Liquid Glass Effect (iOS 26+ only)
+            RoundedRectangle(cornerRadius: 20)
+                .fill(.clear) // No material fill - let glass effect do the work
+                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 20)) // Pure glass effect without material interference
         )
+        .shadow(color: Color.black.opacity(0.1), radius: 10, x: 0, y: 2)
+        .padding(.horizontal, 20)  // Add margin from screen edges
     }
     
     // MARK: - Action Handlers
@@ -284,6 +328,95 @@ struct IOSTextFormattingToolbar: View {
             showColorPicker = false
             showHighlightPicker = false
             showAlignmentPicker = false
+        }
+    }
+    
+    // MARK: - Liquid Glass Toolbar Button Components
+    
+    @ViewBuilder
+    private func liquidGlassFormattingButton(icon: String, isActive: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: {
+            HapticFeedback.impact(.light, intensity: 0.6)
+            action()
+        }) {
+            ZStack(alignment: .topTrailing) {
+                // Main button with liquid glass effect
+                Image(systemName: icon)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(.primary)
+                    .frame(width: 32, height: 32)
+                    .background(
+                        Circle()
+                            .fill(.ultraThinMaterial)
+                            .glassEffect(.regular, in: Circle())
+                    )
+                
+                // Badge indicator (liquid glass style)
+                if isActive {
+                    Circle()
+                        .fill(Color(UIColor.systemBlue))
+                        .frame(width: 8, height: 8)
+                        .overlay(
+                            Circle()
+                                .stroke(Color(UIColor.systemBackground), lineWidth: 1)
+                                .frame(width: 8, height: 8)
+                        )
+                        .offset(x: 3, y: 4) // Positioned right on the corner edge
+                }
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private func liquidGlassColorButton(icon: String, isActive: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: {
+            HapticFeedback.impact(.light, intensity: 0.6)
+            action()
+        }) {
+            ZStack(alignment: .topTrailing) {
+                // Main button with liquid glass effect
+                Image(systemName: icon)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(.primary)
+                    .frame(width: 32, height: 32)
+                    .background(
+                        Circle()
+                            .fill(.ultraThinMaterial)
+                            .glassEffect(.regular, in: Circle())
+                    )
+                
+                // Badge indicator (liquid glass style)
+                if isActive {
+                    Circle()
+                        .fill(Color(UIColor.systemBlue))
+                        .frame(width: 8, height: 8)
+                        .overlay(
+                            Circle()
+                                .stroke(Color(UIColor.systemBackground), lineWidth: 1)
+                                .frame(width: 8, height: 8)
+                        )
+                        .offset(x: 3, y: 4) // Positioned right on the corner edge
+                }
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private func liquidGlassActionButton(text: String, isActive: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: {
+            HapticFeedback.impact(.light, intensity: 0.6)
+            action()
+        }) {
+            Text(text)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundColor(.primary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(.ultraThinMaterial)
+                        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 8))
+                )
         }
     }
 }
@@ -722,6 +855,57 @@ private struct InlineColorButton: View {
     }
 }
 
+private struct InlineLinkPickerView: View {
+    let onLinkCreate: (String, String) -> Void
+    let onBack: () -> Void
+    @State private var urlText: String = ""
+    @State private var linkText: String = ""
+    @Environment(\.colorScheme) var colorScheme
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            // Back button
+            Button(action: onBack) {
+                HStack(spacing: 4) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 12, weight: .medium))
+                    Text("Back")
+                        .font(.system(size: 14, weight: .medium))
+                }
+                .foregroundColor(.accentColor)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(colorScheme == .dark ? Color.white.opacity(0.1) : Color.black.opacity(0.05))
+                )
+            }
+            
+            // URL input field
+            TextField("Enter URL", text: $urlText)
+                .textFieldStyle(.roundedBorder)
+                .frame(maxWidth: .infinity)
+            
+            // Add button
+            Button(action: {
+                onLinkCreate(urlText, linkText.isEmpty ? urlText : linkText)
+            }) {
+                Text("Add")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(Color.accentColor)
+                    .cornerRadius(8)
+            }
+            .disabled(urlText.isEmpty)
+        }
+        .frame(maxHeight: .infinity)
+        .padding(.horizontal, 8)
+        .background(Color(UIColor.systemBackground))
+    }
+}
+
 // MARK: - iOS 26 Enhanced Text Button
 private struct IOSTextButton: View {
     let text: String
@@ -802,17 +986,11 @@ private struct IOSTextButton: View {
     }
     
     private var buttonForegroundColor: Color {
-        if isActive {
-            return .white
-        } else {
-            return colorScheme == .dark ? .white : .black
-        }
+        return colorScheme == .dark ? .white : .black
     }
     
     private var buttonBackgroundColor: Color {
-        if isActive {
-            return .blue
-        } else if isPressed {
+        if isPressed {
             return colorScheme == .dark ? Color.white.opacity(0.3) : Color.black.opacity(0.2)
         } else {
             return Color.gray.opacity(0.1)
@@ -828,8 +1006,6 @@ private struct IOSToolbarButton: View {
     
     // iOS 26 Enhancement: Advanced state tracking
     @State private var isPressed = false
-    @State private var rotationAngle: Double = 0
-    @State private var pressScale: Double = 1.0
     @Environment(\.colorScheme) var colorScheme
     
     init(icon: String, isActive: Bool = false, action: @escaping () -> Void) {
@@ -846,45 +1022,54 @@ private struct IOSToolbarButton: View {
             let hapticIntensity = isActive ? 0.8 : 0.6
             HapticFeedback.impact(.light, intensity: hapticIntensity)
             
-            // iOS 26 Enhancement: Micro-interaction animation
+            // Simple press animation without spin
             withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
-                rotationAngle += 360
-                pressScale = 1.1
-            }
-            
-            // Reset animation
-            withAnimation(.easeOut(duration: 0.3).delay(0.1)) {
-                pressScale = 1.0
+                // No rotation animation - just clean press feedback
             }
             
             action()
         }) {
-            Image(systemName: icon)
-                .font(.system(size: 16, weight: .medium))
-                .foregroundColor(buttonForegroundColor)
-                .frame(width: 52, height: 44)
-                .background(
-                    Group {
-                        if #available(iOS 26.0, *) {
-                            // iOS 26 Liquid Glass Button
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(buttonBackgroundMaterial)
-                                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 8))
-                                .shadow(color: isPressed ? .black.opacity(0.1) : .black.opacity(0.05), 
-                                       radius: isPressed ? 3 : 1, x: 0, y: isPressed ? 1 : 0.5)
-                        } else {
-                            // Fallback for older iOS
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(buttonBackgroundColor)
-                                .shadow(color: isPressed ? .black.opacity(0.15) : .black.opacity(0.05), 
-                                       radius: isPressed ? 4 : 2, x: 0, y: isPressed ? 2 : 1)
+            ZStack(alignment: .topTrailing) {
+                // Main button content
+                Image(systemName: icon)
+                    .font(.system(size: 14, weight: .medium))  // Smaller icon
+                    .foregroundColor(buttonForegroundColor)
+                    .foregroundStyle(buttonForegroundColor)  // Ensure consistent color styling
+                    .frame(width: 44, height: 36)  // Smaller button size
+                    .background(
+                        Group {
+                            if #available(iOS 26.0, *) {
+                                // iOS 26 Liquid Glass Button
+                                RoundedRectangle(cornerRadius: 6)  // Smaller corner radius
+                                    .fill(buttonBackgroundMaterial)
+                                    .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 6))
+                                    .shadow(color: isPressed ? .black.opacity(0.1) : .black.opacity(0.05), 
+                                           radius: isPressed ? 3 : 1, x: 0, y: isPressed ? 1 : 0.5)
+                            } else {
+                                // Fallback for older iOS
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(buttonBackgroundColor)
+                                    .shadow(color: isPressed ? .black.opacity(0.15) : .black.opacity(0.05), 
+                                           radius: isPressed ? 4 : 2, x: 0, y: isPressed ? 2 : 1)
+                            }
                         }
-                    }
-                )
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                // iOS 26 Enhancement: Micro-interaction scaling
-                .scaleEffect(pressScale)
-                .rotationEffect(.degrees(rotationAngle))
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                
+                // Blue badge indicator for active state (matching iOS26NativeTextEditorWithToolbar design)
+                if isActive {
+                    Circle()
+                        .fill(Color(UIColor.systemBlue))  // Proper Apple blue
+                        .frame(width: 10, height: 10)  // Slightly larger for better visibility
+                        .overlay(
+                            Circle()
+                                .stroke(Color(UIColor.systemBackground), lineWidth: 1)
+                                .frame(width: 10, height: 10)
+                        )
+                        .offset(x: 6, y: -6)  // Adjusted offset to prevent clipping
+                }
+            }
+            .padding(4)  // Add padding to prevent clipping
         }
         .buttonStyle(PlainButtonStyle())
         // iOS 26 Enhancement: Improved press animation
@@ -901,7 +1086,7 @@ private struct IOSToolbarButton: View {
             // iOS 26 Enhancement: Subtle selection feedback on press
             if pressing {
                 HapticFeedback.selection()
-        }
+            }
         }
         // iOS 26 Enhancement: Rich accessibility support
         .accessibilityLabel(accessibilityLabelForIcon(icon))
@@ -911,17 +1096,12 @@ private struct IOSToolbarButton: View {
     }
     
     private var buttonForegroundColor: Color {
-        if isActive {
-            return .white
-        } else {
-            return colorScheme == .dark ? .white : .black
-        }
+        // Always use consistent color - never white for active state
+        return colorScheme == .dark ? .white : .black
     }
     
     private var buttonBackgroundColor: Color {
-        if isActive {
-            return .blue
-        } else if isPressed {
+        if isPressed {
             return colorScheme == .dark ? Color.white.opacity(0.3) : Color.black.opacity(0.2)
         } else {
             return Color.gray.opacity(0.1)
@@ -930,9 +1110,7 @@ private struct IOSToolbarButton: View {
     
     @available(iOS 26.0, *)
     private var buttonBackgroundMaterial: Material {
-        if isActive {
-            return .regularMaterial
-        } else if isPressed {
+        if isPressed {
             return .thinMaterial
         } else {
             return .ultraThinMaterial
@@ -956,92 +1134,83 @@ private struct IOSToolbarButton: View {
 
 // MARK: - iOS 26 Enhanced Picker Views
 private struct StylePickerView: View {
+    let currentTextStyle: String?
+    let onTextStyle: (String) -> Void
+    let onBack: () -> Void
+    
     var body: some View {
-        VStack {
-            Text("Style Picker - iOS 26 Enhanced")
-                .font(.headline)
-                .padding()
-            // TODO: Implement enhanced style picker with iOS 26 features
-        }
-        .background(Color(UIColor.systemBackground))
-        .cornerRadius(12)
-        .shadow(radius: 8)
-        .transition(.asymmetric(
-            insertion: .move(edge: .bottom).combined(with: .opacity),
-            removal: .move(edge: .bottom).combined(with: .opacity)
-        ))
+        InlineStylePickerView(
+            currentStyle: currentTextStyle,
+            onStyleSelect: { style in
+                onTextStyle(style)
+                onBack()
+            },
+            onBack: onBack
+        )
     }
 }
 
 private struct ColorPickerView: View {
+    let onTextColor: (Color) -> Void
+    let onBack: () -> Void
+    
     var body: some View {
-        VStack {
-            Text("Color Picker - iOS 26 Enhanced")
-                .font(.headline)
-                .padding()
-            // TODO: Implement enhanced color picker with iOS 26 features
-        }
-        .background(Color(UIColor.systemBackground))
-        .cornerRadius(12)
-        .shadow(radius: 8)
-        .transition(.asymmetric(
-            insertion: .move(edge: .bottom).combined(with: .opacity),
-            removal: .move(edge: .bottom).combined(with: .opacity)
-        ))
+        InlineColorPickerView(
+            title: "Text Color",
+            colors: [.clear, .black, .gray, .blue, .green, .yellow, .red, .orange, .purple, .pink, .brown],
+            onColorSelect: { color in
+                onTextColor(color)
+                onBack()
+            },
+            onBack: onBack
+        )
     }
 }
 
 private struct HighlightPickerView: View {
+    let onHighlight: (Color) -> Void
+    let onBack: () -> Void
+    
     var body: some View {
-        VStack {
-            Text("Highlight Picker - iOS 26 Enhanced")
-                .font(.headline)
-                .padding()
-            // TODO: Implement enhanced highlight picker with iOS 26 features
-        }
-        .background(Color(UIColor.systemBackground))
-        .cornerRadius(12)
-        .shadow(radius: 8)
-        .transition(.asymmetric(
-            insertion: .move(edge: .bottom).combined(with: .opacity),
-            removal: .move(edge: .bottom).combined(with: .opacity)
-        ))
+        InlineColorPickerView(
+            title: "Highlight",
+            colors: [.clear, .yellow, .green, .blue, .pink, .purple, .orange],
+            onColorSelect: { color in
+                onHighlight(color)
+                onBack()
+            },
+            onBack: onBack
+        )
     }
 }
 
 private struct AlignmentPickerView: View {
+    let onAlignment: (TextAlignment) -> Void
+    let onBack: () -> Void
+    
     var body: some View {
-        VStack {
-            Text("Alignment Picker - iOS 26 Enhanced")
-                .font(.headline)
-                .padding()
-            // TODO: Implement enhanced alignment picker with iOS 26 features
-        }
-        .background(Color(UIColor.systemBackground))
-        .cornerRadius(12)
-        .shadow(radius: 8)
-        .transition(.asymmetric(
-            insertion: .move(edge: .bottom).combined(with: .opacity),
-            removal: .move(edge: .bottom).combined(with: .opacity)
-        ))
+        InlineAlignmentPickerView(
+            onAlignment: { alignment in
+                onAlignment(alignment)
+                onBack()
+            },
+            onBack: onBack
+        )
     }
 }
 
 private struct LinkPickerView: View {
+    let onLinkCreate: (String, String) -> Void
+    let onBack: () -> Void
+    
     var body: some View {
-        VStack {
-            Text("Link Picker - iOS 26 Enhanced")
-                .font(.headline)
-                .padding()
-            // TODO: Implement enhanced link picker with iOS 26 features
-        }
-        .background(Color(UIColor.systemBackground))
-        .cornerRadius(12)
-        .shadow(radius: 8)
-        .transition(.asymmetric(
-            insertion: .move(edge: .bottom).combined(with: .opacity),
-            removal: .move(edge: .bottom).combined(with: .opacity)
-        ))
+        InlineLinkPickerView(
+            onLinkCreate: { url, text in
+                onLinkCreate(url, text)
+                onBack()
+            },
+            onBack: onBack
+        )
     }
 }
 
@@ -1052,7 +1221,7 @@ class IOSFormattingToolbarHostingController: UIHostingController<IOSTextFormatti
         super.init(rootView: toolbar)
         
         // Configure for keyboard accessory - completely flush with keyboard
-        view.backgroundColor = UIColor.systemBackground
+        view.backgroundColor = UIColor.clear  // 0% opacity container background
         view.translatesAutoresizingMaskIntoConstraints = false
         
         // Set a preferred content size to give iOS a hint about our desired dimensions
@@ -1066,7 +1235,7 @@ class IOSFormattingToolbarHostingController: UIHostingController<IOSTextFormatti
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = UIColor.systemBackground
+        view.backgroundColor = UIColor.clear  // 0% opacity container background
         
         // Ensure no margins or safe area insets
         view.insetsLayoutMarginsFromSafeArea = false
@@ -1093,3 +1262,4 @@ class IOSFormattingToolbarHostingController: UIHostingController<IOSTextFormatti
 }
 
 #endif 
+
