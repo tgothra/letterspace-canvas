@@ -95,81 +95,88 @@ struct IOSTextFormattingToolbar: View {
     }
     
     var body: some View {
-        VStack(spacing: 0) {
-            MainToolbarView()
-                .overlay(
-                    // iOS 26 Enhancement: Better modal presentations
-                    ZStack {
-                        if showStylePicker {
-                            StylePickerView(
-                                currentTextStyle: currentTextStyle,
-                                onTextStyle: onTextStyle,
-                                onBack: {
-                                    showStylePicker = false
-                                    showColorPicker = false
-                                    showHighlightPicker = false
-                                    showAlignmentPicker = false
-                                    showLinkPicker = false
-                                }
-                            )
+        HStack(spacing: 12) {
+            // Main scrollable toolbar
+            VStack(spacing: 0) {
+                MainToolbarView()
+                    .overlay(
+                        // iOS 26 Enhancement: Better modal presentations
+                        ZStack {
+                            if showStylePicker {
+                                StylePickerView(
+                                    currentTextStyle: currentTextStyle,
+                                    onTextStyle: onTextStyle,
+                                    onBack: {
+                                        showStylePicker = false
+                                        showColorPicker = false
+                                        showHighlightPicker = false
+                                        showAlignmentPicker = false
+                                        showLinkPicker = false
+                                    }
+                                )
+                            }
+                            if showColorPicker {
+                                ColorPickerView(
+                                    onTextColor: onTextColor,
+                                    onBack: {
+                                        showColorPicker = false
+                                        showStylePicker = false
+                                        showHighlightPicker = false
+                                        showAlignmentPicker = false
+                                        showLinkPicker = false
+                                    }
+                                )
+                            }
+                            if showHighlightPicker {
+                                HighlightPickerView(
+                                    onHighlight: onHighlight,
+                                    onBack: {
+                                        showHighlightPicker = false
+                                        showStylePicker = false
+                                        showColorPicker = false
+                                        showAlignmentPicker = false
+                                        showLinkPicker = false
+                                    }
+                                )
+                            }
+                            if showAlignmentPicker {
+                                AlignmentPickerView(
+                                    onAlignment: onAlignment,
+                                    onBack: {
+                                        showAlignmentPicker = false
+                                        showStylePicker = false
+                                        showColorPicker = false
+                                        showHighlightPicker = false
+                                        showLinkPicker = false
+                                    }
+                                )
+                            }
+                            if showLinkPicker {
+                                LinkPickerView(
+                                    onLinkCreate: onLinkCreate,
+                                    onBack: {
+                                        showLinkPicker = false
+                                        showStylePicker = false
+                                        showColorPicker = false
+                                        showHighlightPicker = false
+                                        showAlignmentPicker = false
+                                    }
+                                )
+                            }
                         }
-                        if showColorPicker {
-                            ColorPickerView(
-                                onTextColor: onTextColor,
-                                onBack: {
-                                    showColorPicker = false
-                                    showStylePicker = false
-                                    showHighlightPicker = false
-                                    showAlignmentPicker = false
-                                    showLinkPicker = false
-                                }
-                            )
-                        }
-                        if showHighlightPicker {
-                            HighlightPickerView(
-                                onHighlight: onHighlight,
-                                onBack: {
-                                    showHighlightPicker = false
-                                    showStylePicker = false
-                                    showColorPicker = false
-                                    showAlignmentPicker = false
-                                    showLinkPicker = false
-                                }
-                            )
-                        }
-                        if showAlignmentPicker {
-                            AlignmentPickerView(
-                                onAlignment: onAlignment,
-                                onBack: {
-                                    showAlignmentPicker = false
-                                    showStylePicker = false
-                                    showColorPicker = false
-                                    showHighlightPicker = false
-                                    showLinkPicker = false
-                                }
-                            )
-                        }
-                        if showLinkPicker {
-                            LinkPickerView(
-                                onLinkCreate: onLinkCreate,
-                                onBack: {
-                                    showLinkPicker = false
-                                    showStylePicker = false
-                                    showColorPicker = false
-                                    showHighlightPicker = false
-                                    showAlignmentPicker = false
-                                }
-                            )
-                        }
-                    }
-                    .animation(.spring(response: 0.4, dampingFraction: 0.8), value: showStylePicker)
-                    .animation(.spring(response: 0.4, dampingFraction: 0.8), value: showColorPicker)
-                    .animation(.spring(response: 0.4, dampingFraction: 0.8), value: showHighlightPicker)
-                    .animation(.spring(response: 0.4, dampingFraction: 0.8), value: showAlignmentPicker)
-                    .animation(.spring(response: 0.4, dampingFraction: 0.8), value: showLinkPicker)
-                )
+                        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: showStylePicker)
+                        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: showColorPicker)
+                        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: showHighlightPicker)
+                        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: showAlignmentPicker)
+                        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: showLinkPicker)
+                    )
+            }
+            .background(Color.clear)  // 0% opacity container background
+            
+            // Floating close keyboard button
+            FloatingCloseButton()
         }
-        .background(Color.clear)  // 0% opacity container background
+        .padding(.horizontal, 20)  // Overall horizontal padding
     }
 
     // MARK: - Main Toolbar View with iOS 26 Enhancements
@@ -240,26 +247,7 @@ struct IOSTextFormattingToolbar: View {
                 // Bookmark button
                 liquidGlassFormattingButton(icon: "bookmark", isActive: hasBookmark, action: onBookmark)
                 
-                // Separator
-                Rectangle()
-                    .fill(Color(UIColor.systemGray4))
-                    .frame(width: 0.5, height: 24)
-                
-                // Keyboard dismiss button
-                Button(action: {
-                    HapticFeedback.impact(.light, intensity: 0.6)
-                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-                }) {
-                    Image(systemName: "keyboard.chevron.compact.down")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(.secondary)
-                        .frame(width: 32, height: 32)
-                        .background(
-                            Circle()
-                                .fill(.ultraThinMaterial)
-                                .glassEffect(.regular, in: Circle())
-                        )
-                }
+
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
@@ -271,7 +259,6 @@ struct IOSTextFormattingToolbar: View {
                 .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 20)) // Pure glass effect without material interference
         )
         .shadow(color: Color.black.opacity(0.1), radius: 10, x: 0, y: 2)
-        .padding(.horizontal, 20)  // Add margin from screen edges
     }
     
     // MARK: - Action Handlers
@@ -1129,6 +1116,33 @@ private struct IOSToolbarButton: View {
         case "keyboard.chevron.compact.down": return "Dismiss keyboard"
         default: return icon.replacingOccurrences(of: ".", with: " ")
         }
+    }
+}
+
+// MARK: - Floating Close Button
+private struct FloatingCloseButton: View {
+    var body: some View {
+        Button(action: {
+            HapticFeedback.impact(.light, intensity: 0.7)
+            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        }) {
+            Image(systemName: "keyboard.chevron.compact.down")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundColor(.primary)
+                .frame(width: 44, height: 44)
+                .background(
+                    Circle()
+                        .fill(.ultraThinMaterial)
+                        .glassEffect(.regular, in: Circle())
+                )
+                .overlay(
+                    Circle()
+                        .stroke(Color.primary.opacity(0.1), lineWidth: 0.5)
+                )
+        }
+        .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 3)
+        .scaleEffect(1.0)
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: true)
     }
 }
 

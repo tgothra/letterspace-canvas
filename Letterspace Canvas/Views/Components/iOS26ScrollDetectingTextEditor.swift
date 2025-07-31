@@ -1720,6 +1720,27 @@ struct iOS26ScrollDetectingTextEditor: UIViewRepresentable {
                 DispatchQueue.main.async {
                     self.ensureCursorIsVisible(textView)
                 }
+            } else if obscuredHeight < 50 {
+                // SAFETY NET: If keyboard is moving off screen (height is very small or zero)
+                // This catches edge cases where keyboardWillHide might not fire
+                print("🎹 SAFETY NET: Keyboard moving off screen - ensuring toolbar dismissal")
+                
+                // Make sure toolbar is hidden immediately
+                if let toolbar = toolbarHostingController?.view {
+                    toolbar.alpha = 0.0
+                    
+                    // Reset alpha for next appearance after a short delay
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                        toolbar.alpha = 1.0
+                    }
+                }
+                
+                // CRITICAL: Make sure text view resigns first responder if it hasn't already
+                // This is the key to ensuring document gestures work 100% of the time
+                if textView.isFirstResponder {
+                    print("🎹 SAFETY NET: Force resigning first responder")
+                    textView.resignFirstResponder()
+                }
             }
         }
         
@@ -1784,6 +1805,15 @@ struct iOS26ScrollDetectingTextEditor: UIViewRepresentable {
             // Reset keyboard height since it's hiding
             self.currentKeyboardHeight = 0
             self.updateCombinedInsets()
+            
+            // EXTRA SAFETY: Double-check that text view really resigned first responder
+            // This catches rare edge cases where the resign might not have worked
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                if textView.isFirstResponder {
+                    print("🎹 EXTRA SAFETY: Text view still first responder after keyboard hide - forcing resign")
+                    textView.resignFirstResponder()
+                }
+            }
         }
         
         // This handler ensures the toolbar appears properly when the keyboard shows
@@ -1889,10 +1919,38 @@ struct iOS26ScrollDetectingTextEditor: UIViewRepresentable {
         
         func textViewDidBeginEditing(_ textView: UITextView) {
             print("✏️ Text editing began")
+            
+            // BULLETPROOF: Ensure toolbar is visible when editing begins
+            if let toolbar = toolbarHostingController?.view {
+                UIView.animate(withDuration: 0.3, delay: 0, options: [.curveEaseInOut], animations: {
+                    toolbar.alpha = 1.0
+                })
+            }
         }
         
         func textViewDidEndEditing(_ textView: UITextView) {
-            print("✅ Text editing ended")
+            print("✅ Text editing ended - BULLETPROOF toolbar dismissal")
+            
+            // BULLETPROOF: This fires reliably when editing ends for ANY reason
+            // (keyboard dismiss, tap outside, swipe gesture, etc.)
+            
+            // Immediately hide toolbar
+            if let toolbar = toolbarHostingController?.view {
+                toolbar.alpha = 0.0
+                
+                // Reset alpha for next appearance after a delay
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    toolbar.alpha = 1.0
+                }
+            }
+            
+            // Reset keyboard height tracking
+            currentKeyboardHeight = 0
+            updateCombinedInsets()
+            
+            // This method fires AFTER the text view has already resigned first responder,
+            // so we don't need to call resignFirstResponder() here - it's already done.
+            print("✅ Editing ended - toolbar dismissed and document gestures enabled")
         }
         
         private enum FormattingType {
