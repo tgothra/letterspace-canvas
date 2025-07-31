@@ -1681,43 +1681,34 @@ struct iOS26ScrollDetectingTextEditor: UIViewRepresentable {
             }
 
             let animationCurve = UIView.AnimationOptions(rawValue: UInt(animationCurveRawValue << 16))
-
-            // The keyboard frame is in screen coordinates. We need to know where it is in relation to our text view.
-            let keyboardFrameInView = textView.convert(keyboardFrameEnd, from: nil)
-            
-            // Calculate the height of the keyboard that is actually obscuring the text view.
-            let obscuredHeight = textView.bounds.intersection(keyboardFrameInView).height
-            
-            // Update our stored keyboard height.
-            self.currentKeyboardHeight = max(0, obscuredHeight)
             
             // Determine if the keyboard is showing or hiding by checking its final position.
             let isKeyboardHiding = keyboardFrameEnd.origin.y >= UIScreen.main.bounds.height
             
-            // If the keyboard is appearing, make sure the toolbar is not hidden before we animate it in.
-            if !isKeyboardHiding {
-                self.toolbarHostingController?.view.isHidden = false
+            // Update our stored keyboard height for other functions to use.
+            currentKeyboardHeight = isKeyboardHiding ? 0 : keyboardFrameEnd.height
+            
+            // CRITICAL FIX: Instead of manually animating alpha/isHidden, properly manage inputAccessoryView
+            // This prevents conflicts with iOS's own accessory view management
+            if isKeyboardHiding {
+                // When keyboard is dismissing, let iOS handle the accessory view naturally
+                // Don't manually interfere with alpha or isHidden
+                print("🎹 Keyboard dismissing - letting iOS manage accessory view")
+            } else {
+                // When keyboard is appearing, ensure accessory view is properly set
+                if textView.inputAccessoryView == nil {
+                    print("🔧 Keyboard appearing - ensuring accessory view is attached")
+                    textView.inputAccessoryView = toolbarHostingController?.view
+                }
             }
             
-            // Animate the inset change and toolbar alpha to match the keyboard's movement.
+            // Animate the inset change to match the keyboard's movement.
             UIView.animate(withDuration: animationDuration, delay: 0, options: [animationCurve], animations: {
                 // By calling our unified function, we ensure that both top and bottom insets are considered.
                 self.updateCombinedInsets()
-                
-                // Animate the toolbar's alpha.
-                // It should be visible when the keyboard is visible, and hidden otherwise.
-                self.toolbarHostingController?.view.alpha = isKeyboardHiding ? 0.0 : 1.0
             }) { _ in
-                // After the animation completes, set isHidden to match the alpha state.
-                // This ensures the toolbar doesn't block touch events when it's invisible.
-                self.toolbarHostingController?.view.isHidden = isKeyboardHiding
-            }
-
-            // If the keyboard is appearing or visible, ensure the cursor is scrolled into view.
-            // This is the fix for problem #1. We use our more robust "Cursor Guardian".
-            if !isKeyboardHiding {
-                // Using a small delay ensures that the layout has settled before we scroll.
-                DispatchQueue.main.async {
+                // After keyboard animation completes, ensure cursor is visible
+                if !isKeyboardHiding {
                     self.ensureCursorIsVisible(textView)
                 }
             }
