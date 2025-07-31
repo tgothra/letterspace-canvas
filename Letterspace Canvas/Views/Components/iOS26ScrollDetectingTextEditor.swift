@@ -1722,7 +1722,7 @@ struct iOS26ScrollDetectingTextEditor: UIViewRepresentable {
                 }
             } else if obscuredHeight < 50 {
                 // SAFETY NET: If keyboard is moving off screen (height is very small or zero)
-                // This catches edge cases where keyboardWillHide might not fire
+                // This catches edge cases where keyboardWillHide might not fire or swipe dismissal is incomplete
                 print("🎹 SAFETY NET: Keyboard moving off screen - ensuring toolbar dismissal")
                 
                 // Make sure toolbar is hidden immediately
@@ -1735,11 +1735,14 @@ struct iOS26ScrollDetectingTextEditor: UIViewRepresentable {
                     }
                 }
                 
-                // CRITICAL: Make sure text view resigns first responder if it hasn't already
-                // This is the key to ensuring document gestures work 100% of the time
-                if textView.isFirstResponder {
-                    print("🎹 SAFETY NET: Force resigning first responder")
-                    textView.resignFirstResponder()
+                // PATIENT APPROACH: Give iOS time to complete its swipe dismissal process
+                // then check if cleanup is needed
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    if textView.isFirstResponder {
+                        print("🎹 DELAYED SAFETY NET: Text view still first responder after swipe dismissal - cleaning up")
+                        // Use the same method as the close button for consistency
+                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                    }
                 }
             }
         }

@@ -95,162 +95,178 @@ struct IOSTextFormattingToolbar: View {
     }
     
     var body: some View {
-        HStack(spacing: 12) {
-            // Main scrollable toolbar
-            VStack(spacing: 0) {
-                MainToolbarView()
-                    .overlay(
-                        // iOS 26 Enhancement: Better modal presentations
-                        ZStack {
-                            if showStylePicker {
-                                StylePickerView(
-                                    currentTextStyle: currentTextStyle,
-                                    onTextStyle: onTextStyle,
-                                    onBack: {
-                                        showStylePicker = false
-                                        showColorPicker = false
-                                        showHighlightPicker = false
-                                        showAlignmentPicker = false
-                                        showLinkPicker = false
-                                    }
-                                )
-                            }
-                            if showColorPicker {
-                                ColorPickerView(
-                                    onTextColor: onTextColor,
-                                    onBack: {
-                                        showColorPicker = false
-                                        showStylePicker = false
-                                        showHighlightPicker = false
-                                        showAlignmentPicker = false
-                                        showLinkPicker = false
-                                    }
-                                )
-                            }
-                            if showHighlightPicker {
-                                HighlightPickerView(
-                                    onHighlight: onHighlight,
-                                    onBack: {
-                                        showHighlightPicker = false
-                                        showStylePicker = false
-                                        showColorPicker = false
-                                        showAlignmentPicker = false
-                                        showLinkPicker = false
-                                    }
-                                )
-                            }
-                            if showAlignmentPicker {
-                                AlignmentPickerView(
-                                    onAlignment: onAlignment,
-                                    onBack: {
-                                        showAlignmentPicker = false
-                                        showStylePicker = false
-                                        showColorPicker = false
-                                        showHighlightPicker = false
-                                        showLinkPicker = false
-                                    }
-                                )
-                            }
-                            if showLinkPicker {
-                                LinkPickerView(
-                                    onLinkCreate: onLinkCreate,
-                                    onBack: {
-                                        showLinkPicker = false
-                                        showStylePicker = false
-                                        showColorPicker = false
-                                        showHighlightPicker = false
-                                        showAlignmentPicker = false
-                                    }
-                                )
-                            }
+        VStack(spacing: 0) {
+            MainToolbarView()
+                .overlay(
+                    // iOS 26 Enhancement: Better modal presentations
+                    ZStack {
+                        if showStylePicker {
+                            StylePickerView(
+                                currentTextStyle: currentTextStyle,
+                                onTextStyle: onTextStyle,
+                                onBack: {
+                                    showStylePicker = false
+                                    showColorPicker = false
+                                    showHighlightPicker = false
+                                    showAlignmentPicker = false
+                                    showLinkPicker = false
+                                }
+                            )
                         }
-                        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: showStylePicker)
-                        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: showColorPicker)
-                        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: showHighlightPicker)
-                        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: showAlignmentPicker)
-                        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: showLinkPicker)
-                    )
-            }
-            .background(Color.clear)  // 0% opacity container background
-            
-            // Floating close keyboard button
-            FloatingCloseButton()
+                        if showColorPicker {
+                            ColorPickerView(
+                                onTextColor: onTextColor,
+                                onBack: {
+                                    showColorPicker = false
+                                    showStylePicker = false
+                                    showHighlightPicker = false
+                                    showAlignmentPicker = false
+                                    showLinkPicker = false
+                                }
+                            )
+                        }
+                        if showHighlightPicker {
+                            HighlightPickerView(
+                                onHighlight: onHighlight,
+                                onBack: {
+                                    showHighlightPicker = false
+                                    showStylePicker = false
+                                    showColorPicker = false
+                                    showAlignmentPicker = false
+                                    showLinkPicker = false
+                                }
+                            )
+                        }
+                        if showAlignmentPicker {
+                            AlignmentPickerView(
+                                onAlignment: onAlignment,
+                                onBack: {
+                                    showAlignmentPicker = false
+                                    showStylePicker = false
+                                    showColorPicker = false
+                                    showHighlightPicker = false
+                                    showLinkPicker = false
+                                }
+                            )
+                        }
+                        if showLinkPicker {
+                            LinkPickerView(
+                                onLinkCreate: onLinkCreate,
+                                onBack: {
+                                    showLinkPicker = false
+                                    showStylePicker = false
+                                    showColorPicker = false
+                                    showHighlightPicker = false
+                                    showAlignmentPicker = false
+                                }
+                            )
+                        }
+                    }
+                    .animation(.spring(response: 0.4, dampingFraction: 0.8), value: showStylePicker)
+                    .animation(.spring(response: 0.4, dampingFraction: 0.8), value: showColorPicker)
+                    .animation(.spring(response: 0.4, dampingFraction: 0.8), value: showHighlightPicker)
+                    .animation(.spring(response: 0.4, dampingFraction: 0.8), value: showAlignmentPicker)
+                    .animation(.spring(response: 0.4, dampingFraction: 0.8), value: showLinkPicker)
+                )
         }
-        .padding(.horizontal, 20)  // Overall horizontal padding
+        .background(Color.clear)  // 0% opacity container background
     }
 
     // MARK: - Main Toolbar View with iOS 26 Enhancements
     @ViewBuilder
     private func MainToolbarView() -> some View {
-        // Compact Capsulated Liquid Glass Toolbar (Scrollable)
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
-                // Text style button
-                Button(action: onShowStylePicker) {
-                    HStack(spacing: 4) {
-                        Text(currentTextStyle ?? "Body")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.primary)
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(.secondary)
+        // Compact Capsulated Liquid Glass Toolbar with Sticky Close Button
+        HStack(spacing: 8) {
+            // Scrollable formatting buttons
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    // Text style button
+                    Button(action: onShowStylePicker) {
+                        HStack(spacing: 4) {
+                            Text(currentTextStyle ?? "Body")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(.primary)
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 8)
+                        .background(
+                            RoundedRectangle(cornerRadius: 16)
+                                .fill(.ultraThinMaterial)
+                                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16))
+                        )
                     }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 8)
-                    .background(
-                        RoundedRectangle(cornerRadius: 16)
-                            .fill(.ultraThinMaterial)
-                            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16))
-                    )
+                    
+                    // Separator
+                    Rectangle()
+                        .fill(Color(UIColor.systemGray4))
+                        .frame(width: 0.5, height: 24)
+                    
+                    // Basic formatting buttons (compact)
+                    HStack(spacing: 8) {
+                        liquidGlassFormattingButton(icon: "bold", isActive: isBold, action: onBold)
+                        liquidGlassFormattingButton(icon: "italic", isActive: isItalic, action: onItalic)
+                        liquidGlassFormattingButton(icon: "underline", isActive: isUnderlined, action: onUnderline)
+                    }
+                    
+                    // Separator
+                    Rectangle()
+                        .fill(Color(UIColor.systemGray4))
+                        .frame(width: 0.5, height: 24)
+                    
+                    // Color controls (compact)
+                    HStack(spacing: 8) {
+                        liquidGlassColorButton(icon: "paintbrush", isActive: hasTextColor, action: onShowColorPicker)
+                        liquidGlassColorButton(icon: "highlighter", isActive: hasHighlight, action: onShowHighlightPicker)
+                    }
+                    
+                    // Separator
+                    Rectangle()
+                        .fill(Color(UIColor.systemGray4))
+                        .frame(width: 0.5, height: 24)
+                    
+                    // Actions (compact)
+                    HStack(spacing: 8) {
+                        liquidGlassActionButton(text: "Link", isActive: hasLink, action: onShowLinkPicker)
+                        liquidGlassActionButton(text: "List", isActive: hasBulletList, action: onBulletList)
+                        liquidGlassActionButton(text: "Align", isActive: false, action: onShowAlignmentPicker)
+                    }
+                    
+                    // Separator
+                    Rectangle()
+                        .fill(Color(UIColor.systemGray4))
+                        .frame(width: 0.5, height: 24)
+                    
+                    // Bookmark button
+                    liquidGlassFormattingButton(icon: "bookmark", isActive: hasBookmark, action: onBookmark)
                 }
-                
-                // Separator
-                Rectangle()
-                    .fill(Color(UIColor.systemGray4))
-                    .frame(width: 0.5, height: 24)
-                
-                // Basic formatting buttons (compact)
-                HStack(spacing: 8) {
-                    liquidGlassFormattingButton(icon: "bold", isActive: isBold, action: onBold)
-                    liquidGlassFormattingButton(icon: "italic", isActive: isItalic, action: onItalic)
-                    liquidGlassFormattingButton(icon: "underline", isActive: isUnderlined, action: onUnderline)
-                }
-                
-                // Separator
-                Rectangle()
-                    .fill(Color(UIColor.systemGray4))
-                    .frame(width: 0.5, height: 24)
-                
-                // Color controls (compact)
-                HStack(spacing: 8) {
-                    liquidGlassColorButton(icon: "paintbrush", isActive: hasTextColor, action: onShowColorPicker)
-                    liquidGlassColorButton(icon: "highlighter", isActive: hasHighlight, action: onShowHighlightPicker)
-                }
-                
-                // Separator
-                Rectangle()
-                    .fill(Color(UIColor.systemGray4))
-                    .frame(width: 0.5, height: 24)
-                
-                // Actions (compact)
-                HStack(spacing: 8) {
-                    liquidGlassActionButton(text: "Link", isActive: hasLink, action: onShowLinkPicker)
-                    liquidGlassActionButton(text: "List", isActive: hasBulletList, action: onBulletList)
-                    liquidGlassActionButton(text: "Align", isActive: false, action: onShowAlignmentPicker)
-                }
-                
-                // Separator
-                Rectangle()
-                    .fill(Color(UIColor.systemGray4))
-                    .frame(width: 0.5, height: 24)
-                
-                // Bookmark button
-                liquidGlassFormattingButton(icon: "bookmark", isActive: hasBookmark, action: onBookmark)
-                
-
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            
+            // Sticky close keyboard button (always visible on the right)
+            Button(action: {
+                HapticFeedback.impact(.light, intensity: 0.6)
+                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+            }) {
+                Image(systemName: "keyboard.chevron.compact.down")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(.primary)
+                    .frame(width: 36, height: 36)
+                    .background(
+                        Circle()
+                            .fill(.ultraThinMaterial)
+                            .glassEffect(.regular, in: Circle())
+                    )
+                    .overlay(
+                        Circle()
+                            .stroke(Color.primary.opacity(0.05), lineWidth: 0.3)
+                    )
+            }
+            .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 2)
+            .padding(.trailing, 14)
         }
         .background(
             // Pure Liquid Glass Effect (iOS 26+ only)
@@ -259,6 +275,7 @@ struct IOSTextFormattingToolbar: View {
                 .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 20)) // Pure glass effect without material interference
         )
         .shadow(color: Color.black.opacity(0.1), radius: 10, x: 0, y: 2)
+        .padding(.horizontal, 20)  // Add margin from screen edges
     }
     
     // MARK: - Action Handlers
@@ -1119,32 +1136,7 @@ private struct IOSToolbarButton: View {
     }
 }
 
-// MARK: - Floating Close Button
-private struct FloatingCloseButton: View {
-    var body: some View {
-        Button(action: {
-            HapticFeedback.impact(.light, intensity: 0.7)
-            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-        }) {
-            Image(systemName: "keyboard.chevron.compact.down")
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundColor(.primary)
-                .frame(width: 44, height: 44)
-                .background(
-                    Circle()
-                        .fill(.ultraThinMaterial)
-                        .glassEffect(.regular, in: Circle())
-                )
-                .overlay(
-                    Circle()
-                        .stroke(Color.primary.opacity(0.1), lineWidth: 0.5)
-                )
-        }
-        .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 3)
-        .scaleEffect(1.0)
-        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: true)
-    }
-}
+
 
 // MARK: - iOS 26 Enhanced Picker Views
 private struct StylePickerView: View {
