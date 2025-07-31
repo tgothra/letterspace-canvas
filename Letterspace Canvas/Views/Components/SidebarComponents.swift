@@ -807,3 +807,137 @@ struct FloatingSidebarButton: View {
         })
     }
 }
+
+// MARK: - Geometry Change Modifier
+struct GeometryChangeModifier<T: Equatable>: ViewModifier {
+    let value: T
+    let action: (T) -> Void
+    
+    func body(content: Content) -> some View {
+        content
+            .onChange(of: value) { _, newValue in
+                action(newValue)
+            }
+    }
+}
+
+extension View {
+    func onGeometryChange<T: Equatable>(for value: T, action: @escaping (T) -> Void) -> some View {
+        modifier(GeometryChangeModifier(value: value, action: action))
+    }
+}
+
+// MARK: - Glass Effect Container
+struct GlassEffectContainer<Content: View>: View {
+    @ViewBuilder var content: Content
+    
+    var body: some View {
+        content
+    }
+}
+
+// MARK: - Glass Menu Effect Navigation
+struct GlassNavigationMenu<Content: View, Label: View>: View, Animatable {
+    var alignment: Alignment
+    var progress: CGFloat
+    var labelSize: CGSize = .init(width: 55, height: 55)
+    var cornerRadius: CGFloat = 30
+    @ViewBuilder var content: Content
+    @ViewBuilder var label: Label
+    
+    /// View Properties
+    @State private var contentSize: CGSize = .zero
+    
+    var animatableData: CGFloat {
+        get { progress }
+        set { progress = newValue }
+    }
+    
+    var body: some View {
+        GlassEffectContainer {
+            let widthDiff = contentSize.width - labelSize.width
+            let heightDiff = contentSize.height - labelSize.height
+            
+            let rWidth = widthDiff * contentOpacity
+            let rHeight = heightDiff * contentOpacity
+            
+            ZStack(alignment: alignment) {
+                content
+                    .compositingGroup()
+                    .scaleEffect(contentScale)
+                    .blur(radius: 14 * blurProgress)
+                    .opacity(contentOpacity)
+                    .background(
+                        GeometryReader { geometry in
+                            Color.clear
+                                .onAppear {
+                                    contentSize = geometry.size
+                                }
+                                .onChange(of: geometry.size) { _, newSize in
+                                    contentSize = newSize
+                                }
+                        }
+                    )
+                    .fixedSize()
+                    .frame(
+                        width: labelSize.width + rWidth,
+                        height: labelSize.height + rHeight
+                    )
+                
+                label
+                    .compositingGroup()
+                    .blur(radius: 14 * blurProgress)
+                    .opacity(1 - labelOpacity)
+                    .frame(width: labelSize.width, height: labelSize.height)
+            }
+            .compositingGroup()
+            .clipShape(.rect(cornerRadius: progress < 0.5 ? min(labelSize.width, labelSize.height) / 2 : cornerRadius))
+            .glassEffect(.regular.interactive(), in: .rect(cornerRadius: progress < 0.5 ? min(labelSize.width, labelSize.height) / 2 : cornerRadius))
+        }
+        .scaleEffect(
+            x: 1 - (blurProgress * 0.35),
+            y: 1 + (blurProgress * 0.45),
+            anchor: scaleAnchor
+        )
+        .offset(y: offset * blurProgress)
+    }
+    
+    var labelOpacity: CGFloat {
+        min(progress / 0.35, 1)
+    }
+    
+    var contentOpacity: CGFloat {
+        max(progress - 0.35, 0) / 0.65
+    }
+    
+    var contentScale: CGFloat {
+        let minAspectScale = min(labelSize.width / contentSize.width, labelSize.height / contentSize.height)
+        return minAspectScale + (1 - minAspectScale) * progress
+    }
+    
+    var blurProgress: CGFloat {
+        return progress > 0.5 ? (1 - progress) / 0.5 : progress / 0.5
+    }
+    
+    var offset: CGFloat {
+        switch alignment {
+        case .bottom, .bottomLeading, .bottomTrailing: return -80
+        case .top, .topLeading, .topTrailing: return 80
+        default: return 0
+        }
+    }
+    
+    var scaleAnchor: UnitPoint {
+        switch alignment {
+        case .bottomLeading: .bottomLeading
+        case .bottom: .bottom
+        case .bottomTrailing: .bottomTrailing
+        case .topLeading: .topLeading
+        case .top: .top
+        case .topTrailing: .topTrailing
+        case .leading: .leading
+        case .trailing: .trailing
+        default: .center
+        }
+    }
+}

@@ -2332,8 +2332,59 @@ private func mainContentView(availableWidth: CGFloat) -> some View {
                                         .matchedGeometryEffect(id: "fullScreenButton", in: buttonTransition)
                                     }
                                     
-                                    // Menu Button (right)
-                                    CircularMenuButton(isMenuOpen: $isCircularMenuOpen)
+                                    // Glass Menu Button (right) - morphing effect
+                                    GlassCircularMenuButton(
+                                        isMenuOpen: $isCircularMenuOpen,
+                                        onDashboard: {
+                                            sidebarMode = .allDocuments
+                                            isRightSidebarVisible = false
+                                            viewMode = .normal
+                                        },
+                                        onSearch: {
+                                            showSearchModal = true
+                                        },
+                                        onNewDocument: {
+                                            let docId = UUID().uuidString
+                                            var d = Letterspace_CanvasDocument(
+                                                title: "Untitled", 
+                                                subtitle: "", 
+                                                elements: [DocumentElement(type: .textBlock, content: "", placeholder: "Start typing...")], 
+                                                id: docId, 
+                                                markers: [], 
+                                                series: nil, 
+                                                variations: [],
+                                                isVariation: false, 
+                                                parentVariationId: nil, 
+                                                createdAt: Date(), 
+                                                modifiedAt: Date(), 
+                                                tags: nil, 
+                                                isHeaderExpanded: false, 
+                                                isSubtitleVisible: true, 
+                                                links: []
+                                            )
+                                            d.save()
+                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                                document = d
+                                                sidebarMode = .details
+                                                isRightSidebarVisible = true
+                                            }
+                                        },
+                                        onFolders: {
+                                            showFoldersModal = true
+                                        },
+                                        onBibleReader: {
+                                            showBibleReaderModal = true
+                                        },
+                                        onSmartStudy: {
+                                            showSmartStudyModal = true
+                                        },
+                                        onRecentlyDeleted: {
+                                            showRecentlyDeletedModal = true
+                                        },
+                                        onSettings: {
+                                            showUserProfileModal = true
+                                        }
+                                    )
                                 }
                             }
                         }
@@ -2421,75 +2472,7 @@ private func mainContentView(availableWidth: CGFloat) -> some View {
             }
             #endif
             
-            // Circular Menu Overlay (iPhone only)
-            #if os(iOS)
-            if UIDevice.current.userInterfaceIdiom == .phone {
-                CircularMenuOverlay(
-                    isMenuOpen: $isCircularMenuOpen,
-                    onDashboard: {
-                        sidebarMode = .allDocuments
-                        isRightSidebarVisible = false
-                        viewMode = .normal
-                    },
-                    onSearch: {
-                        #if os(iOS)
-                        if UIDevice.current.userInterfaceIdiom == .phone {
-                            showSearchModal = true
-                        } else {
-                            searchFieldFocused = true
-                        }
-                        #else
-                        searchFieldFocused = true
-                        #endif
-                    },
-                    onNewDocument: {
-                        // Create new document directly for iPhone (same logic as floating sidebar)
-                        let docId = UUID().uuidString
-                        var d = Letterspace_CanvasDocument(
-                            title: "Untitled", 
-                            subtitle: "", 
-                            elements: [DocumentElement(type: .textBlock, content: "", placeholder: "Start typing...")], 
-                            id: docId, 
-                            markers: [], 
-                            series: nil, 
-                            variations: [],
-                            isVariation: false, 
-                            parentVariationId: nil, 
-                            createdAt: Date(), 
-                            modifiedAt: Date(), 
-                            tags: nil, 
-                            isHeaderExpanded: false, 
-                            isSubtitleVisible: true, 
-                            links: []
-                        )
-                        d.save()
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                            document = d
-                            sidebarMode = .details
-                            // No need to show right sidebar on iPhone
-                        }
-                    },
-                    onFolders: {
-                        showFoldersModal = true
-                    },
-                    onBibleReader: {
-                        showBibleReaderModal = true
-                    },
-                    onSmartStudy: {
-                        // Small delay to prevent gesture conflicts
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                            showSmartStudyModal = true
-                        }
-                    },
-                    onRecentlyDeleted: {
-                        showRecentlyDeletedModal = true
-                    },
-                    onSettings: {
-                        showUserProfileSheet = true
-                    }
-                )
-            }
-            #endif
+            // REMOVED: Old CircularMenuOverlay - now using GlassCircularMenuButton with morphing effect
         }
     }
 
