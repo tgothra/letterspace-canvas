@@ -134,6 +134,22 @@ struct iOS26ScrollDetectingTextEditor: UIViewRepresentable {
                 object: nil
             )
             
+            // Add keyboard hide notification to handle toolbar dismissal properly
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(keyboardWillHide),
+                name: UIResponder.keyboardWillHideNotification,
+                object: nil
+            )
+            
+            // Add keyboard show notification to handle toolbar appearance
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(keyboardWillShow),
+                name: UIResponder.keyboardWillShowNotification,
+                object: nil
+            )
+            
             // Set up scroll-to-top notification
             NotificationCenter.default.addObserver(
                 self,
@@ -1681,34 +1697,27 @@ struct iOS26ScrollDetectingTextEditor: UIViewRepresentable {
             }
 
             let animationCurve = UIView.AnimationOptions(rawValue: UInt(animationCurveRawValue << 16))
+
+            // The keyboard frame is in screen coordinates. We need to know where it is in relation to our text view.
+            let keyboardFrameInView = textView.convert(keyboardFrameEnd, from: nil)
             
-            // Determine if the keyboard is showing or hiding by checking its final position.
-            let isKeyboardHiding = keyboardFrameEnd.origin.y >= UIScreen.main.bounds.height
+            // Calculate the height of the keyboard that is actually obscuring the text view.
+            let obscuredHeight = textView.bounds.intersection(keyboardFrameInView).height
             
-            // Update our stored keyboard height for other functions to use.
-            currentKeyboardHeight = isKeyboardHiding ? 0 : keyboardFrameEnd.height
-            
-            // CRITICAL FIX: Instead of manually animating alpha/isHidden, properly manage inputAccessoryView
-            // This prevents conflicts with iOS's own accessory view management
-            if isKeyboardHiding {
-                // When keyboard is dismissing, let iOS handle the accessory view naturally
-                // Don't manually interfere with alpha or isHidden
-                print("🎹 Keyboard dismissing - letting iOS manage accessory view")
-            } else {
-                // When keyboard is appearing, ensure accessory view is properly set
-                if textView.inputAccessoryView == nil {
-                    print("🔧 Keyboard appearing - ensuring accessory view is attached")
-                    textView.inputAccessoryView = toolbarHostingController?.view
-                }
-            }
+            // Update our stored keyboard height.
+            self.currentKeyboardHeight = max(0, obscuredHeight)
             
             // Animate the inset change to match the keyboard's movement.
             UIView.animate(withDuration: animationDuration, delay: 0, options: [animationCurve], animations: {
                 // By calling our unified function, we ensure that both top and bottom insets are considered.
                 self.updateCombinedInsets()
-            }) { _ in
-                // After keyboard animation completes, ensure cursor is visible
-                if !isKeyboardHiding {
+            })
+
+            // If the keyboard is appearing or visible, ensure the cursor is scrolled into view.
+            // This uses our more robust "Cursor Guardian" instead of the default scrollRangeToVisible.
+            if obscuredHeight > 0 {
+                // Using a small delay ensures that the layout has settled before we scroll.
+                DispatchQueue.main.async {
                     self.ensureCursorIsVisible(textView)
                 }
             }
@@ -1720,6 +1729,78 @@ struct iOS26ScrollDetectingTextEditor: UIViewRepresentable {
                 if let textView = self.textView {
                     textView.setContentOffset(.zero, animated: true)
                 }
+            }
+        }
+        
+        // This handler specifically deals with keyboard dismissal to ensure the toolbar doesn't get stuck
+        @objc private func keyboardWillHide(_ notification: Notification) {
+            guard let textView = textView,
+                  let animationDuration = notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double else {
+                return
+            }
+            
+            print("🎹 Keyboard will hide - animation duration: \(animationDuration)")
+            
+            // Check if this is a swipe-to-dismiss gesture (very fast animation)
+            let isSwipeToDismiss = animationDuration < 0.3
+            
+            if let toolbar = toolbarHostingController?.view {
+                if isSwipeToDismiss {
+                    // For swipe-to-dismiss, immediately hide toolbar and resign first responder
+                    // to prevent the toolbar from getting stuck
+                    print("🎹 Swipe-to-dismiss detected - immediate toolbar dismissal")
+                    toolbar.alpha = 0.0
+                    
+                    // Force the text view to resign first responder
+                    // This ensures iOS properly cleans up the input accessory view
+                    if textView.isFirstResponder {
+                        textView.resignFirstResponder()
+                    }
+                    
+                    // Reset alpha for next appearance after a short delay
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        toolbar.alpha = 1.0
+                    }
+                } else {
+                    // For normal dismissal (e.g., tapping "Done"), animate with keyboard
+                    UIView.animate(withDuration: animationDuration,
+                                 delay: 0,
+                                 options: [.curveEaseInOut],
+                                 animations: {
+                        toolbar.alpha = 0.0
+                    }) { _ in
+                        // Reset alpha for next appearance
+                        toolbar.alpha = 1.0
+                    }
+                    
+                    // CRITICAL: Always resign first responder to ensure document gestures work
+                    // This must happen for ALL keyboard dismissals, not just swipe-to-dismiss
+                    if textView.isFirstResponder {
+                        textView.resignFirstResponder()
+                    }
+                }
+            }
+            
+            // Reset keyboard height since it's hiding
+            self.currentKeyboardHeight = 0
+            self.updateCombinedInsets()
+        }
+        
+        // This handler ensures the toolbar appears properly when the keyboard shows
+        @objc private func keyboardWillShow(_ notification: Notification) {
+            guard let animationDuration = notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double else {
+                return
+            }
+            
+            // Animate the toolbar fade-in along with keyboard appearance
+            if let toolbar = toolbarHostingController?.view {
+                toolbar.alpha = 0.0
+                UIView.animate(withDuration: animationDuration,
+                             delay: 0,
+                             options: [.curveEaseInOut],
+                             animations: {
+                    toolbar.alpha = 1.0
+                })
             }
         }
         
