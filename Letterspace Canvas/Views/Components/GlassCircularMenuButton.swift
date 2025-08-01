@@ -111,8 +111,8 @@ struct GlassCircularMenuButton: View {
                     .offset(y: isMenuOpen ? -3 : 0)
             }
             .animation(.easeInOut(duration: 0.2), value: isMenuOpen)
-            // ✨ iOS 26 Animated SF Symbol: Variable color pulse during menu toggle
-            .symbolEffect(.variableColor.reversing, value: menuToggleAnimationTrigger)
+            // ✨ iOS 26 Animated SF Symbol: Bounce during menu toggle
+            .symbolEffect(.bounce, value: menuToggleAnimationTrigger)
             .frame(width: 56, height: 56)
             .glassEffect(.regular.tint(theme.accent.opacity(0.8)).interactive())
             .shadow(color: Color.black.opacity(0.2), radius: 8, x: 0, y: 2)

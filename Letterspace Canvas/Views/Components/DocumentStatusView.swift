@@ -90,8 +90,8 @@ struct DocumentStatusView: View {
                                 .foregroundStyle(wipDocuments.contains(document.id) ? .orange : (wipHover ? theme.accent : (colorScheme == .dark ? .white : .black)))
                                 .scaleEffect(wipHover ? 1.2 : 1.0)
                                 .animation(.easeInOut(duration: 0.15), value: wipHover)
-                                // ✨ iOS 26 Animated SF Symbol: Pulse when WIP toggled
-                                .symbolEffect(.pulse, value: wipAnimationTrigger)
+                                // ✨ iOS 26 Animated SF Symbol: Bounce when WIP toggled
+                                .symbolEffect(.bounce, value: wipAnimationTrigger)
                         }
                         .buttonStyle(.plain)
                         .help("Mark as Work in Progress")
@@ -116,8 +116,8 @@ struct DocumentStatusView: View {
                                 .foregroundStyle(hasUpcomingSchedule ? .blue : (calendarHover ? theme.accent : (colorScheme == .dark ? .white : .black)))
                                 .scaleEffect(calendarHover ? 1.2 : 1.0)
                                 .animation(.easeInOut(duration: 0.15), value: calendarHover)
-                                // ✨ iOS 26 Animated SF Symbol: Pulse when calendar action triggered
-                                .symbolEffect(.pulse, value: calendarAnimationTrigger)
+                                // ✨ iOS 26 Animated SF Symbol: Bounce when calendar action triggered
+                                .symbolEffect(.bounce, value: calendarAnimationTrigger)
                         }
                         .buttonStyle(.plain)
                         .help("Add to Calendar")

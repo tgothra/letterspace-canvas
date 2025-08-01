@@ -65,8 +65,8 @@ struct MultiSelectionActionBar: View {
             }) {
                 HStack(spacing: 4) {
                     Image(systemName: "clock.fill")
-                        // ✨ iOS 26 Animated SF Symbol: Pulse on bulk WIP action
-                        .symbolEffect(.pulse, value: wipAnimationTrigger)
+                        // ✨ iOS 26 Animated SF Symbol: Bounce on bulk WIP action
+                        .symbolEffect(.bounce, value: wipAnimationTrigger)
                     Text("WIP")
                 }
                 .font(.system(size: 13))
@@ -93,8 +93,8 @@ struct MultiSelectionActionBar: View {
             }) {
                 HStack(spacing: 4) {
                     Image(systemName: "trash.fill")
-                        // ✨ iOS 26 Animated SF Symbol: Pulse on delete action
-                        .symbolEffect(.pulse, value: deleteAnimationTrigger)
+                        // ✨ iOS 26 Animated SF Symbol: Bounce on delete action
+                        .symbolEffect(.bounce, value: deleteAnimationTrigger)
                     Text("Delete")
                         .fixedSize(horizontal: true, vertical: false) // Ensure text doesn't get truncated
                 }
