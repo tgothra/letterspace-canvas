@@ -412,21 +412,33 @@ struct DashboardView: View {
     }
     
     private func togglePin(for docId: String) {
-        if pinnedDocuments.contains(docId) {
-            pinnedDocuments.remove(docId)
-        } else {
-            pinnedDocuments.insert(docId)
+        // ✅ FIX: Use transaction to prevent flash during state updates
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        
+        withTransaction(transaction) {
+            if pinnedDocuments.contains(docId) {
+                pinnedDocuments.remove(docId)
+            } else {
+                pinnedDocuments.insert(docId)
+            }
+            saveDocumentState()
         }
-        saveDocumentState()
     }
     
     private func toggleWIP(_ docId: String) {
-        if wipDocuments.contains(docId) {
-            wipDocuments.remove(docId)
-        } else {
-            wipDocuments.insert(docId)
+        // ✅ FIX: Use transaction to prevent flash during state updates
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        
+        withTransaction(transaction) {
+            if wipDocuments.contains(docId) {
+                wipDocuments.remove(docId)
+            } else {
+                wipDocuments.insert(docId)
+            }
+            saveDocumentState()
         }
-        saveDocumentState()
     }
     
 private func deleteSelectedDocuments() {
@@ -1008,38 +1020,50 @@ var body: some View {
                             MultiSelectionActionBar(
                                 selectedCount: selectedDocuments.count,
                                 onPin: {
-                                    // Check if all selected documents are already pinned
-                                    let allPinned = selectedDocuments.allSatisfy { pinnedDocuments.contains($0) }
+                                    // ✅ FIX: Use transaction to prevent flash during bulk updates
+                                    var transaction = Transaction()
+                                    transaction.disablesAnimations = true
                                     
-                                    if allPinned {
-                                        // If all are pinned, unpin all of them
-                                        for docId in selectedDocuments {
-                                            pinnedDocuments.remove(docId)
+                                    withTransaction(transaction) {
+                                        // Check if all selected documents are already pinned
+                                        let allPinned = selectedDocuments.allSatisfy { pinnedDocuments.contains($0) }
+                                        
+                                        if allPinned {
+                                            // If all are pinned, unpin all of them
+                                            for docId in selectedDocuments {
+                                                pinnedDocuments.remove(docId)
+                                            }
+                                        } else {
+                                            // Otherwise, pin any that aren't pinned yet
+                                            for docId in selectedDocuments {
+                                                pinnedDocuments.insert(docId)
+                                            }
                                         }
-                                    } else {
-                                        // Otherwise, pin any that aren't pinned yet
-                                        for docId in selectedDocuments {
-                                            pinnedDocuments.insert(docId)
-                                        }
+                                        saveDocumentState()
                                     }
-                                    saveDocumentState()
                                 },
                                 onWIP: {
-                                    // Check if all selected documents are already WIP
-                                    let allWIP = selectedDocuments.allSatisfy { wipDocuments.contains($0) }
+                                    // ✅ FIX: Use transaction to prevent flash during bulk updates
+                                    var transaction = Transaction()
+                                    transaction.disablesAnimations = true
                                     
-                                    if allWIP {
-                                        // If all are WIP, remove all of them
-                                        for docId in selectedDocuments {
-                                            wipDocuments.remove(docId)
+                                    withTransaction(transaction) {
+                                        // Check if all selected documents are already WIP
+                                        let allWIP = selectedDocuments.allSatisfy { wipDocuments.contains($0) }
+                                        
+                                        if allWIP {
+                                            // If all are WIP, remove all of them
+                                            for docId in selectedDocuments {
+                                                wipDocuments.remove(docId)
+                                            }
+                                        } else {
+                                            // Otherwise, add any that aren't WIP yet
+                                            for docId in selectedDocuments {
+                                                wipDocuments.insert(docId)
+                                            }
                                         }
-                                    } else {
-                                        // Otherwise, add any that aren't WIP yet
-                                        for docId in selectedDocuments {
-                                            wipDocuments.insert(docId)
-                                        }
+                                        saveDocumentState()
                                     }
-                                    saveDocumentState()
                                 },
                                 onDelete: deleteSelectedDocuments
                             )
