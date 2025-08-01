@@ -14,6 +14,18 @@ import CoreGraphics
 struct DashboardView: View {
     @Binding var document: Letterspace_CanvasDocument
     var onSelectDocument: (Letterspace_CanvasDocument) -> Void // Added this property
+    var onMenuTap: (() -> Void)? = nil // Callback to trigger the morph menu
+    
+    // Individual menu action callbacks for morphing bottom bar
+    var onDashboard: (() -> Void)? = nil
+    var onSearch: (() -> Void)? = nil
+    var onNewDocument: (() -> Void)? = nil
+    var onFolders: (() -> Void)? = nil
+    var onBibleReader: (() -> Void)? = nil
+    var onSmartStudy: (() -> Void)? = nil
+    var onRecentlyDeleted: (() -> Void)? = nil
+    var onSettings: (() -> Void)? = nil
+    
     // Removed floating sidebar parameters - iPhone uses circular menu, iPad uses native NavigationSplitView
     // Dummy property for compatibility
     private var showFloatingSidebar: Bool { false }
@@ -48,6 +60,16 @@ struct DashboardView: View {
     private let colorManager = TagColorManager.shared
     @State private var isViewButtonHovering = false
     @State private var showDetailsCard = false
+    @State private var activeBottomBarTab: DashboardTab = .pinned
+    
+    // iOS 26 detection
+    private var isiOS26: Bool {
+        if #available(iOS 26, *) {
+            return true
+        } else {
+            return false
+        }
+    }
     @State private var selectedDetailsDocument: Letterspace_CanvasDocument?
     @State private var showShareSheet = false
     // Add a refresh trigger state variable
@@ -859,12 +881,77 @@ var body: some View {
                 #endif
             }()
             
+            mainContentWithOverlays(isIPad: isIPad)
+        }
+        .overlay(macOSModal)
+        .onAppear {
+            // Only do essential initialization - like Apple Notes and Craft
+            // Load basic UserDefaults data (fast operations)
+            if let pinnedArray = UserDefaults.standard.array(forKey: "PinnedDocuments") as? [String] {
+                pinnedDocuments = Set(pinnedArray)
+            }
+            if let wipArray = UserDefaults.standard.array(forKey: "WIPDocuments") as? [String] {
+                wipDocuments = Set(wipArray)
+            }
+            if let calendarArray = UserDefaults.standard.array(forKey: "CalendarDocuments") as? [String] {
+                calendarDocuments = Set(calendarArray)
+            }
+            loadDocuments()
+        }
+        .onChange(of: refreshTrigger) {
+            loadDocuments()
+        }
+    }
+    
+    // MARK: - Extracted Views to Break Up Complex Expression
+    
+    @ViewBuilder
+    private func mainContentWithOverlays(isIPad: Bool) -> some View {
             ZStack { // Main ZStack for overlay handling
                 dashboardContent // Use the extracted content view
                 
                 // Floating selection bar for All Documents multi-select (iPad only)
                 #if os(iOS)
                 if UIDevice.current.userInterfaceIdiom == .pad && isAllDocumentsEditMode {
+                floatingSelectionBar
+            }
+            #endif
+        }
+        .modifier(ContentBlurModifier(isModalPresented: isModalPresented, showPinnedModal: showPinnedModal, showWIPModal: showWIPModal, showSchedulerModal: showSchedulerModal))
+        .overlay { modalOverlayView } // Apply overlay first
+        .animation(.easeInOut(duration: 0.2), value: isModalPresented || showPinnedModal || showWIPModal || showSchedulerModal)
+                          .overlay(alignment: .bottom) {
+             // Floating bottom bar with custom sheet overlays
+             FloatingDashboardBottomBar(
+                 documents: $documents,
+                 pinnedDocuments: $pinnedDocuments,
+                 wipDocuments: $wipDocuments,
+                 calendarDocuments: $calendarDocuments,
+                 onSelectDocument: onSelectDocument,
+                 onPin: togglePin,
+                 onWIP: toggleWIP,
+                 onCalendar: toggleCalendar,
+                 onDashboard: onDashboard,
+                 onSearch: onSearch,
+                 onNewDocument: onNewDocument,
+                 onFolders: onFolders,
+                 onBibleReader: onBibleReader,
+                 onSmartStudy: onSmartStudy,
+                 onRecentlyDeleted: onRecentlyDeleted,
+                 onSettings: onSettings
+             )
+         }
+         .sheet(isPresented: $showTallyLabelModal) {
+             TallyLabelModal()
+                 .presentationBackground(.thinMaterial)
+                 .presentationDetents([.medium, .large])
+                 .presentationDragIndicator(.visible)
+         }
+        .modifier(SafeAreaModifier(isIPad: isIPad))
+    }
+    
+    @ViewBuilder
+    private var floatingSelectionBar: some View {
                     VStack {
                         Spacer()
                         
@@ -919,420 +1006,31 @@ var body: some View {
                     .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isAllDocumentsEditMode)
                     .animation(.easeInOut(duration: 0.15), value: selectedAllDocuments.count)
                 }
-                #endif
-            }
-            .blur(radius: isModalPresented || showPinnedModal || showWIPModal || showSchedulerModal ? 3 : 0)
-            .opacity(isModalPresented || showPinnedModal || showWIPModal || showSchedulerModal ? 0.7 : 1.0)
-            .overlay { modalOverlayView } // Apply overlay first
-
-            .animation(.easeInOut(duration: 0.2), value: isModalPresented || showPinnedModal || showWIPModal || showSchedulerModal)
-            .sheet(isPresented: $showTallyLabelModal) {
-                TallyLabelModal()
-                    .presentationBackground(.thinMaterial)
-                    .presentationDetents([.medium, .large])
-                    .presentationDragIndicator(.visible)
-            }
-            // BREAK UP THE COMPLEX EXPRESSION:
-            #if os(iOS)
-            .modifier(IgnoresSafeAreaModifier(isIPad: isIPad))
-            #else
-            .ignoresSafeArea()
-            #endif
-        }
+    
+    // MARK: - ViewModifiers to Break Up Complex Expressions
+    
+    struct ContentBlurModifier: ViewModifier {
+        let isModalPresented: Bool
+        let showPinnedModal: Bool
+        let showWIPModal: Bool
+        let showSchedulerModal: Bool
         
-        // ✨ iOS 26 Dashboard Bottom Bar - positioned to left of green FAB
-        .overlay(
-            VStack {
-                Spacer()
-                HStack {
-                    Spacer()
-                    
-                    // Dashboard Bottom Bar (positioned to left of green FAB)
-                    #if os(iOS)
-                    DashboardBottomBarView(
-                        documents: $documents,
-                        pinnedDocuments: $pinnedDocuments,
-                        wipDocuments: $wipDocuments,
-                        calendarDocuments: $calendarDocuments,
-                        onSelectDocument: onSelectDocument,
-                        onPin: togglePin,
-                        onWIP: toggleWIP,
-                        onCalendar: toggleCalendar
-                    )
-                    .padding(.trailing, 80) // Space for green FAB
-                    .padding(.bottom, 20)
-                    #endif
-                }
-            }
-            .allowsHitTesting(true)
-        )
-
-        
-        .overlay(macOSModal)
-        .onAppear {
-            // Only do essential initialization - like Apple Notes and Craft
-            // Load basic UserDefaults data (fast operations)
-                if let pinnedArray = UserDefaults.standard.array(forKey: "PinnedDocuments") as? [String] {
-                    pinnedDocuments = Set(pinnedArray)
-                }
-                if let wipArray = UserDefaults.standard.array(forKey: "WIPDocuments") as? [String] {
-                    wipDocuments = Set(wipArray)
-                }
-                if let calendarArray = UserDefaults.standard.array(forKey: "CalendarDocuments") as? [String] {
-                    calendarDocuments = Set(calendarArray)
-                }
-                
-            // Load visible columns (fast operation)
-                if let savedColumns = UserDefaults.standard.array(forKey: "VisibleColumns") as? [String] {
-                    visibleColumns = Set(savedColumns)
-                } else {
-                // Set default visible columns
-                        visibleColumns = Set(["name"])
-                }
-                
-            // Load carousel position (fast operation)
-                if !isFirstLaunch {
-                    selectedCarouselIndex = UserDefaults.standard.integer(forKey: "SelectedCarouselIndex")
-                } else {
-                    let savedIndex = UserDefaults.standard.integer(forKey: "SelectedCarouselIndex")
-                    if UserDefaults.standard.object(forKey: "SelectedCarouselIndex") == nil {
-                    selectedCarouselIndex = 0
-                    } else {
-                    selectedCarouselIndex = savedIndex
-                    }
-                isFirstLaunch = false
-                }
-                
-            // Load documents in background (heavy operation)
-            Task.detached(priority: .utility) {
-                await MainActor.run {
-                loadDocuments()
-                initializeCarouselSections()
-                }
-            }
-            
-            // Load folders in background (heavy operation)
-            Task.detached(priority: .utility) {
-                await MainActor.run {
-                    loadFolders()
-                        }
-                    }
-                    
-            // Set up notification observers (fast operation)
-            setupNotificationObservers()
-            
-            // Listen for swipe-down navigation
-            NotificationCenter.default.addObserver(
-                forName: NSNotification.Name("SwipeDownDismissStarted"),
-                object: nil,
-                queue: .main
-            ) { _ in
-                isSwipeDownNavigation = true
-                // Don't reload documents, just show loading placeholders briefly
-                // Reset after animation should be complete
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    isSwipeDownNavigation = false
-                }
-            }
-            }
-            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("DocumentListDidUpdate"))) { _ in
-                loadDocuments()
-                // Refresh carousel sections when document list updates
-                initializeCarouselSections()
-            }
-            .overlay( // Keep the MultiSelectionActionBar overlay here
-                Group {
-                    if selectedDocuments.count >= 2 {
-                        VStack {
-                            Spacer()
-                            MultiSelectionActionBar(
-                                selectedCount: selectedDocuments.count,
-                                onPin: {
-                                    // ✅ FIX: Use transaction to prevent flash during bulk updates
-                                    var transaction = Transaction()
-                                    transaction.disablesAnimations = true
-                                    
-                                    withTransaction(transaction) {
-                                        // Check if all selected documents are already pinned
-                                        let allPinned = selectedDocuments.allSatisfy { pinnedDocuments.contains($0) }
-                                        
-                                        if allPinned {
-                                            // If all are pinned, unpin all of them
-                                            for docId in selectedDocuments {
-                                                pinnedDocuments.remove(docId)
-                                            }
-                                        } else {
-                                            // Otherwise, pin any that aren't pinned yet
-                                            for docId in selectedDocuments {
-                                                pinnedDocuments.insert(docId)
-                                            }
-                                        }
-                                        saveDocumentState()
-                                    }
-                                },
-                                onWIP: {
-                                    // ✅ FIX: Use transaction to prevent flash during bulk updates
-                                    var transaction = Transaction()
-                                    transaction.disablesAnimations = true
-                                    
-                                    withTransaction(transaction) {
-                                        // Check if all selected documents are already WIP
-                                        let allWIP = selectedDocuments.allSatisfy { wipDocuments.contains($0) }
-                                        
-                                        if allWIP {
-                                            // If all are WIP, remove all of them
-                                            for docId in selectedDocuments {
-                                                wipDocuments.remove(docId)
-                                            }
-                                        } else {
-                                            // Otherwise, add any that aren't WIP yet
-                                            for docId in selectedDocuments {
-                                                wipDocuments.insert(docId)
-                                            }
-                                        }
-                                        saveDocumentState()
-                                    }
-                                },
-                                onDelete: deleteSelectedDocuments
-                            )
-                            .padding(.bottom, 24)
-                            .transition(
-                                .asymmetric(
-                                    insertion: .scale(scale: 0.8)
-                                        .combined(with: .offset(y: 50))
-                                        .combined(with: .opacity),
-                                    removal: .scale(scale: 0.8)
-                                        .combined(with: .offset(y: 50))
-                                        .combined(with: .opacity)
-                                )
-                            )
-                        }
-                    }
-                }
-                .animation(.spring(response: 0.3, dampingFraction: 0.7, blendDuration: 0), value: selectedDocuments.count > 1)
-            )
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("DocumentScheduledUpdate"))) { notification in
-            guard let userInfo = notification.userInfo,
-                  let documentId = userInfo["documentId"] as? String else {
-                return
-            }
-            
-            // First find the document with this ID
-            if let document = documents.first(where: { $0.id == documentId }) {
-                // Only add to calendarDocuments if it has upcoming schedules
-                if hasUpcomingSchedules(for: document) {
-                    // Make sure the document is added to calendarDocuments
-                    if !calendarDocuments.contains(documentId) {
-                        calendarDocuments.insert(documentId)
-                        // Save calendar documents state
-                        UserDefaults.standard.set(Array(calendarDocuments), forKey: "CalendarDocuments")
-                        UserDefaults.standard.synchronize()
-                        
-                        // ✅ FIX: Don't rebuild entire carousel - let calendar section update itself
-                        // The SermonCalendar view will automatically update when calendarDocuments changes
-                        
-                        // Force UI update
-                        DispatchQueue.main.async {
-                            // Post notification to update views
-                            NotificationCenter.default.post(name: NSNotification.Name("DocumentListDidUpdate"), object: nil)
-                        }
-                    }
-                }
-            }
+        func body(content: Content) -> some View {
+            content
+                .blur(radius: isModalPresented || showPinnedModal || showWIPModal || showSchedulerModal ? 3 : 0)
+                .opacity(isModalPresented || showPinnedModal || showWIPModal || showSchedulerModal ? 0.7 : 1.0)
         }
-        .onDisappear {
-            // Remove notification observer when view disappears
-            NotificationCenter.default.removeObserver(self)
-        }
-        .onChange(of: refreshTrigger) { _, _ in
-            // This empty handler is sufficient to trigger a refresh
-        }
-        .onChange(of: colorScheme) {
-            // Explicitly trigger table refresh when color scheme changes
-            tableRefreshID = UUID()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ToggleWIP"))) { notification in
-            if let documentId = notification.userInfo?["documentId"] as? String {
-                toggleWIP(documentId)
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("DismissTallyModal"))) { _ in
-            print("🎯 Received DismissTallyModal notification")
-            showTallyLabelModal = false
-        }
-        // iPad Modal Overlays
-        .overlay(
-            Group {
-                // Pinned Modal
-                if showPinnedModal {
-                    iPadModalOverlay(
-                        isPresented: $showPinnedModal,
-                        title: "Pinned",
-                        icon: "pin.fill"
-                    ) {
-                        PinnedSection(
-                            documents: documents,
-                            pinnedDocuments: $pinnedDocuments,
-                            onSelectDocument: { selectedDoc in
-                                onSelectDocument(selectedDoc)
-                                showPinnedModal = false
-                            },
-                            document: $document,
-                            sidebarMode: $sidebarMode,
-                            isRightSidebarVisible: $isRightSidebarVisible,
-                            isExpanded: .constant(true), // Always expanded in modal
-                            isCarouselMode: false, // Disable carousel mode in modal
-                            showExpandButtons: false, // No expand buttons in modal
-                            hideHeader: true // Hide internal header since we have modal header
-                        )
-                    }
-                }
-                
-                // WIP Modal
-                if showWIPModal {
-                    iPadModalOverlay(
-                        isPresented: $showWIPModal,
-                        title: "Work in Progress",
-                        icon: "clock.badge.checkmark"
-                    ) {
-                        WIPSection(
-                            documents: documents,
-                            wipDocuments: $wipDocuments,
-                            document: $document,
-                            sidebarMode: $sidebarMode,
-                            isRightSidebarVisible: $isRightSidebarVisible,
-                            isExpanded: .constant(true), // Always expanded in modal
-                            isCarouselMode: false, // Disable carousel mode in modal
-                            showExpandButtons: false, // No expand buttons in modal
-                            hideHeader: true // Hide internal header since we have modal header
-                        )
-                    }
-                }
-                
-                // Scheduler Modal
-                if showSchedulerModal {
-                    iPadModalOverlay(
-                        isPresented: $showSchedulerModal,
-                        title: "Document Schedule",
-                        icon: "calendar"
-                    ) {
-                        SermonCalendar(
-                            documents: documents,
-                            calendarDocuments: calendarDocuments,
-                            isExpanded: .constant(true), // Always expanded in modal
-                            onShowModal: { data in
-                                self.calendarModalData = data 
-                            },
-                            isCarouselMode: false, // Disable carousel mode in modal
-                            showExpandButtons: false, // No expand buttons in modal
-                            hideHeader: false, // Keep header area for padding, but hide content below
-                            showMonthSelectorOnly: true // ONLY show month selector
-                        )
-                    }
-                }
-            }
-        )
-        // iOS: Use sheet for Document Details (iPhone & iPad)
-        #if os(iOS)
-        .sheet(isPresented: Binding(
-            get: { showDetailsCard && selectedDetailsDocument != nil },
-            set: { show in
-                if !show {
-                    showDetailsCard = false
-                    selectedDetailsDocument = nil
-                }
-            }
-        )) {
-            if let selectedDoc = selectedDetailsDocument,
-               let currentIndex = documents.firstIndex(where: { $0.id == selectedDoc.id }) {
-                DocumentDetailsCard(
-                    document: $documents[currentIndex],
-                    allLocations: allLocations,
-                    onNext: navigateToNextDocument,
-                    onPrevious: navigateToPreviousDocument,
-                    canNavigateNext: canNavigateNext,
-                    canNavigatePrevious: canNavigatePrevious,
-                    onDismiss: {
-                        showDetailsCard = false
-                        selectedDetailsDocument = nil
-                    }
-                )
-                .id(selectedDoc.id)
-                .presentationBackground(.ultraThinMaterial)
-                .presentationDetents([.height(600)])
-                .presentationDragIndicator(.visible)
-            }
-        }
-        #endif
     }
     
-    // iPad Modal Overlay Helper
-    @ViewBuilder
-    private func iPadModalOverlay<Content: View>(
-        isPresented: Binding<Bool>,
-        title: String,
-        icon: String? = nil,
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        ZStack {
-            // Background blur similar to smart study modals
-            Color.clear
-                .contentShape(Rectangle())
-                .ignoresSafeArea()
-                .onTapGesture {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        isPresented.wrappedValue = false
-                    }
-                }
-            
-            // Modal content centered on screen
-            VStack(spacing: 0) {
-                // Modal header with icon support
-                HStack(spacing: 8) {
-                    if let icon = icon {
-                        Image(systemName: icon)
-                            .font(.system(size: 18, weight: .medium))
-                            .foregroundStyle(theme.primary)
-                    }
-                    
-                    Text(title)
-                        .font(.custom("InterTight-Medium", size: 22))
-                        .foregroundStyle(theme.primary)
-                    
-                    Spacer()
-                    
-                    Button("Done") {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            isPresented.wrappedValue = false
-                        }
-                    }
-                    .font(.custom("InterTight-Medium", size: 16))
-                    .foregroundStyle(theme.accent)
-                }
-                .padding(.horizontal, 24)
-                .padding(.top, title == "Document Schedule" ? 100 : 20) // Extra top padding for Document Schedule
-                .padding(.bottom, 20)
-                .background(colorScheme == .dark ? Color(.sRGB, white: 0.12) : .white)
-                
-                // Divider after header
-                Rectangle()
-                    .fill(.separator)
-                    .frame(height: 1)
-                    .padding(.horizontal, 24)
-                
-                // Content
-                content()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(colorScheme == .dark ? Color(.sRGB, white: 0.12) : .white)
-            }
-            .frame(width: 600, height: 500)
-            .background(colorScheme == .dark ? Color(.sRGB, white: 0.12) : .white)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 10)
-            .transition(.asymmetric(
-                insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .center)),
-                removal: .opacity.combined(with: .scale(scale: 0.95, anchor: .center))
-            ))
+    struct SafeAreaModifier: ViewModifier {
+        let isIPad: Bool
+        
+        func body(content: Content) -> some View {
+        #if os(iOS)
+            content.modifier(IgnoresSafeAreaModifier(isIPad: isIPad))
+            #else
+            content.ignoresSafeArea()
+        #endif
         }
     }
     

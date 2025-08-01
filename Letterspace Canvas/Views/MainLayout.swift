@@ -1644,6 +1644,60 @@ private func mainContentView(availableWidth: CGFloat) -> some View {
                 onSelectDocument: { selectedDoc in
                                             self.loadAndOpenDocument(id: selectedDoc.id)
                                         },
+                onMenuTap: {
+                    withAnimation(.bouncy(duration: 0.7, extraBounce: 0.01)) {
+                        isCircularMenuOpen = true
+                    }
+                },
+                onDashboard: {
+                    sidebarMode = .allDocuments
+                    isRightSidebarVisible = false
+                    viewMode = .normal
+                },
+                onSearch: {
+                    showSearchModal = true
+                },
+                onNewDocument: {
+                    let docId = UUID().uuidString
+                    var d = Letterspace_CanvasDocument(
+                        title: "Untitled", 
+                        subtitle: "", 
+                        elements: [DocumentElement(type: .textBlock, content: "", placeholder: "Start typing...")], 
+                        id: docId, 
+                        markers: [], 
+                        series: nil, 
+                        variations: [],
+                        isVariation: false, 
+                        parentVariationId: nil, 
+                        createdAt: Date(), 
+                        modifiedAt: Date(), 
+                        tags: nil, 
+                        isHeaderExpanded: false, 
+                        isSubtitleVisible: true, 
+                        links: []
+                    )
+                    d.save()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        document = d
+                        sidebarMode = .details
+                        isRightSidebarVisible = true
+                    }
+                },
+                onFolders: {
+                    showFoldersModal = true
+                },
+                onBibleReader: {
+                    showBibleReaderModal = true
+                },
+                onSmartStudy: {
+                    showSmartStudyModal = true
+                },
+                onRecentlyDeleted: {
+                    showRecentlyDeletedModal = true
+                },
+                onSettings: {
+                    showUserProfileModal = true
+                },
                 sidebarMode: $sidebarMode, // Pass sidebarMode binding
                 isRightSidebarVisible: $isRightSidebarVisible // Pass isRightSidebarVisible binding
                                     )

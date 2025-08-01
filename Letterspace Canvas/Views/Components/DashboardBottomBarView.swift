@@ -1,5 +1,12 @@
 import SwiftUI
 
+/// Sheet Detent Positions
+enum SheetDetent {
+    case compact
+    case medium
+    case large
+}
+
 /// Dashboard Tab Enum for Bottom Bar
 enum DashboardTab: String, CaseIterable {
     case pinned = "Pinned"
@@ -29,13 +36,17 @@ enum DashboardTab: String, CaseIterable {
     }
 }
 
-struct DashboardBottomBarView: View {
+/// Floating Dashboard Bottom Bar with Custom Sheet Overlays
+struct FloatingDashboardBottomBar: View {
     @Environment(\.themeColors) var theme
     @Environment(\.colorScheme) var colorScheme
     
     // State management
-    @State private var activeTab: DashboardTab = .pinned
-    @State private var showBottomBar: Bool = true
+    @State private var selectedTab: DashboardTab? = nil
+    @State private var showSheet: Bool = false
+    @State private var currentTabIndex: Int = 0
+    @State private var dragOffset: CGFloat = 0
+    @State private var isDragging: Bool = false
     
     // Dashboard data bindings
     @Binding var documents: [Letterspace_CanvasDocument]
@@ -49,46 +60,24 @@ struct DashboardBottomBarView: View {
     let onWIP: (String) -> Void
     let onCalendar: (String) -> Void
     
+    // Menu actions
+    let onDashboard: (() -> Void)?
+    let onSearch: (() -> Void)?
+    let onNewDocument: (() -> Void)?
+    let onFolders: (() -> Void)?
+    let onBibleReader: (() -> Void)?
+    let onSmartStudy: (() -> Void)?
+    let onRecentlyDeleted: (() -> Void)?
+    let onSettings: (() -> Void)?
+    
     var body: some View {
-        // Bottom bar trigger button (positioned to left of green FAB)
-        Button(action: {
-            withAnimation(.bouncy(duration: 0.5, extraBounce: 0.1)) {
-                showBottomBar = true
-            }
-        }) {
-            HStack(spacing: 4) {
-                // Show active tab icon
-                Image(systemName: activeTab.symbolImage)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.white)
-                    .symbolEffect(.bounce, value: activeTab)
-                
-                // Show count badge for active tab
-                if let count = getTabCount(activeTab), count > 0 {
-                    Text("\(count)")
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(
-                            Capsule()
-                                .fill(activeTab.color.opacity(0.8))
-                        )
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(
-                Capsule()
-                    .fill(.ultraThinMaterial)
-                    .glassEffect(.regular.interactive())
-            )
-            .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 2)
-        }
-        .sheet(isPresented: $showBottomBar) {
-            DashboardBottomBarContent(
-                activeTab: $activeTab,
+        GeometryReader { geometry in
+            ZStack {
+                // Custom sheet overlay
+                if showSheet, let selectedTab = selectedTab {
+                    DashboardSheetOverlay(
+                        tab: selectedTab,
+                        isPresented: $showSheet,
                 documents: $documents,
                 pinnedDocuments: $pinnedDocuments,
                 wipDocuments: $wipDocuments,
@@ -96,15 +85,78 @@ struct DashboardBottomBarView: View {
                 onSelectDocument: onSelectDocument,
                 onPin: onPin,
                 onWIP: onWIP,
-                onCalendar: onCalendar
-            )
-            .presentationDetents([.height(isiOS26 ? 80 : 130), .fraction(0.6), .large])
-            .presentationBackgroundInteraction(.enabled)
-            .presentationCornerRadius(20)
+                onCalendar: onCalendar,
+                        onDashboard: onDashboard,
+                        onSearch: onSearch,
+                        onNewDocument: onNewDocument,
+                        onFolders: onFolders,
+                        onBibleReader: onBibleReader,
+                        onSmartStudy: onSmartStudy,
+                        onRecentlyDeleted: onRecentlyDeleted,
+                        onSettings: onSettings
+                    )
+                    .zIndex(1000)
+                }
+                
+                // Floating bottom bar
+                VStack {
+                    Spacer()
+                    
+                    HStack(spacing: 0) {
+                        ForEach(Array(DashboardTab.allCases.enumerated()), id: \.element.rawValue) { index, tab in
+                            TabButton(
+                                tab: tab,
+                                count: getTabCount(tab),
+                                isSelected: selectedTab == tab,
+                                action: {
+                                    HapticFeedback.impact(.light)
+                                    selectedTab = tab
+                                    currentTabIndex = index
+                                    withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                                        showSheet = true
+                                    }
+                                }
+                            )
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .background(
+                        RoundedRectangle(cornerRadius: 32)
+                            .fill(.clear)
+                            .glassEffect(.regular.interactive(), in: RoundedRectangle(cornerRadius: 32))
+                            .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: 4)
+                    )
+                    .padding(.horizontal, 40)
+                    .padding(.bottom, geometry.safeAreaInsets.bottom > 0 ? 8 : 20)
+                    .gesture(
+                        DragGesture()
+                            .onChanged { value in
+                                isDragging = true
+                                let barWidth = geometry.size.width - 80 // Account for horizontal padding
+                                let tabWidth = barWidth / CGFloat(DashboardTab.allCases.count)
+                                let touchX = value.location.x - 40 // Adjust for horizontal padding
+                                
+                                // Calculate which tab should be selected based on touch position
+                                let tabIndex = max(0, min(DashboardTab.allCases.count - 1, Int(touchX / tabWidth)))
+                                
+                                if tabIndex != currentTabIndex {
+                                    currentTabIndex = tabIndex
+                                    selectedTab = DashboardTab.allCases[tabIndex]
+                                    HapticFeedback.impact(.light)
+                                }
+                            }
+                            .onEnded { value in
+                                isDragging = false
+                                // Keep the current selection
+                            }
+                    )
+                }
+            }
         }
+        .ignoresSafeArea(edges: .bottom)
     }
     
-    // Helper to get count for each tab
     private func getTabCount(_ tab: DashboardTab) -> Int? {
         switch tab {
         case .pinned:
@@ -117,124 +169,28 @@ struct DashboardBottomBarView: View {
     }
 }
 
-/// Dashboard Bottom Bar Content (Sheet Content)
-struct DashboardBottomBarContent: View {
+
+/// Individual Tab Button for Floating Bar
+struct TabButton: View {
     @Environment(\.themeColors) var theme
-    @Environment(\.dismiss) var dismiss
+    let tab: DashboardTab
+    let count: Int?
+    let isSelected: Bool
+    let action: () -> Void
     
-    @Binding var activeTab: DashboardTab
-    @Binding var documents: [Letterspace_CanvasDocument]
-    @Binding var pinnedDocuments: Set<String>
-    @Binding var wipDocuments: Set<String>
-    @Binding var calendarDocuments: Set<String>
-    
-    let onSelectDocument: (Letterspace_CanvasDocument) -> Void
-    let onPin: (String) -> Void
-    let onWIP: (String) -> Void
-    let onCalendar: (String) -> Void
+    @State private var isPressed = false
     
     var body: some View {
-        GeometryReader {
-            let safeArea = $0.safeAreaInsets
-            let bottomPadding = safeArea.bottom / 5
-            
-            VStack(spacing: 0) {
-                TabView(selection: $activeTab) {
-                    Tab.init(value: .pinned) {
-                        IndividualTabView(.pinned)
-                    }
-                    
-                    Tab.init(value: .wip) {
-                        IndividualTabView(.wip)
-                    }
-                    
-                    Tab.init(value: .schedule) {
-                        IndividualTabView(.schedule)
-                    }
-                }
-                .tabViewStyle(.tabBarOnly)
-                .background {
-                    if #available(iOS 26, *) {
-                        TabViewHelper()
-                    }
-                }
-                .compositingGroup()
-                
-                CustomTabBar()
-                    .padding(.bottom, isiOS26 ? bottomPadding : 0)
-            }
-            .ignoresSafeArea(.all, edges: isiOS26 ? .bottom : [])
-        }
-        .interactiveDismissDisabled()
-    }
-    
-    /// Individual Tab View
-    @ViewBuilder
-    func IndividualTabView(_ tab: DashboardTab) -> some View {
-        ScrollView(.vertical) {
-            VStack(alignment: .leading, spacing: 16) {
-                // Header
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(tab.rawValue)
-                            .font(isiOS26 ? .largeTitle : .title)
-                            .fontWeight(.bold)
-                            .foregroundColor(theme.primary)
-                        
-                        Text(getTabSubtitle(tab))
-                            .font(.subheadline)
-                            .foregroundColor(theme.secondary)
-                    }
-                    
-                    Spacer()
-                    
-                    // Close button with glass effect
-                    Button(action: {
-                        dismiss()
-                    }) {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(theme.primary)
-                            .frame(width: 30, height: 30)
-                    }
-                    .buttonStyle(isiOS26 ? .glass : .plain)
-                    .buttonBorderShape(.circle)
-                }
-                .padding(.top, isiOS26 ? 15 : 10)
-                .padding(.horizontal, 20)
-                
-                // Tab Content
-                switch tab {
-                case .pinned:
-                    PinnedTabContent()
-                case .wip:
-                    WIPTabContent()
-                case .schedule:
-                    ScheduleTabContent()
-                }
-            }
-        }
-        .toolbarVisibility(.hidden, for: .tabBar)
-        .toolbarBackgroundVisibility(.hidden, for: .tabBar)
-    }
-    
-    /// Custom Tab Bar
-    @ViewBuilder
-    func CustomTabBar() -> some View {
-        HStack(spacing: 0) {
-            ForEach(DashboardTab.allCases, id: \.rawValue) { tab in
-                VStack(spacing: 6) {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                ZStack {
                     Image(systemName: tab.symbolImage)
-                        .font(.title3)
-                        .symbolVariant(.fill)
-                        .symbolEffect(.bounce, value: activeTab == tab)
-                    
-                    Text(tab.rawValue)
-                        .font(.caption2)
-                        .fontWeight(.semibold)
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundColor(isSelected ? tab.color : theme.secondary)
+                        .symbolEffect(.bounce, value: isSelected)
                     
                     // Count badge
-                    if let count = getTabCount(tab), count > 0 {
+                    if let count = count, count > 0 {
                         Text("\(count)")
                             .font(.caption2)
                             .fontWeight(.bold)
@@ -245,31 +201,225 @@ struct DashboardBottomBarContent: View {
                                 Capsule()
                                     .fill(tab.color)
                             )
+                            .offset(x: 12, y: -8)
                     }
                 }
-                .foregroundStyle(activeTab == tab ? tab.color : .gray)
+                
+                Text(tab.rawValue)
+                    .font(.caption2)
+                    .fontWeight(.medium)
+                    .foregroundColor(isSelected ? tab.color : theme.secondary)
+                    .scaleEffect(isSelected ? 1.1 : 1.0)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
+            }
                 .frame(maxWidth: .infinity)
-                .contentShape(.rect)
-                .onTapGesture {
-                    withAnimation(.bouncy(duration: 0.3)) {
-                        activeTab = tab
+            .padding(.vertical, 8)
+            .background(
+                Group {
+                    if isSelected {
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(tab.color.opacity(0.15))
+                            .glassEffect(.regular.interactive(), in: RoundedRectangle(cornerRadius: 12))
+                    } else {
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color.clear)
                     }
+                }
+            )
+            .scaleEffect(isPressed ? 0.95 : 1.0)
+            .animation(.easeInOut(duration: 0.1), value: isPressed)
+        }
+        .buttonStyle(.plain)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in
+                    if !isPressed {
+                        isPressed = true
+                    }
+                }
+                .onEnded { _ in
+                    isPressed = false
+                }
+        )
+    }
+}
+
+/// Custom Sheet Overlay that slides up from bottom
+struct DashboardSheetOverlay: View {
+    @Environment(\.themeColors) var theme
+    @Environment(\.colorScheme) var colorScheme
+    
+    let tab: DashboardTab
+    @Binding var isPresented: Bool
+    
+    // Dashboard data
+    @Binding var documents: [Letterspace_CanvasDocument]
+    @Binding var pinnedDocuments: Set<String>
+    @Binding var wipDocuments: Set<String>
+    @Binding var calendarDocuments: Set<String>
+    
+    // Actions
+    let onSelectDocument: (Letterspace_CanvasDocument) -> Void
+    let onPin: (String) -> Void
+    let onWIP: (String) -> Void
+    let onCalendar: (String) -> Void
+    
+    // Menu actions
+    let onDashboard: (() -> Void)?
+    let onSearch: (() -> Void)?
+    let onNewDocument: (() -> Void)?
+    let onFolders: (() -> Void)?
+    let onBibleReader: (() -> Void)?
+    let onSmartStudy: (() -> Void)?
+    let onRecentlyDeleted: (() -> Void)?
+    let onSettings: (() -> Void)?
+    
+    @State private var dragOffset: CGFloat = 0
+    @State private var isDragging: Bool = false
+    @State private var currentDetent: SheetDetent = .medium
+    
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack {
+                // Background overlay
+                
+                // Sheet content
+                VStack(spacing: 0) {
+                    Spacer()
+                    
+                    VStack(spacing: 0) {
+                        // Handle bar
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(Color.secondary.opacity(0.4))
+                            .frame(width: 36, height: 6)
+                            .padding(.top, 12)
+                            .padding(.bottom, 8)
+                        
+                        // Header
+                        HStack {
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack(spacing: 8) {
+                                    Image(systemName: tab.symbolImage)
+                                        .font(.title3)
+                                        .foregroundColor(tab.color)
+                                    
+                                    Text(tab.rawValue)
+                                        .font(.title2)
+                                        .fontWeight(.bold)
+                                        .foregroundColor(theme.primary)
+                                }
+                                
+                                Text(getTabSubtitle())
+                                    .font(.subheadline)
+                                    .foregroundColor(theme.secondary)
+                            }
+                            
+                            Spacer()
+                            
+                            Button("Done") {
+                                dismissSheet()
+                            }
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(tab.color)
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 16)
+                        
+                        // Content
+                        ScrollView(.vertical, showsIndicators: false) {
+                            VStack(spacing: 0) {
+                                switch tab {
+                                case .pinned:
+                                    PinnedSheetContent()
+                                case .wip:
+                                    WIPSheetContent()
+                                case .schedule:
+                                    ScheduleSheetContent()
+                                }
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.bottom, 100)
+                        }
+                    }
+                    .frame(height: calculateSheetHeight(geometry: geometry))
+                    .background(
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .fill(.clear)
+                            .glassEffect(.regular.interactive(), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                            .shadow(color: Color.black.opacity(0.1), radius: 20, x: 0, y: -5)
+                    )
+                    .offset(y: dragOffset)
+                                         .gesture(
+                         DragGesture()
+                             .onChanged { value in
+                                 isDragging = true
+                                 if value.translation.height > 0 {
+                                     // Dragging down - allow drag
+                                     dragOffset = value.translation.height
+                                 } else {
+                                     // Dragging up - expand to next detent
+                                     dragOffset = value.translation.height * 0.5
+                                 }
+                             }
+                             .onEnded { value in
+                                 isDragging = false
+                                 let translation = value.translation.height
+                                 let velocity = value.predictedEndTranslation.height
+                                 
+                                 withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                                     if translation > 100 || velocity > 300 {
+                                         // Dismiss if dragged down significantly
+                                         if currentDetent == .medium {
+                                             dismissSheet()
+                                         } else {
+                                             // Move to medium detent
+                                             currentDetent = .medium
+                                             dragOffset = 0
+                                         }
+                                     } else if translation < -100 || velocity < -300 {
+                                         // Expand to large detent if dragged up
+                                         currentDetent = .large
+                                         dragOffset = 0
+                                     } else {
+                                         // Return to current detent
+                                         dragOffset = 0
+                                     }
+                                 }
+                             }
+                     )
                 }
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.top, 10)
-        .padding(.bottom, isiOS26 ? 12 : 5)
-        .overlay(alignment: .top) {
-            if !isiOS26 {
-                Divider()
-            }
+        .transition(.asymmetric(
+            insertion: .move(edge: .bottom).combined(with: .opacity),
+            removal: .move(edge: .bottom).combined(with: .opacity)
+        ))
+    }
+    
+    private func calculateSheetHeight(geometry: GeometryProxy) -> CGFloat {
+        let mediumHeight: CGFloat = geometry.size.height * 0.5
+        let largeHeight: CGFloat = geometry.size.height * 0.85
+        
+        switch currentDetent {
+        case .compact:
+            return mediumHeight // Fallback to medium
+        case .medium:
+            return mediumHeight
+        case .large:
+            return largeHeight
         }
     }
     
-    // Helper functions
-    private func getTabSubtitle(_ tab: DashboardTab) -> String {
-        let count = getTabCount(tab) ?? 0
+    private func dismissSheet() {
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+            isPresented = false
+            dragOffset = 0
+            currentDetent = .medium
+        }
+    }
+    
+    private func getTabSubtitle() -> String {
+        let count = getTabCount() ?? 0
         switch tab {
         case .pinned:
             return count == 1 ? "1 pinned document" : "\(count) pinned documents"
@@ -280,7 +430,7 @@ struct DashboardBottomBarContent: View {
         }
     }
     
-    private func getTabCount(_ tab: DashboardTab) -> Int? {
+    private func getTabCount() -> Int? {
         switch tab {
         case .pinned:
             return pinnedDocuments.count
@@ -291,9 +441,10 @@ struct DashboardBottomBarContent: View {
         }
     }
     
-    // Tab content views
+    // MARK: - Sheet Content Views
+    
     @ViewBuilder
-    func PinnedTabContent() -> some View {
+    func PinnedSheetContent() -> some View {
         let pinnedDocs = documents.filter { pinnedDocuments.contains($0.id) }
         
         if pinnedDocs.isEmpty {
@@ -304,26 +455,28 @@ struct DashboardBottomBarContent: View {
                 color: .green
             )
         } else {
-            LazyVStack(spacing: 8) {
+            LazyVStack(spacing: 12) {
                 ForEach(pinnedDocs, id: \.id) { document in
-                    DashboardDocumentCard(
+                    DocumentSheetCard(
                         document: document,
                         isPinned: true,
                         isWIP: wipDocuments.contains(document.id),
                         hasCalendar: calendarDocuments.contains(document.id),
-                        onTap: { onSelectDocument(document) },
+                        onTap: { 
+                            onSelectDocument(document)
+                            dismissSheet()
+                        },
                         onPin: { onPin(document.id) },
                         onWIP: { onWIP(document.id) },
                         onCalendar: { onCalendar(document.id) }
                     )
                 }
             }
-            .padding(.horizontal, 20)
         }
     }
     
     @ViewBuilder
-    func WIPTabContent() -> some View {
+    func WIPSheetContent() -> some View {
         let wipDocs = documents.filter { wipDocuments.contains($0.id) }
         
         if wipDocs.isEmpty {
@@ -334,26 +487,28 @@ struct DashboardBottomBarContent: View {
                 color: .orange
             )
         } else {
-            LazyVStack(spacing: 8) {
+            LazyVStack(spacing: 12) {
                 ForEach(wipDocs, id: \.id) { document in
-                    DashboardDocumentCard(
+                    DocumentSheetCard(
                         document: document,
                         isPinned: pinnedDocuments.contains(document.id),
                         isWIP: true,
                         hasCalendar: calendarDocuments.contains(document.id),
-                        onTap: { onSelectDocument(document) },
+                        onTap: { 
+                            onSelectDocument(document)
+                            dismissSheet()
+                        },
                         onPin: { onPin(document.id) },
                         onWIP: { onWIP(document.id) },
                         onCalendar: { onCalendar(document.id) }
                     )
                 }
             }
-            .padding(.horizontal, 20)
         }
     }
     
     @ViewBuilder
-    func ScheduleTabContent() -> some View {
+    func ScheduleSheetContent() -> some View {
         let scheduledDocs = documents.filter { calendarDocuments.contains($0.id) }
         
         if scheduledDocs.isEmpty {
@@ -364,56 +519,29 @@ struct DashboardBottomBarContent: View {
                 color: .blue
             )
         } else {
-            LazyVStack(spacing: 8) {
+            LazyVStack(spacing: 12) {
                 ForEach(scheduledDocs, id: \.id) { document in
-                    DashboardDocumentCard(
+                    DocumentSheetCard(
                         document: document,
                         isPinned: pinnedDocuments.contains(document.id),
                         isWIP: wipDocuments.contains(document.id),
                         hasCalendar: true,
-                        onTap: { onSelectDocument(document) },
+                        onTap: { 
+                            onSelectDocument(document)
+                            dismissSheet()
+                        },
                         onPin: { onPin(document.id) },
                         onWIP: { onWIP(document.id) },
                         onCalendar: { onCalendar(document.id) }
                     )
                 }
             }
-            .padding(.horizontal, 20)
         }
     }
 }
 
-/// Empty State View for when sections are empty
-struct EmptyStateView: View {
-    let icon: String
-    let title: String
-    let subtitle: String
-    let color: Color
-    
-    var body: some View {
-        VStack(spacing: 16) {
-            Image(systemName: icon)
-                .font(.system(size: 48))
-                .foregroundColor(color.opacity(0.6))
-            
-            VStack(spacing: 4) {
-                Text(title)
-                    .font(.headline)
-                    .fontWeight(.semibold)
-                
-                Text(subtitle)
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
-            }
-        }
-        .padding(.vertical, 40)
-        .frame(maxWidth: .infinity)
-    }
-}
-
-/// Simplified Document Card for Bottom Bar
-struct DashboardDocumentCard: View {
+/// Document Card for Sheet
+struct DocumentSheetCard: View {
     @Environment(\.themeColors) var theme
     
     let document: Letterspace_CanvasDocument
@@ -426,7 +554,6 @@ struct DashboardDocumentCard: View {
     let onWIP: () -> Void
     let onCalendar: () -> Void
     
-    // Animation triggers
     @State private var pinAnimationTrigger = 0
     @State private var wipAnimationTrigger = 0
     @State private var calendarAnimationTrigger = 0
@@ -491,73 +618,38 @@ struct DashboardDocumentCard: View {
             .background(
                 RoundedRectangle(cornerRadius: 12)
                     .fill(.ultraThinMaterial)
-                    .stroke(theme.separator.opacity(0.3), lineWidth: 0.5)
+                    .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
             )
         }
         .buttonStyle(.plain)
     }
 }
 
-// iOS 26 Tab View Helper (from FindMyBottomBar)
-@available(iOS 26, *)
-fileprivate struct TabViewHelper: UIViewRepresentable {
-    func makeCoordinator() -> Coordinator {
-        Coordinator()
-    }
+/// Empty State View
+struct EmptyStateView: View {
+    let icon: String
+    let title: String
+    let subtitle: String
+    let color: Color
     
-    func makeUIView(context: Context) -> UIView {
-        let view = UIView()
-        view.backgroundColor = .clear
-        
-        DispatchQueue.main.async {
-            guard let compostingGroup = view.superview?.superview else { return }
-            guard let swiftUIWrapperUITabView = compostingGroup.subviews.last else { return }
+    var body: some View {
+        VStack(spacing: 16) {
+            Image(systemName: icon)
+                .font(.system(size: 48))
+                .foregroundColor(color.opacity(0.6))
             
-            if let tabBarController = swiftUIWrapperUITabView.subviews.first?.next as? UITabBarController {
-                /// Clearing Backgrounds
-                tabBarController.view.backgroundColor = .clear
-                tabBarController.viewControllers?.forEach {
-                    $0.view.backgroundColor = .clear
-                }
+            VStack(spacing: 4) {
+                Text(title)
+                    .font(.headline)
+                    .fontWeight(.semibold)
                 
-                tabBarController.delegate = context.coordinator
-                
-                /// Temporary Solution!
-                tabBarController.tabBar.removeFromSuperview()
+                Text(subtitle)
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
             }
         }
-        
-        return view
-    }
-    
-    func updateUIView(_ uiView: UIView, context: Context) {  }
-    
-    class Coordinator: NSObject, UITabBarControllerDelegate, UIViewControllerAnimatedTransitioning {
-        func tabBarController(_ tabBarController: UITabBarController, animationControllerForTransitionFrom fromVC: UIViewController, to toVC: UIViewController) -> (any UIViewControllerAnimatedTransitioning)? {
-            return self
-        }
-        
-        func transitionDuration(using transitionContext: (any UIViewControllerContextTransitioning)?) -> TimeInterval {
-            return .zero
-        }
-        
-        func animateTransition(using transitionContext: any UIViewControllerContextTransitioning) {
-            guard let destinationView = transitionContext.view(forKey: .to) else { return }
-            let containerView = transitionContext.containerView
-            
-            containerView.addSubview(destinationView)
-            transitionContext.completeTransition(true)
-        }
+        .padding(.vertical, 40)
+        .frame(maxWidth: .infinity)
     }
 }
-
-// Extension for iOS 26 detection
-extension View {
-    var isiOS26: Bool {
-        if #available(iOS 26, *) {
-            return true
-        } else {
-            return false
-        }
-    }
-} 
