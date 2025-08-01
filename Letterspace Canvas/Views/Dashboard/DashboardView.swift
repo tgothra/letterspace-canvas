@@ -531,8 +531,9 @@ private func deleteSelectedDocuments() {
         // The PinnedSection and WIPSection views will automatically update when their data changes
         // This prevents the flash caused by recreating the entire carousel
         
-        // Post notification that documents have been updated
-        NotificationCenter.default.post(name: NSNotification.Name("DocumentListDidUpdate"), object: nil)
+        // ❌ REMOVED: Do not post a notification that causes this same view to reload itself.
+        // The @State wrappers already handle updating the necessary child views.
+        // NotificationCenter.default.post(name: NSNotification.Name("DocumentListDidUpdate"), object: nil)
     }
     
     private func saveCarouselPosition() {
