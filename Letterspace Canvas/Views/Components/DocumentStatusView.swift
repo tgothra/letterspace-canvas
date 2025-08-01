@@ -45,6 +45,11 @@ struct DocumentStatusView: View {
     @State private var calendarButtonRect: CGRect = .zero
     @State private var reopenSubscription: NSObjectProtocol?
     
+    // iOS 26 Animated SF Symbols state
+    @State private var pinAnimationTrigger = 0
+    @State private var wipAnimationTrigger = 0
+    @State private var calendarAnimationTrigger = 0
+    
     // Helper to check for upcoming scheduled presentations
     private var hasUpcomingSchedule: Bool {
         document.presentations.contains { $0.status == .scheduled && $0.datetime >= Date() }
@@ -58,12 +63,16 @@ struct DocumentStatusView: View {
                     HStack(spacing: 6) {
                         Button(action: {
                             onPin(document.id)
+                            // ✨ Trigger iOS 26 animated SF symbol
+                            pinAnimationTrigger += 1
                         }) {
                             Image(systemName: "pin.fill")
                                 .font(.system(size: 12))
                                 .foregroundStyle(pinnedDocuments.contains(document.id) ? .green : (pinHover ? theme.accent : (colorScheme == .dark ? .white : .black)))
                                 .scaleEffect(pinHover ? 1.2 : 1.0)
                                 .animation(.easeInOut(duration: 0.15), value: pinHover)
+                                // ✨ iOS 26 Animated SF Symbol: Bounce when pinned/unpinned
+                                .symbolEffect(.bounce, value: pinAnimationTrigger)
                         }
                         .buttonStyle(.plain)
                         .help("Pin to Top")
@@ -73,12 +82,16 @@ struct DocumentStatusView: View {
                         
                         Button(action: {
                             onWIP(document.id)
+                            // ✨ Trigger iOS 26 animated SF symbol
+                            wipAnimationTrigger += 1
                         }) {
                             Image(systemName: "clock.fill")
                                 .font(.system(size: 12))
                                 .foregroundStyle(wipDocuments.contains(document.id) ? .orange : (wipHover ? theme.accent : (colorScheme == .dark ? .white : .black)))
                                 .scaleEffect(wipHover ? 1.2 : 1.0)
                                 .animation(.easeInOut(duration: 0.15), value: wipHover)
+                                // ✨ iOS 26 Animated SF Symbol: Scale up when WIP toggled
+                                .symbolEffect(.scaleUp, value: wipAnimationTrigger)
                         }
                         .buttonStyle(.plain)
                         .help("Mark as Work in Progress")
@@ -94,6 +107,8 @@ struct DocumentStatusView: View {
                                 // Fall back to the original behavior
                                 showCalendarContext = true
                             }
+                            // ✨ Trigger iOS 26 animated SF symbol
+                            calendarAnimationTrigger += 1
                         }) {
                             Image(systemName: "calendar")
                                 .font(.system(size: 12))
@@ -101,6 +116,8 @@ struct DocumentStatusView: View {
                                 .foregroundStyle(hasUpcomingSchedule ? .blue : (calendarHover ? theme.accent : (colorScheme == .dark ? .white : .black)))
                                 .scaleEffect(calendarHover ? 1.2 : 1.0)
                                 .animation(.easeInOut(duration: 0.15), value: calendarHover)
+                                // ✨ iOS 26 Animated SF Symbol: Pulse when calendar action triggered
+                                .symbolEffect(.pulse, value: calendarAnimationTrigger)
                         }
                         .buttonStyle(.plain)
                         .help("Add to Calendar")

@@ -15,6 +15,11 @@ struct MultiSelectionActionBar: View {
     @State private var isWIPHovered = false
     @State private var isDeleteHovered = false
     
+    // iOS 26 Animated SF Symbols state
+    @State private var pinAnimationTrigger = 0
+    @State private var wipAnimationTrigger = 0
+    @State private var deleteAnimationTrigger = 0
+    
     var body: some View {
         HStack(spacing: 16) {
             Text("\(selectedCount) selected")
@@ -27,9 +32,13 @@ struct MultiSelectionActionBar: View {
             Button(action: {
                 HapticFeedback.impact(.light)
                 onPin()
+                // ✨ Trigger iOS 26 animated SF symbol
+                pinAnimationTrigger += 1
             }) {
                 HStack(spacing: 4) {
                     Image(systemName: "pin.fill")
+                        // ✨ iOS 26 Animated SF Symbol: Bounce on bulk pin action
+                        .symbolEffect(.bounce, value: pinAnimationTrigger)
                     Text("Pin")
                 }
                 .font(.system(size: 13))
@@ -51,9 +60,13 @@ struct MultiSelectionActionBar: View {
             Button(action: {
                 HapticFeedback.impact(.light)
                 onWIP()
+                // ✨ Trigger iOS 26 animated SF symbol
+                wipAnimationTrigger += 1
             }) {
                 HStack(spacing: 4) {
                     Image(systemName: "clock.fill")
+                        // ✨ iOS 26 Animated SF Symbol: Scale up on bulk WIP action
+                        .symbolEffect(.scaleUp, value: wipAnimationTrigger)
                     Text("WIP")
                 }
                 .font(.system(size: 13))
@@ -75,9 +88,13 @@ struct MultiSelectionActionBar: View {
             Button(action: {
                 HapticFeedback.impact(.medium)
                 onDelete()
+                // ✨ Trigger iOS 26 animated SF symbol
+                deleteAnimationTrigger += 1
             }) {
                 HStack(spacing: 4) {
                     Image(systemName: "trash.fill")
+                        // ✨ iOS 26 Animated SF Symbol: Pulse on delete action
+                        .symbolEffect(.pulse, value: deleteAnimationTrigger)
                     Text("Delete")
                         .fixedSize(horizontal: true, vertical: false) // Ensure text doesn't get truncated
                 }

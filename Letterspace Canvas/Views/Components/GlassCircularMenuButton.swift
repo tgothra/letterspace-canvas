@@ -20,6 +20,10 @@ struct GlassCircularMenuButton: View {
     @State private var isDragging: Bool = false
     @State private var hoveredButtonIndex: Int? = nil
     
+    // iOS 26 Animated SF Symbols state
+    @State private var menuToggleAnimationTrigger = 0
+    @State private var menuItemAnimationTriggers: [Int: Int] = [:]
+    
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
             // Background overlay for tap-outside-to-dismiss
@@ -107,6 +111,8 @@ struct GlassCircularMenuButton: View {
                     .offset(y: isMenuOpen ? -3 : 0)
             }
             .animation(.easeInOut(duration: 0.2), value: isMenuOpen)
+            // ✨ iOS 26 Animated SF Symbol: Variable color pulse during menu toggle
+            .symbolEffect(.variableColor.reversing, value: menuToggleAnimationTrigger)
             .frame(width: 56, height: 56)
             .glassEffect(.regular.tint(theme.accent.opacity(0.8)).interactive())
             .shadow(color: Color.black.opacity(0.2), radius: 8, x: 0, y: 2)
@@ -116,6 +122,8 @@ struct GlassCircularMenuButton: View {
                 withAnimation(.bouncy(duration: 0.7, extraBounce: 0.01)) {
                     isMenuOpen.toggle()
                 }
+                // ✨ Trigger iOS 26 animated SF symbol for menu toggle
+                menuToggleAnimationTrigger += 1
             }
         }
         // Apply bouncy container movement effects to the entire glass navigation menu
@@ -132,6 +140,8 @@ struct GlassCircularMenuButton: View {
     private func menuItem(icon: String, title: String, action: @escaping () -> Void, index: Int, isUserProfile: Bool = false) -> some View {
         Button(action: {
             HapticFeedback.safeTrigger(.light)
+            // ✨ Trigger iOS 26 animated SF symbol for this menu item
+            menuItemAnimationTriggers[index] = (menuItemAnimationTriggers[index] ?? 0) + 1
             // Close menu first, then execute action
             withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
                 isMenuOpen = false
@@ -186,6 +196,8 @@ struct GlassCircularMenuButton: View {
                         .font(.system(size: 16, weight: .medium))
                         .foregroundColor(theme.primary)
                         .frame(width: 20, height: 20)
+                        // ✨ iOS 26 Animated SF Symbol: Bounce when menu item is tapped
+                        .symbolEffect(.bounce, value: menuItemAnimationTriggers[index] ?? 0)
                 }
                 
                 // Title
