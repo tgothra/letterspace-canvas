@@ -5,7 +5,6 @@ import SwiftUI
 
 // MARK: - iOS 26 Enhanced RTF Service with Modern AttributedString
 @available(iOS 15.0, *) // Updated to use AttributedString from iOS 15+
-@Observable
 class iOS26RTFService: NSObject {
     static let shared = iOS26RTFService()
     

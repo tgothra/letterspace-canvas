@@ -893,11 +893,10 @@ struct GlassNavigationMenu<Content: View, Label: View>: View, Animatable {
             .compositingGroup()
             .clipShape(.rect(cornerRadius: progress < 0.5 ? min(labelSize.width, labelSize.height) / 2 : cornerRadius))
             .background(
-                // Glass background with reduced opacity
+                // Glass background without material
                 RoundedRectangle(cornerRadius: progress < 0.5 ? min(labelSize.width, labelSize.height) / 2 : cornerRadius)
-                    .fill(.ultraThinMaterial)
+                    .fill(.clear)
                     .glassEffect(.regular.interactive(), in: .rect(cornerRadius: progress < 0.5 ? min(labelSize.width, labelSize.height) / 2 : cornerRadius))
-                    .opacity(0.8)
             )
         }
         .scaleEffect(

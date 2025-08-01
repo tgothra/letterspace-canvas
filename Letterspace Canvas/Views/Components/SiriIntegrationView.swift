@@ -6,7 +6,7 @@ import IntentsUI
 // MARK: - iOS 26 Siri Integration Demo View
 @available(iOS 26.0, *)
 struct SiriIntegrationView: View {
-    @StateObject private var siriService = SiriIntentService.shared
+    @State private var siriService = SiriIntentService.shared
     @State private var showVoiceShortcuts = false
     @State private var selectedCommand: String = ""
     @State private var demoResults: [DemoResult] = []
@@ -105,7 +105,7 @@ struct SiriIntegrationView: View {
         
         switch command {
         case let cmd where cmd.contains("create") && cmd.contains("document"):
-            let doc = siriService.handleCreateDocument(type: .general)
+            let doc = siriService.handleCreateDocument(type: DocumentType.general)
             return DemoResult(
                 command: command,
                 result: "Created '\(doc.title)' successfully",
@@ -115,7 +115,7 @@ struct SiriIntegrationView: View {
             )
             
         case let cmd where cmd.contains("create") && cmd.contains("sermon"):
-            let doc = siriService.handleCreateDocument(type: .sermon)
+            let doc = siriService.handleCreateDocument(type: DocumentType.sermon)
             return DemoResult(
                 command: command,
                 result: "Created sermon document '\(doc.title)'",

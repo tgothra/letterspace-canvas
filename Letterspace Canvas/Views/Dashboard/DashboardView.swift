@@ -515,8 +515,9 @@ private func deleteSelectedDocuments() {
         defaults.set(Array(pinnedDocuments), forKey: "PinnedDocuments")
         defaults.set(Array(wipDocuments), forKey: "WIPDocuments")
         
-        // Refresh carousel sections when document states change
-        initializeCarouselSections()
+        // ✅ FIX: Don't rebuild entire carousel - let individual sections update themselves
+        // The PinnedSection and WIPSection views will automatically update when their data changes
+        // This prevents the flash caused by recreating the entire carousel
         
         // Post notification that documents have been updated
         NotificationCenter.default.post(name: NSNotification.Name("DocumentListDidUpdate"), object: nil)
@@ -1075,8 +1076,8 @@ var body: some View {
                         UserDefaults.standard.set(Array(calendarDocuments), forKey: "CalendarDocuments")
                         UserDefaults.standard.synchronize()
                         
-                        // Refresh carousel sections when calendar documents change
-                        initializeCarouselSections()
+                        // ✅ FIX: Don't rebuild entire carousel - let calendar section update itself
+                        // The SermonCalendar view will automatically update when calendarDocuments changes
                         
                         // Force UI update
                         DispatchQueue.main.async {
@@ -2402,8 +2403,8 @@ var body: some View {
         UserDefaults.standard.set(Array(calendarDocuments), forKey: "CalendarDocuments")
         UserDefaults.standard.synchronize()
         
-        // Refresh carousel sections when calendar documents change
-        initializeCarouselSections()
+        // ✅ FIX: Don't rebuild entire carousel - let calendar section update itself
+        // The SermonCalendar view will automatically update when calendarDocuments changes
         
         // Force UI update
         DispatchQueue.main.async {
