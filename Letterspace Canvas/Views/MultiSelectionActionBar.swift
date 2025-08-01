@@ -65,8 +65,8 @@ struct MultiSelectionActionBar: View {
             }) {
                 HStack(spacing: 4) {
                     Image(systemName: "clock.fill")
-                        // ✨ iOS 26 Animated SF Symbol: Scale up on bulk WIP action
-                        .symbolEffect(.scaleUp, value: wipAnimationTrigger)
+                        // ✨ iOS 26 Animated SF Symbol: Pulse on bulk WIP action
+                        .symbolEffect(.pulse, value: wipAnimationTrigger)
                     Text("WIP")
                 }
                 .font(.system(size: 13))

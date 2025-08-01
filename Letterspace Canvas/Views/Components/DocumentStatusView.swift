@@ -90,8 +90,8 @@ struct DocumentStatusView: View {
                                 .foregroundStyle(wipDocuments.contains(document.id) ? .orange : (wipHover ? theme.accent : (colorScheme == .dark ? .white : .black)))
                                 .scaleEffect(wipHover ? 1.2 : 1.0)
                                 .animation(.easeInOut(duration: 0.15), value: wipHover)
-                                // ✨ iOS 26 Animated SF Symbol: Scale up when WIP toggled
-                                .symbolEffect(.scaleUp, value: wipAnimationTrigger)
+                                // ✨ iOS 26 Animated SF Symbol: Pulse when WIP toggled
+                                .symbolEffect(.pulse, value: wipAnimationTrigger)
                         }
                         .buttonStyle(.plain)
                         .help("Mark as Work in Progress")
