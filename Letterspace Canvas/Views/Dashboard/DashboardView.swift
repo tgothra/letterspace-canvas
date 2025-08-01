@@ -939,6 +939,33 @@ var body: some View {
             .ignoresSafeArea()
             #endif
         }
+        
+        // ✨ iOS 26 Dashboard Bottom Bar - positioned to left of green FAB
+        .overlay(
+            VStack {
+                Spacer()
+                HStack {
+                    Spacer()
+                    
+                    // Dashboard Bottom Bar (positioned to left of green FAB)
+                    #if os(iOS)
+                    DashboardBottomBarView(
+                        documents: $documents,
+                        pinnedDocuments: $pinnedDocuments,
+                        wipDocuments: $wipDocuments,
+                        calendarDocuments: $calendarDocuments,
+                        onSelectDocument: onSelectDocument,
+                        onPin: togglePin,
+                        onWIP: toggleWIP,
+                        onCalendar: toggleCalendar
+                    )
+                    .padding(.trailing, 80) // Space for green FAB
+                    .padding(.bottom, 20)
+                    #endif
+                }
+            }
+            .allowsHitTesting(true)
+        )
 
         
         .overlay(macOSModal)
