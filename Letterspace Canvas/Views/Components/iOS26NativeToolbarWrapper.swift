@@ -7,7 +7,7 @@ import UIKit
 struct iOS26NativeToolbarWrapper: View {
     @Binding var text: AttributedString
     @Binding var selection: AttributedTextSelection
-    @StateObject private var nativeTextService = iOS26NativeTextService.shared
+    @State private var nativeTextService = iOS26NativeTextService.shared
     @State private var showColorPicker = false
     @State private var showHighlightPicker = false
     @State private var showStylePicker = false

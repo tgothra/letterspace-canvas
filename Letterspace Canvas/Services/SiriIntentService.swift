@@ -6,12 +6,13 @@ import SwiftUI
 
 // MARK: - iOS 26 Enhanced Siri Integration Service
 @available(iOS 26.0, *)
-class SiriIntentService: NSObject, ObservableObject {
+@Observable
+class SiriIntentService: NSObject {
     static let shared = SiriIntentService()
     
-    @Published var isRegistered = false
-    @Published var lastCommand: String?
-    @Published var lastResult: String?
+    var isRegistered = false
+    var lastCommand: String?
+    var lastResult: String?
     
     private override init() {
         super.init()

@@ -9,8 +9,8 @@ struct iOS26EnhancedTextEditor: UIViewRepresentable {
     @Binding var document: Letterspace_CanvasDocument
     @Binding var isEditing: Bool
     
-    @StateObject private var textEditingService = iOS26TextEditingService.shared
-    @StateObject private var rtfService = iOS26RTFService.shared
+    @State private var textEditingService = iOS26TextEditingService.shared
+    @State private var rtfService = iOS26RTFService.shared
     
     // iOS 26 Enhancement: Advanced text editing settings
     @State private var smartSelectionEnabled = true
@@ -430,8 +430,8 @@ struct iOS26TextEditorWrapper: View {
 @available(iOS 26.0, *)
 struct iOS26TextEditorStatusBar: View {
     @Binding var isEditing: Bool
-    @ObservedObject var rtfService: iOS26RTFService
-    @ObservedObject var textEditingService: iOS26TextEditingService
+    let rtfService: iOS26RTFService
+          let textEditingService: iOS26TextEditingService
     
     var body: some View {
         HStack {

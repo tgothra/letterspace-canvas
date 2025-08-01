@@ -110,22 +110,10 @@ struct PinnedSection: View {
                             #endif
                         }()
                         
-                        if isLoadingDocuments {
-                            // Show loading indicator instead of empty state
-                            HStack(spacing: 8) {
-                                ProgressView()
-                                    .scaleEffect(0.8)
-                                Text("Loading...")
-                                    .font(.system(size: isIPadLocal ? 18 : 13))
-                                    .foregroundColor(theme.secondary)
-                            }
+                        Text("No pinned documents")
+                            .font(.system(size: isIPadLocal ? 18 : 13))
+                            .foregroundColor(theme.secondary)
                             .padding(.horizontal, 4)
-                        } else {
-                            Text("No pinned documents")
-                                .font(.system(size: isIPadLocal ? 18 : 13))
-                                .foregroundColor(theme.secondary)
-                                .padding(.horizontal, 4)
-                        }
                     } else {
                         ForEach(pinnedDocs, id: \.id) { doc in
                             PinnedDocumentButton(

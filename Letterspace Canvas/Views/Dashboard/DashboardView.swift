@@ -1286,6 +1286,10 @@ var body: some View {
     // NEW: Extracted computed property for the main dashboard layout
     private var dashboardContent: some View {
         Group {
+            if isLoadingDocuments {
+                // Show skeleton loading when documents are loading
+                DashboardSkeleton()
+            } else {
             GeometryReader { geometry in
                 let isPortrait = geometry.size.height > geometry.size.width
                 let isIPad: Bool = {
@@ -1558,6 +1562,7 @@ var body: some View {
             }
             // Remove pre-initialization views that were causing ghosting effects
             // These were creating faint duplicates visible in the background on iPhone
+            }
         }
     }
 
@@ -4112,14 +4117,15 @@ extension NSParagraphStyle {
 }
 #endif
 
-class DashboardViewModel: ObservableObject {
-    @Published var folders: [Folder] = [
+@Observable
+class DashboardViewModel {
+    var folders: [Folder] = [
         Folder(id: UUID(), name: "Sermons", isEditing: false),
         Folder(id: UUID(), name: "Bible Studies", isEditing: false),
         Folder(id: UUID(), name: "Notes", isEditing: false),
         Folder(id: UUID(), name: "Archive", isEditing: false)
     ]
-    @Published var folderSwipeOffsets: [UUID: CGFloat] = [:]
+    var folderSwipeOffsets: [UUID: CGFloat] = [:]
     
     func resetSwipeOffset(for folderId: UUID) {
         folderSwipeOffsets[folderId] = 0

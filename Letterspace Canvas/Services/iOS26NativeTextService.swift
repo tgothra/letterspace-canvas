@@ -4,7 +4,8 @@ import Foundation
 // MARK: - iOS 26 Native Text Service
 @available(iOS 26.0, *)
 @MainActor
-class iOS26NativeTextService: ObservableObject {
+@Observable
+class iOS26NativeTextService {
     static let shared = iOS26NativeTextService()
     
     private init() {}

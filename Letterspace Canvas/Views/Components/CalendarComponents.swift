@@ -308,7 +308,7 @@ struct OptimizedCalendarView: View {
     @Environment(\.colorScheme) var colorScheme
     
     // Use StateObject for values that should persist across renders
-    @StateObject private var calendarState = CalendarState()
+    @State private var calendarState = CalendarState()
     
     // Cache formatters and calendar
     private static let calendar = Calendar.current
@@ -389,13 +389,14 @@ struct OptimizedCalendarView: View {
 }
 
 // State object to manage calendar state
-class CalendarState: ObservableObject {
-    @Published var selectedMonth: Int
-    @Published var selectedYear: Int
-    @Published var hoveredDay: Int? = nil
+@Observable
+class CalendarState {
+    var selectedMonth: Int
+    var selectedYear: Int
+    var hoveredDay: Int? = nil
     
     // Cache the days for the current month/year
-    @Published var currentDays: [Day] = []
+    var currentDays: [Day] = []
     
     init() {
         let calendar = Calendar.current
@@ -439,7 +440,7 @@ class CalendarState: ObservableObject {
 }
 
 struct OptimizedCalendarGrid: View {
-    @ObservedObject var calendarState: CalendarState
+    let calendarState: CalendarState
     @Binding var selectedDate: String
     @Binding var isPresented: Bool
     @Binding var hoveredDay: Int?

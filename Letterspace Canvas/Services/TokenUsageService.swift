@@ -2,7 +2,8 @@ import Foundation
 import Combine
 import CloudKit
 
-class TokenUsageService: ObservableObject {
+@Observable
+class TokenUsageService {
     static let shared = TokenUsageService()
     
     // CloudKit configuration
@@ -17,11 +18,11 @@ class TokenUsageService: ObservableObject {
     // Size of token package
     private let additionalTokensAmount = 1_000_000
     
-    @Published private(set) var currentUsage: Int = 0
-    @Published private(set) var additionalTokensPurchased: Int = 0
-    @Published private(set) var resetDate: Date = Date()
-    @Published private(set) var isCloudKitAvailable: Bool = false
-    @Published private(set) var lastSyncDate: Date? = nil
+    private(set) var currentUsage: Int = 0
+    private(set) var additionalTokensPurchased: Int = 0
+    private(set) var resetDate: Date = Date()
+    private(set) var isCloudKitAvailable: Bool = false
+    private(set) var lastSyncDate: Date? = nil
     
     private var cancellables = Set<AnyCancellable>()
     
@@ -106,7 +107,6 @@ class TokenUsageService: ObservableObject {
                 self?.lastSyncDate = Date()
                 
                 print("☁️ Loaded token usage from CloudKit: \(self?.currentUsage ?? 0) tokens used")
-                self?.objectWillChange.send()
             }
         }
     }
@@ -178,7 +178,6 @@ class TokenUsageService: ObservableObject {
         checkForMonthlyReset()
         currentUsage += tokenCount
         saveUsageData()
-        objectWillChange.send()
     }
     
     func recordEmbeddingUsage(_ tokenCount: Int) {
@@ -186,7 +185,6 @@ class TokenUsageService: ObservableObject {
         currentUsage += tokenCount
         saveUsageData()
         print("Recorded EMBEDDING usage: \(tokenCount) tokens. New total: \(currentUsage)")
-        objectWillChange.send()
     }
     
     func recordQueryEmbeddingUsage(_ tokenCount: Int) {
@@ -194,7 +192,6 @@ class TokenUsageService: ObservableObject {
         currentUsage += tokenCount
         saveUsageData()
         print("Recorded QUERY embedding usage: \(tokenCount) tokens. New total: \(currentUsage)")
-        objectWillChange.send()
     }
     
     func purchaseAdditionalTokens() {
@@ -203,7 +200,6 @@ class TokenUsageService: ObservableObject {
         additionalTokensPurchased += 1
         saveUsageData()
         print("💳 Purchased additional 1M tokens. Total purchased: \(additionalTokensPurchased)")
-        objectWillChange.send()
     }
     
     func remainingTokens() -> Int {

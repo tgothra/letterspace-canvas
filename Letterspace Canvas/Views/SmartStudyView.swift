@@ -527,7 +527,7 @@ struct SmartStudyView: View {
     @State private var libraryService: UserLibraryService = {
         return UserLibraryService()
     }()
-    @ObservedObject private var tokenService = TokenUsageService.shared
+    @State private var tokenService = TokenUsageService.shared
     
     // UI State (Optimized initialization)
     @State private var userQuery = ""

@@ -5,11 +5,12 @@ import SwiftUI
 
 // MARK: - iOS 26 Enhanced RTF Service with Modern AttributedString
 @available(iOS 15.0, *) // Updated to use AttributedString from iOS 15+
-class iOS26RTFService: NSObject, ObservableObject {
+@Observable
+class iOS26RTFService: NSObject {
     static let shared = iOS26RTFService()
     
-    @Published var isProcessing = false
-    @Published var lastProcessingTime: TimeInterval = 0
+    var isProcessing = false
+    var lastProcessingTime: TimeInterval = 0
     
     // Modern AttributedString processor
     private let modernProcessor = iOS26RTFProcessor()

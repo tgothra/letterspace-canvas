@@ -6,13 +6,14 @@ import NaturalLanguage
 
 // MARK: - iOS 26 Enhanced Text Editing Service
 @available(iOS 26.0, *)
-class iOS26TextEditingService: NSObject, ObservableObject {
+@Observable
+class iOS26TextEditingService: NSObject {
     static let shared = iOS26TextEditingService()
     
-    @Published var isAnalyzing = false
-    @Published var suggestions: [TextSuggestion] = []
-    @Published var smartSelectionEnabled = true
-    @Published var markdownPreviewEnabled = true
+    var isAnalyzing = false
+    var suggestions: [TextSuggestion] = []
+    var smartSelectionEnabled = true
+    var markdownPreviewEnabled = true
     
     // iOS 26 Enhancement: Natural Language Processing
     private let languageRecognizer = NLLanguageRecognizer()
