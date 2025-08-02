@@ -917,9 +917,9 @@ var body: some View {
             }
             #endif
         }
-        .modifier(ContentBlurModifier(isModalPresented: isModalPresented, showPinnedModal: showPinnedModal, showWIPModal: showWIPModal, showSchedulerModal: showSchedulerModal))
+        .modifier(ContentBlurModifier(isModalPresented: isModalPresented, showPinnedModal: showPinnedModal, showWIPModal: showWIPModal, showSchedulerModal: showSchedulerModal, showDetailsCard: showDetailsCard))
         .overlay { modalOverlayView } // Apply overlay first
-        .animation(.easeInOut(duration: 0.2), value: isModalPresented || showPinnedModal || showWIPModal || showSchedulerModal)
+        .animation(.easeInOut(duration: 0.2), value: isModalPresented || showPinnedModal || showWIPModal || showSchedulerModal || showDetailsCard)
                           .overlay(alignment: .bottom) {
              // Floating bottom bar with custom sheet overlays
              FloatingDashboardBottomBar(
@@ -1014,11 +1014,12 @@ var body: some View {
         let showPinnedModal: Bool
         let showWIPModal: Bool
         let showSchedulerModal: Bool
+        let showDetailsCard: Bool
         
         func body(content: Content) -> some View {
             content
-                .blur(radius: isModalPresented || showPinnedModal || showWIPModal || showSchedulerModal ? 3 : 0)
-                .opacity(isModalPresented || showPinnedModal || showWIPModal || showSchedulerModal ? 0.7 : 1.0)
+                .blur(radius: isModalPresented || showPinnedModal || showWIPModal || showSchedulerModal || showDetailsCard ? 3 : 0)
+                .opacity(isModalPresented || showPinnedModal || showWIPModal || showSchedulerModal || showDetailsCard ? 0.7 : 1.0)
         }
     }
     
@@ -1326,7 +1327,7 @@ var body: some View {
     @ViewBuilder
     private var modalOverlayView: some View {
         // Overlay for DocumentDetailsCard (iPad and macOS only, iPhone uses sheet)
-        let _: Bool = {
+        let shouldShowDetailsCard: Bool = {
             #if os(iOS)
             return UIDevice.current.userInterfaceIdiom == .pad && showDetailsCard
             #else
@@ -1334,7 +1335,39 @@ var body: some View {
             #endif
         }()
         
+        if shouldShowDetailsCard, let document = selectedDetailsDocument {
+            // Dismiss layer
+            Color.clear
+                .contentShape(Rectangle())
+                .ignoresSafeArea()
+                .onTapGesture {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        showDetailsCard = false
+                    }
+                }
 
+            // Document Details Card
+            DocumentDetailsCard(
+                document: Binding(
+                    get: { document },
+                    set: { updatedDocument in
+                        if let index = documents.firstIndex(where: { $0.id == updatedDocument.id }) {
+                            documents[index] = updatedDocument
+                        }
+                    }
+                ),
+                allLocations: Array(Set(documents.compactMap { $0.variations.first?.location }.filter { !$0.isEmpty })).sorted(),
+                onDismiss: {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        showDetailsCard = false
+                    }
+                }
+            )
+            .transition(.asymmetric(
+                insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .center)),
+                removal: .opacity.combined(with: .scale(scale: 0.95, anchor: .center))
+            ))
+        }
         // Overlay for PresentationNotesModal (Calendar Modal)
         if let data = calendarModalData {
              // Dismiss layer
@@ -1765,6 +1798,40 @@ var body: some View {
                 #elseif os(iOS)
                 .background(Color(UIColor.systemBackground))
                 #endif
+        }
+        .sheet(isPresented: Binding(
+            get: {
+                #if os(iOS)
+                return UIDevice.current.userInterfaceIdiom == .phone && showDetailsCard
+                #else
+                return false
+                #endif
+            },
+            set: { _ in showDetailsCard = false }
+        )) {
+            if let document = selectedDetailsDocument {
+                DocumentDetailsCard(
+                    document: Binding(
+                        get: { document },
+                        set: { updatedDocument in
+                            if let index = documents.firstIndex(where: { $0.id == updatedDocument.id }) {
+                                documents[index] = updatedDocument
+                            }
+                        }
+                    ),
+                    allLocations: Array(Set(documents.compactMap { $0.variations.first?.location }.filter { !$0.isEmpty })).sorted(),
+                    onDismiss: {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            showDetailsCard = false
+                        }
+                    }
+                )
+                .environment(\.themeColors, theme)
+                .environment(\.colorScheme, colorScheme)
+                .presentationBackground(.ultraThinMaterial)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+            }
         }
 
         #if os(macOS)
