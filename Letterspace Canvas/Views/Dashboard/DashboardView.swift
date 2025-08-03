@@ -15,6 +15,7 @@ struct DashboardView: View {
     @Binding var document: Letterspace_CanvasDocument
     var onSelectDocument: (Letterspace_CanvasDocument) -> Void // Added this property
     var onMenuTap: (() -> Void)? = nil // Callback to trigger the morph menu
+    @Binding var isCircularMenuOpen: Bool // Binding to track circular menu state
     
     // Individual menu action callbacks for morphing bottom bar
     var onDashboard: (() -> Void)? = nil
@@ -94,6 +95,8 @@ struct DashboardView: View {
     @State private var showWIPModal = false
     @State private var showSchedulerModal = false
     
+    // NOTE: Shared sheet system removed - using tabs within All Documents sheet instead
+    
     // State for calendar modal - Managed by DashboardView
     @State private var calendarModalData: ModalDisplayData? = nil
     
@@ -132,6 +135,10 @@ struct DashboardView: View {
     // NEW: State for All Documents sheet behavior (iPhone and iPad)
     @State private var isDraggingAllDocuments: Bool = false
     @State private var allDocumentsPosition: AllDocumentsPosition = .default
+    @State private var showAllDocumentsSheet = true // Start with sheet open
+    @State private var wasAllDocumentsSheetOpenBeforeMenu = false // Track sheet state before menu opens
+
+    @State private var allDocumentsSheetDetent: PresentationDetent = .height(350) // Start at medium
     
     // Sheet position states
     enum AllDocumentsPosition {
@@ -898,9 +905,27 @@ var body: some View {
             }
             loadDocuments()
         }
-        .onChange(of: refreshTrigger) {
-            loadDocuments()
+                .onChange(of: refreshTrigger) {
+loadDocuments()
         }
+        .onChange(of: isCircularMenuOpen) { oldValue, newValue in
+            print("🔄 Menu state changed: \(oldValue) -> \(newValue)")
+            print("💾 Was sheet open before: \(wasAllDocumentsSheetOpenBeforeMenu)")
+            
+            // Only handle menu closing - opening is handled by onShowMorphMenu
+            if !newValue && wasAllDocumentsSheetOpenBeforeMenu {
+                print("✅ Menu closed - restoring sheet")
+                // Small delay to ensure menu close animation completes
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        showAllDocumentsSheet = true
+                    }
+                    // Reset the tracking variable
+                    wasAllDocumentsSheetOpenBeforeMenu = false
+                }
+            }
+        }
+
     }
     
     // MARK: - Extracted Views to Break Up Complex Expression
@@ -917,9 +942,9 @@ var body: some View {
             }
             #endif
         }
-        .modifier(ContentBlurModifier(isModalPresented: isModalPresented, showPinnedModal: showPinnedModal, showWIPModal: showWIPModal, showSchedulerModal: showSchedulerModal, showDetailsCard: showDetailsCard))
+        .modifier(ContentBlurModifier(isModalPresented: isModalPresented, showPinnedModal: false, showWIPModal: false, showSchedulerModal: false, showDetailsCard: showDetailsCard))
         .overlay { modalOverlayView } // Apply overlay first
-        .animation(.easeInOut(duration: 0.2), value: isModalPresented || showPinnedModal || showWIPModal || showSchedulerModal || showDetailsCard)
+        .animation(.easeInOut(duration: 0.2), value: isModalPresented || showDetailsCard)
                           .overlay(alignment: .bottom) {
              // Floating bottom bar with custom sheet overlays
              FloatingDashboardBottomBar(
@@ -940,6 +965,56 @@ var body: some View {
                  onRecentlyDeleted: onRecentlyDeleted,
                  onSettings: onSettings
              )
+         }
+                 .sheet(isPresented: $showAllDocumentsSheet) {
+            AllDocumentsBottomSheet(
+                documents: $documents,
+                selectedDocuments: $selectedDocuments,
+                selectedTags: $selectedTags,
+                selectedFilterColumn: $selectedFilterColumn,
+                selectedFilterCategory: $selectedFilterCategory,
+                sheetDetent: $allDocumentsSheetDetent,
+                pinnedDocuments: pinnedDocuments,
+                wipDocuments: wipDocuments,
+                calendarDocuments: calendarDocuments,
+                dateFilterType: dateFilterType,
+                onPin: { doc in togglePin(for: doc.id) },
+                onWIP: { doc in toggleWIP(doc.id) },
+                onCalendar: { doc in toggleCalendar(doc.id) },
+                onOpen: { doc in
+                    self.document = doc
+                    self.sidebarMode = .details
+                    self.isRightSidebarVisible = true
+                    showAllDocumentsSheet = false // Close sheet when opening document
+                },
+                onShowDetails: showDetails,
+                onDelete: { docIds in
+                    selectedDocuments = Set(docIds)
+                    deleteSelectedDocuments()
+                },
+                onClose: {
+                    showAllDocumentsSheet = false
+                },
+                onShowPinnedSheet: { /* No longer used - tabs handled internally */ },
+                onShowWIPSheet: { /* No longer used - tabs handled internally */ },
+                onShowScheduleSheet: { /* No longer used - tabs handled internally */ },
+                 onShowMorphMenu: {
+                     // Only save state if sheet is currently showing
+                     if showAllDocumentsSheet {
+                         wasAllDocumentsSheetOpenBeforeMenu = true
+                         withAnimation(.easeInOut(duration: 0.2)) {
+                             showAllDocumentsSheet = false
+                         }
+                     }
+                     onMenuTap?()
+                 }
+             )
+              .presentationDetents([.height(350), .large], selection: $allDocumentsSheetDetent)
+             .presentationBackgroundInteraction(.enabled)
+             .presentationBackground(.ultraThinMaterial)
+             .presentationDragIndicator(.hidden)
+             .presentationCornerRadius(20)
+             .interactiveDismissDisabled()
          }
          .sheet(isPresented: $showTallyLabelModal) {
              TallyLabelModal()
@@ -1113,48 +1188,12 @@ var body: some View {
                                     }())
                             }
                             
-                            // Carousel Navigation Pills (iPhone and iPad) - hide when All Documents is expanded
-                            #if os(iOS)
-                            if allDocumentsPosition != .expanded {
-                                carouselNavigationPills
-                            }
-                            #endif
+
                             
                                                         // Spacer to push All Documents to bottom
                             Spacer()
                             
-                            // All Documents section - positioned at bottom
-                            allDocumentsSectionView
-                                .padding(.horizontal, {
-                                    #if os(iOS)
-                                    if UIDevice.current.userInterfaceIdiom == .phone {
-                                        // iPhone: Calculate padding to center 93% width content
-                                        let screenWidth = UIScreen.main.bounds.width
-                                        return screenWidth * 0.035 // 3.5% on each side for 93% centered content
-                                    } else {
-                                        return 10 // iPad: reduced from 20 to 10 to make All Documents wider
-                                    }
-                                    #else
-                                    return 10 // Keep reduced spacing for other platforms
-                                    #endif
-                                }())
-                                .padding(.leading, {
-                                    #if os(macOS)
-                                    return 24 // Fixed alignment with carousel sections on macOS
-                                    #else
-                                    #if os(iOS)
-                                    if UIDevice.current.userInterfaceIdiom == .phone {
-                                        return 0 // iPhone: no additional leading padding for centering
-                                    } else {
-                                        // Use the new responsive navPadding for iPad
-                                        return shouldAddNavigationPadding ? navPadding : 10
-                                    }
-                                    #else
-                                    return shouldAddNavigationPadding ? navPadding : 10
-                                    #endif
-                                    #endif
-                                }()) // Platform-specific alignment - iPhone centered, iPad aligned
-                                // No floating sidebar animation needed
+
                             
                         // Remove Spacer to let All Documents fill remaining space
                         }
@@ -1179,39 +1218,12 @@ var body: some View {
                                 .animation(.spring(response: 0.6, dampingFraction: 0.75), value: showFloatingSidebar)
                         }
                             
-                        // Carousel Navigation Pills for Landscape (iPhone and iPad) - hide when All Documents is expanded
-                        #if os(iOS)
-                        if allDocumentsPosition != .expanded {
-                            carouselNavigationPills
-                                .padding(.horizontal, 20) // Consistent padding for centering in landscape
-                        }
-                        #endif
+
                         
                                                 // Spacer to push All Documents to bottom
                         Spacer()
                         
-                        // All Documents section - positioned at bottom
-                        allDocumentsSectionView
-                            .padding(.trailing, 20) // Match right alignment with cards
-                            .padding(.leading, {
-                                #if os(macOS)
-                                return 44 // Fixed alignment with carousel sections on macOS (24 + 20 base padding)
-                                #else
-                                #if os(iOS)
-                                if UIDevice.current.userInterfaceIdiom == .phone {
-                                    // iPhone: Calculate padding to center 93% width content
-                                    let screenWidth = UIScreen.main.bounds.width
-                                    return screenWidth * 0.035 // 3.5% on each side for 93% centered content
-                                } else {
-                                // Match the cards' padding logic for better alignment - use fixed value for consistency
-                                return shouldAddNavigationPadding ? 185 : 20  // 165 (cards) + 20 (base padding)
-                                }
-                                #else
-                                return shouldAddNavigationPadding ? 185 : 20
-                                #endif
-                                #endif
-                            }()) // Platform-specific alignment - iPhone centered, iPad aligned
-                            // No floating sidebar animation needed
+
                             
                         // Remove Spacer to let All Documents fill remaining space
                     }
@@ -1238,8 +1250,8 @@ var body: some View {
                             }
                         }
                         
-                        // Wrap topContainers and allDocumentsSectionView in a ZStack for overlay effect
-                        ZStack(alignment: .top) {
+                        // Main content without All Documents section
+                        VStack(spacing: 0) {
                             // Layer 0: Click-outside catcher (only active when a section is expanded)
                             if isPinnedExpanded || isWIPExpanded || isSchedulerExpanded {
                                 Color.clear
@@ -1253,40 +1265,6 @@ var body: some View {
                                         }
                                     }
                                     .zIndex(-1) // Ensure it's behind interactive elements
-                            }
-
-                            // Documents list (bottom layer)
-                            VStack {
-                                Spacer().frame(height: {
-                                    #if os(macOS)
-                                    return 290 // Reduced by 10 points to bring sections closer to All Documents
-                                    #else
-                                    // Responsive spacing for iOS/iPad - eliminating spacer for iPad
-                                    let screenHeight = UIScreen.main.bounds.height
-                                    return screenHeight * 0.01 // Minimal spacing to eliminate gap
-                                    #endif
-                                }()) // Platform-specific spacing
-                                HStack {
-                                    if shouldAddNavigationPadding {
-                                        Spacer().frame(width: 185) // Fixed spacer width to reserve navigation space
-                                    } else {
-                                        #if os(macOS)
-                                        Spacer().frame(width: 0) // Extend to left edge for macOS to align with cards
-                                        #else
-                                        Spacer().frame(width: 20) // Minimal left margin when navigation hidden
-                                        #endif
-                                    }
-                                    
-                                allDocumentsSectionView
-                                        .frame(maxWidth: .infinity, alignment: .trailing) // Align to right edge
-                                    
-                                        #if os(macOS)
-                                    Spacer().frame(width: 0) // Extend to right edge for macOS to align with cards
-                                        #else
-                                    Spacer().frame(width: 20) // Fixed right margin
-                                        #endif
-                                }
-                                    // No floating sidebar animation needed
                             }
 
                             // Top containers (top layer)
@@ -1433,6 +1411,7 @@ var body: some View {
                 removal: .opacity.combined(with: .scale(scale: 0.95, anchor: .center))
             ))
         }
+
     }
 
     private func setup() {
@@ -1611,12 +1590,9 @@ var body: some View {
                     Image(systemName: "doc.text.fill")
                         .font(.system(size: 12)) // Match carousel icon size
                         .foregroundStyle(theme.primary)
-                    Text("All Documents")
-                        .font(.custom("InterTight-Medium", size: 16)) // Match carousel header font size
+                    Text("All Docs (\(filteredDocuments.count))")
+                        .font(.custom("InterTight-Medium", size: 14)) // Match carousel header font size
                         .foregroundStyle(theme.primary)
-                    Text("(\(filteredDocuments.count))")
-                        .font(.custom("InterTight-Regular", size: 14)) // Proportionally smaller
-                        .foregroundStyle(theme.secondary)
                     Spacer()
                     
                     // Clear all filters button
@@ -1934,13 +1910,9 @@ var body: some View {
                 Image(systemName: "doc.text.fill")
                     .font(.custom("InterTight-Regular", size: 16))
                     .foregroundStyle(theme.primary)
-                Text("All Documents")
-                    .font(.custom("InterTight-Medium", size: 18))
+                Text("All Docs (\(filteredDocuments.count))")
+                    .font(.custom("InterTight-Medium", size: 16))
                     .foregroundStyle(theme.primary)
-                Text("(\(filteredDocuments.count))")
-                    .font(.custom("InterTight-Regular", size: 16))
-                    .foregroundStyle(theme.secondary)
-                    .frame(width: 45, alignment: .leading)
                 
                 Menu {
                     ForEach(ListColumn.allColumns) { column in
@@ -2498,265 +2470,51 @@ var body: some View {
         #endif
     }
     
-    // Extracted computed property for the "All Documents" section (header + table)
+    // Modern All Documents bottom sheet
     private var allDocumentsSectionView: some View {
-        #if os(iOS)
-        let isIPad = UIDevice.current.userInterfaceIdiom == .pad
-        let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-        #else
-        let isIPad = false
-        let isPhone = false
-        #endif
-        
-        return VStack(spacing: 0) {
-            // Call the extracted header view - THIS SHOULD STAY FIXED
-            documentSectionHeader
-            
-            // Add breathing room between header and table for iPad
-            #if os(iOS)
-            let isIPad = UIDevice.current.userInterfaceIdiom == .pad
-            if isIPad {
-                Spacer().frame(height: 24) // Increased to 24pt breathing room for iPad
-            }
-            #endif
-
-            #if os(macOS)
-            DocumentTable(
-                documents: Binding(
-                    get: { filteredDocuments },
-                    set: { documents = $0 }
-                ),
-                selectedDocuments: $selectedDocuments,
-                isSelectionMode: isSelectionMode,
-                pinnedDocuments: pinnedDocuments,
-
-                wipDocuments: wipDocuments,
-                calendarDocuments: calendarDocuments,
-                visibleColumns: visibleColumns,
-                dateFilterType: dateFilterType,
-                onPin: togglePin,
-                onWIP: toggleWIP,
-                onCalendar: toggleCalendar,
-                onOpen: { doc in
-                    self.document = doc
-                    self.sidebarMode = .details
-                    self.isRightSidebarVisible = true
-                },
-                onShowDetails: showDetails,
-                onDelete: { docIds in
-                    selectedDocuments = Set(docIds)
-                    deleteSelectedDocuments()
-                },
-                onCalendarAction: { document in
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                        documentToShowInSheet = document
-                    }
-                },
-                refreshID: tableRefreshID
-            )
-            // Apply the height adjustment only to the table instead of the whole container
-            .frame(height: 325)
-            #elseif os(iOS)
-            // iOS: SwiftUI-based document list optimized for touch
-            let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-            
-            if isPhone {
-                // iPhone: Table always fills full width, no horizontal scrolling needed
-                VStack(alignment: .leading, spacing: 0) {
-                    // Column Header Row
-                    iosColumnHeaderRow(columnWidths: calculateFlexibleColumnWidths())
-                    
-                    // Document Rows
-                    ScrollView(.vertical) {
-                        LazyVStack(alignment: .leading, spacing: 0) {
-                            ForEach(Array(filteredDocuments.enumerated()), id: \.element.id) { index, document in
-                                documentRowForIndex(index, document: document, columnWidths: calculateFlexibleColumnWidths())
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.bottom, allDocumentsPosition == .default ? 300 : 0) // Increased padding to 300pt in default state
-                    }
-                    .frame(height: 435)
-                }
-                .padding(.horizontal, 0) // iPhone: Remove padding to allow table to fill full width
-            } else {
-                // iPad: Original layout without horizontal scrolling
-            GeometryReader { geometry in
-                // iPad: Use conservative width calculation to ensure Actions column is fully visible
-                let availableWidth = min(geometry.size.width * 0.92, geometry.size.width - 60) // 92% width or 60pt margin, whichever is smaller
-                let columnWidths = calculateFlexibleColumnWidths(availableWidth: availableWidth)
-                VStack(spacing: 0) {
-                    // Column Header Row
-                    iosColumnHeaderRow(columnWidths: columnWidths)
-                    
-                    // Document Rows
-                    ScrollView {
-                        LazyVStack(spacing: isIPad ? -4 : 0) {
-                            ForEach(Array(filteredDocuments.enumerated()), id: \.element.id) { index, document in
-                                documentRowForIndex(index, document: document, columnWidths: columnWidths)
-                            }
-                        }
-                        .padding(.bottom, {
-                            #if os(iOS)
-                            let isIPad = UIDevice.current.userInterfaceIdiom == .pad
-                            if isIPad && allDocumentsPosition == .expanded {
-                                return 100 // Add bottom padding on iPad when expanded so users can see last item
-                            } else {
-                                return 0 // No extra padding in other cases
-                            }
-                            #else
-                            return 0 // No extra padding on other platforms
-                            #endif
-                        }())
-                    }
-                    .frame(height: isIPad ? nil : 435) // Remove fixed height on iPad to allow expansion
-                    .frame(maxHeight: isIPad ? .infinity : 435) // Allow it to fill available space on iPad
-                }
-            }
-                .padding(.horizontal, {
-                    #if os(iOS)
-                    let isIPad = UIDevice.current.userInterfaceIdiom == .pad
-                    if isIPad {
-                        // Remove horizontal padding on iPad to allow full width columns
-                        return 0
-                    } else {
-                        return 16
-                    }
-                    #else
-                    return 16
-                    #endif
-                }())
-                }
-            #endif
-        }
-        .glassmorphismBackground(cornerRadius: 12)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .shadow(
-            color: colorScheme == .dark ? .black.opacity(0.17) : .black.opacity(0.07),
-            radius: 8,
-            x: 0,
-            y: 1
-        )
-
-        .frame(
-            maxWidth: {
-                #if os(iOS)
-                let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-                if isPhone {
-                    // iPhone: 93% width to match carousel cards
-                    return UIScreen.main.bounds.width * 0.93
-                } else {
-                    return .infinity // iPad: allow full width expansion
-                }
-                #else
-                return .infinity // macOS: allow full width expansion
-                #endif
-            }()
-        )
-        .frame(height: {
-            #if os(iOS)
-            let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-            let isIPad = UIDevice.current.userInterfaceIdiom == .pad
-            if isPhone || isIPad {
-                // Dynamic height based on position - stretches from top, bottom stays anchored
-                switch allDocumentsPosition {
-                case .collapsed:
-                    return 300 // Compact height
-                case .default:
-                    return 600 // Default height (increased from 500)
-                case .expanded:
-                    return 1200 // Expanded height (increased from 1000 for more growth toward header)
-                }
-            } else {
-                return 400 // Default for other platforms
-            }
-            #else
-            return 400 // Default for macOS
-            #endif
-        }())
-        .offset(y: {
-            #if os(iOS)
-            let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-            let isIPad = UIDevice.current.userInterfaceIdiom == .pad
-            if isPhone || isIPad {
-                // Offset to anchor bottom edge - move up when expanded, down when collapsed
-                switch allDocumentsPosition {
-                case .collapsed:
-                    return 150 // Move down (300pt height vs 600pt default = 150pt difference)
-                case .default:
-                    return 0 // No offset (baseline position)
-                case .expanded:
-                    if isPhone {
-                        return -250 // iPhone: Move up for better spacing from header (perfect)
-                    } else {
-                        return 50 // iPad: Move down slightly for better positioning
-                    }
-                }
-            } else {
-                return 0 // No offset for other platforms
-            }
-            #else
-            return 0 // No offset for macOS
-            #endif
-        }())
-        .frame(maxHeight: isIPad ? .infinity : 1200) // Allow All Documents to fill remaining space on iPad
-        .blur(radius: isSchedulerExpanded || isPinnedExpanded || isWIPExpanded ? 3 : 0)
-        .opacity(isSchedulerExpanded || isPinnedExpanded || isWIPExpanded ? 0.7 : 1.0)
-        .onChange(of: selectedAllDocuments) { oldSelection, newSelection in
-            // Auto-exit edit mode when all items are deselected
-            if newSelection.isEmpty && isAllDocumentsEditMode {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    isAllDocumentsEditMode = false
-                }
-            }
-        }
-        // Remove the offset - now using dynamic height instead
-        .gesture(
-            (isPhone || isIPad) ? DragGesture()
-                .onChanged { value in
-                    // Track dragging state for visual feedback
-                    isDraggingAllDocuments = true
-                }
-                .onEnded { value in
-                    let velocity = value.predictedEndTranslation.height
-                    let dragThreshold: CGFloat = 50  // Reduced from 100 to 50 for more responsive swipes
-                    
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                        let previousPosition = allDocumentsPosition
-                        
-                        // Determine final position based on drag distance and velocity
-                        if allDocumentsPosition == .default {
-                            if value.translation.height < -dragThreshold || velocity < -100 {
-                                // Swipe up from default -> expanded
-                                allDocumentsPosition = .expanded
-                            } else if value.translation.height > dragThreshold || velocity > 100 {
-                                // Swipe down from default -> collapsed
-                                allDocumentsPosition = .collapsed
-                            }
-                        } else if allDocumentsPosition == .expanded {
-                            if value.translation.height > dragThreshold || velocity > 100 {
-                                // Swipe down from expanded -> default
-                                allDocumentsPosition = .default
-                            }
-                        } else if allDocumentsPosition == .collapsed {
-                            if value.translation.height < -dragThreshold || velocity < -100 {
-                                // Swipe up from collapsed -> default
-                                allDocumentsPosition = .default
-                            }
-                        }
-                        
-                        // Add haptic feedback if position changed
-                        if previousPosition != allDocumentsPosition {
-                            HapticFeedback.impact(.medium)
-                        }
-                        
-                        // Reset dragging state
-                        isDraggingAllDocuments = false
-                    }
-                } : nil
-        )
-        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: allDocumentsPosition)
-    }
+        AllDocumentsBottomSheet(
+            documents: $documents,
+            selectedDocuments: $selectedDocuments,
+            selectedTags: $selectedTags,
+            selectedFilterColumn: $selectedFilterColumn,
+            selectedFilterCategory: $selectedFilterCategory,
+            sheetDetent: $allDocumentsSheetDetent,
+            pinnedDocuments: pinnedDocuments,
+            wipDocuments: wipDocuments,
+            calendarDocuments: calendarDocuments,
+            dateFilterType: dateFilterType,
+            onPin: { doc in togglePin(for: doc.id) },
+            onWIP: { doc in toggleWIP(doc.id) },
+            onCalendar: { doc in toggleCalendar(doc.id) },
+            onOpen: { doc in
+                self.document = doc
+                self.sidebarMode = .details
+                self.isRightSidebarVisible = true
+                showAllDocumentsSheet = false // Close sheet when opening document
+            },
+            onShowDetails: showDetails,
+            onDelete: { docIds in
+                selectedDocuments = Set(docIds)
+                deleteSelectedDocuments()
+            },
+            onClose: {
+                showAllDocumentsSheet = false
+            },
+                            onShowPinnedSheet: { /* No longer used - tabs handled internally */ },
+                onShowWIPSheet: { /* No longer used - tabs handled internally */ },
+                onShowScheduleSheet: { /* No longer used - tabs handled internally */ },
+                         onShowMorphMenu: {
+                 // Only save state if sheet is currently showing
+                 if showAllDocumentsSheet {
+                     wasAllDocumentsSheetOpenBeforeMenu = true
+                     withAnimation(.easeInOut(duration: 0.2)) {
+                         showAllDocumentsSheet = false
+                     }
+                 }
+                 onMenuTap?()
+             }
+         )
+     }
 
     // iOS Column Header Row
     #if os(iOS)

@@ -1649,6 +1649,7 @@ private func mainContentView(availableWidth: CGFloat) -> some View {
                         isCircularMenuOpen = true
                     }
                 },
+                isCircularMenuOpen: $isCircularMenuOpen,
                 onDashboard: {
                     sidebarMode = .allDocuments
                     isRightSidebarVisible = false

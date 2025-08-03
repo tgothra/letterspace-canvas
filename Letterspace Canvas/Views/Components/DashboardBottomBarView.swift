@@ -72,89 +72,119 @@ struct FloatingDashboardBottomBar: View {
     
     var body: some View {
         GeometryReader { geometry in
-            ZStack {
-                // Custom sheet overlay
-                if showSheet, let selectedTab = selectedTab {
-                    DashboardSheetOverlay(
-                        tab: selectedTab,
-                        isPresented: $showSheet,
-                documents: $documents,
-                pinnedDocuments: $pinnedDocuments,
-                wipDocuments: $wipDocuments,
-                calendarDocuments: $calendarDocuments,
-                onSelectDocument: onSelectDocument,
-                onPin: onPin,
-                onWIP: onWIP,
-                onCalendar: onCalendar,
-                        onDashboard: onDashboard,
-                        onSearch: onSearch,
-                        onNewDocument: onNewDocument,
-                        onFolders: onFolders,
-                        onBibleReader: onBibleReader,
-                        onSmartStudy: onSmartStudy,
-                        onRecentlyDeleted: onRecentlyDeleted,
-                        onSettings: onSettings
-                    )
-                    .zIndex(1000)
-                }
+            VStack {
+                Spacer()
                 
-                // Floating bottom bar
-                VStack {
-                    Spacer()
-                    
-                    HStack(spacing: 0) {
-                        ForEach(Array(DashboardTab.allCases.enumerated()), id: \.element.rawValue) { index, tab in
-                            TabButton(
-                                tab: tab,
-                                count: getTabCount(tab),
-                                isSelected: selectedTab == tab,
-                                action: {
-                                    HapticFeedback.impact(.light)
-                                    selectedTab = tab
-                                    currentTabIndex = index
-                                    withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                HStack(spacing: 40) {
+                    ForEach(Array(DashboardTab.allCases.enumerated()), id: \.element.rawValue) { index, tab in
+                        TabButton(
+                            tab: tab,
+                            count: getTabCount(tab),
+                            isSelected: selectedTab == tab,
+                            action: {
+                                HapticFeedback.impact(.light)
+                                selectedTab = tab
+                                currentTabIndex = index
+                                withAnimation(.spring(response: 0.6, dampingFraction: 0.75, blendDuration: 0.1)) {
+                                    showSheet = true
+                                }
+                            }
+                        )
+                    }
+                }
+                .padding(.horizontal, 6)
+                .padding(.vertical, isiOS26 ? 6 : 8)
+                .background {
+                    if #available(iOS 26, *) {
+                        // No background for iOS 26 - glass effect applied directly
+                        Color.clear
+                    } else {
+                        // Fallback for older iOS
+                        RoundedRectangle(cornerRadius: 32)
+                            .fill(.ultraThinMaterial)
+                            .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: 4)
+                    }
+                }
+                .modifier(InteractiveGlassEffectModifier(cornerRadius: isiOS26 ? 24 : 28))
+                .padding(.leading, 25)
+                .padding(.trailing, 75)
+                .padding(.bottom, geometry.safeAreaInsets.bottom > 0 ? 8 : 20)
+                .contentShape(Rectangle())
+                .offset(y: dragOffset)
+                .gesture(
+                    DragGesture()
+                        .onChanged { value in
+                            isDragging = true
+                            
+                            // Handle horizontal drag for tab selection
+                            let barWidth = geometry.size.width - 100 // Account for horizontal padding (25 + 75)
+                            let tabWidth = barWidth / CGFloat(DashboardTab.allCases.count)
+                            let touchX = value.location.x - 25 // Adjust for leading padding
+                            
+                            // Calculate which tab should be selected based on touch position
+                            let tabIndex = max(0, min(DashboardTab.allCases.count - 1, Int(touchX / tabWidth)))
+                            
+                            if tabIndex != currentTabIndex {
+                                currentTabIndex = tabIndex
+                                selectedTab = DashboardTab.allCases[tabIndex]
+                                HapticFeedback.impact(.light)
+                            }
+                            
+                            // Handle vertical drag to open sheet
+                            if value.translation.height < -50 {
+                                // Dragging up - prepare to open sheet
+                                dragOffset = value.translation.height * 0.3
+                            }
+                        }
+                        .onEnded { value in
+                            isDragging = false
+                            
+                            // Check if dragged up enough to open sheet
+                            if value.translation.height < -100 || value.predictedEndTranslation.height < -150 {
+                                if let selectedTab = selectedTab {
+                                    withAnimation(.spring(response: 0.6, dampingFraction: 0.75, blendDuration: 0.1)) {
                                         showSheet = true
+                                        dragOffset = 0
                                     }
                                 }
-                            )
-                        }
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
-                    .background(
-                        RoundedRectangle(cornerRadius: 32)
-                            .fill(.clear)
-                            .glassEffect(.regular.interactive(), in: RoundedRectangle(cornerRadius: 32))
-                            .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: 4)
-                    )
-                    .padding(.horizontal, 40)
-                    .padding(.bottom, geometry.safeAreaInsets.bottom > 0 ? 8 : 20)
-                    .gesture(
-                        DragGesture()
-                            .onChanged { value in
-                                isDragging = true
-                                let barWidth = geometry.size.width - 80 // Account for horizontal padding
-                                let tabWidth = barWidth / CGFloat(DashboardTab.allCases.count)
-                                let touchX = value.location.x - 40 // Adjust for horizontal padding
-                                
-                                // Calculate which tab should be selected based on touch position
-                                let tabIndex = max(0, min(DashboardTab.allCases.count - 1, Int(touchX / tabWidth)))
-                                
-                                if tabIndex != currentTabIndex {
-                                    currentTabIndex = tabIndex
-                                    selectedTab = DashboardTab.allCases[tabIndex]
-                                    HapticFeedback.impact(.light)
+                            } else {
+                                // Return to normal position
+                                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                                    dragOffset = 0
                                 }
                             }
-                            .onEnded { value in
-                                isDragging = false
-                                // Keep the current selection
-                            }
-                    )
-                }
+                        }
+                )
             }
         }
         .ignoresSafeArea(edges: .bottom)
+        .sheet(isPresented: $showSheet) {
+            if let selectedTab = selectedTab {
+                DashboardSheetContent(
+                    tab: selectedTab,
+                    documents: $documents,
+                    pinnedDocuments: $pinnedDocuments,
+                    wipDocuments: $wipDocuments,
+                    calendarDocuments: $calendarDocuments,
+                    onSelectDocument: onSelectDocument,
+                    onPin: onPin,
+                    onWIP: onWIP,
+                    onCalendar: onCalendar,
+                    onDashboard: onDashboard,
+                    onSearch: onSearch,
+                    onNewDocument: onNewDocument,
+                    onFolders: onFolders,
+                    onBibleReader: onBibleReader,
+                    onSmartStudy: onSmartStudy,
+                    onRecentlyDeleted: onRecentlyDeleted,
+                    onSettings: onSettings
+                )
+                .presentationDetents([.medium, .large])
+                .presentationBackground(.clear)
+                .presentationBackgroundInteraction(.enabled)
+                .presentationDragIndicator(.visible)
+            }
+        }
     }
     
     private func getTabCount(_ tab: DashboardTab) -> Int? {
@@ -182,52 +212,70 @@ struct TabButton: View {
     
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 4) {
+            VStack(spacing: isiOS26 ? 2 : 3) {
                 ZStack {
-                    Image(systemName: tab.symbolImage)
-                        .font(.system(size: 18, weight: .medium))
-                        .foregroundColor(isSelected ? tab.color : theme.secondary)
-                        .symbolEffect(.bounce, value: isSelected)
+                    Group {
+                        if #available(iOS 26, *) {
+                            // iOS 26 with enhanced symbol rendering - smaller icons
+                            Image(systemName: tab.symbolImage)
+                                .font(.system(size: isiOS26 ? 16 : 16, weight: .medium))
+                                .symbolVariant(isSelected ? .fill : .none)
+                                .foregroundStyle(isSelected ? tab.color : theme.secondary)
+                                .symbolEffect(.bounce.down, value: isSelected)
+                                .contentTransition(.symbolEffect(.replace.downUp))
+                        } else {
+                            // Fallback for older iOS - smaller icons
+                            Image(systemName: tab.symbolImage)
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(isSelected ? tab.color : theme.secondary)
+                                .symbolEffect(.bounce, value: isSelected)
+                        }
+                    }
                     
-                    // Count badge
+                    // iOS 26 style badge with liquid glass effect
                     if let count = count, count > 0 {
-                        Text("\(count)")
-                            .font(.caption2)
-                            .fontWeight(.bold)
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(
-                                Capsule()
-                                    .fill(tab.color)
-                            )
-                            .offset(x: 12, y: -8)
+                        Group {
+                            if #available(iOS 26, *) {
+                                Text("\(count)")
+                                    .font(.caption2)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background {
+                                        Capsule()
+                                            .fill(tab.color)
+                                            .glassEffect(.regular, in: .capsule)
+                                    }
+                                    .offset(x: 14, y: -10)
+                            } else {
+                                Text("\(count)")
+                                    .font(.caption2)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(
+                                        Capsule()
+                                            .fill(tab.color)
+                                    )
+                                    .offset(x: 12, y: -8)
+                            }
+                        }
                     }
                 }
                 
                 Text(tab.rawValue)
-                    .font(.caption2)
+                    .font(isiOS26 ? .caption2 : .caption2)
                     .fontWeight(.medium)
-                    .foregroundColor(isSelected ? tab.color : theme.secondary)
-                    .scaleEffect(isSelected ? 1.1 : 1.0)
-                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
+                    .foregroundStyle(isSelected ? tab.color : theme.secondary)
+                    .scaleEffect(isSelected ? (isiOS26 ? 1.02 : 1.05) : 1.0)
+                    .animation(.interpolatingSpring(duration: 0.3, bounce: 0.3), value: isSelected)
             }
-                .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
-            .background(
-                Group {
-                    if isSelected {
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(tab.color.opacity(0.15))
-                            .glassEffect(.regular.interactive(), in: RoundedRectangle(cornerRadius: 12))
-                    } else {
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(Color.clear)
-                    }
-                }
-            )
-            .scaleEffect(isPressed ? 0.95 : 1.0)
-            .animation(.easeInOut(duration: 0.1), value: isPressed)
+            .padding(.vertical, isiOS26 ? 8 : 10)
+            .padding(.horizontal, isiOS26 ? 8 : 10)
+            .scaleEffect(isPressed ? 0.96 : 1.0)
+            .animation(.interpolatingSpring(duration: 0.15, bounce: 0.2), value: isPressed)
         }
         .buttonStyle(.plain)
         .simultaneousGesture(
@@ -244,13 +292,13 @@ struct TabButton: View {
     }
 }
 
-/// Custom Sheet Overlay that slides up from bottom
-struct DashboardSheetOverlay: View {
+/// Dashboard Sheet Content for Native Sheet
+struct DashboardSheetContent: View {
     @Environment(\.themeColors) var theme
     @Environment(\.colorScheme) var colorScheme
+    @Environment(\.dismiss) var dismiss
     
     let tab: DashboardTab
-    @Binding var isPresented: Bool
     
     // Dashboard data
     @Binding var documents: [Letterspace_CanvasDocument]
@@ -274,147 +322,67 @@ struct DashboardSheetOverlay: View {
     let onRecentlyDeleted: (() -> Void)?
     let onSettings: (() -> Void)?
     
-    @State private var dragOffset: CGFloat = 0
-    @State private var isDragging: Bool = false
-    @State private var currentDetent: SheetDetent = .medium
-    
     var body: some View {
-        GeometryReader { geometry in
-            ZStack {
-                // Background overlay
-                
-                // Sheet content
-                VStack(spacing: 0) {
+        NavigationView {
+            VStack(spacing: 0) {
+                // Header
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 8) {
+                            Image(systemName: tab.symbolImage)
+                                .font(.title3)
+                                .foregroundColor(tab.color)
+                            
+                            Text(tab.rawValue)
+                                .font(.title2)
+                                .fontWeight(.bold)
+                                .foregroundColor(theme.primary)
+                        }
+                        
+                        Text(getTabSubtitle())
+                            .font(.subheadline)
+                            .foregroundColor(theme.secondary)
+                    }
+                    
                     Spacer()
                     
+                    Button("Done") {
+                        dismiss()
+                    }
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(tab.color)
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 16)
+                
+                // Content
+                ScrollView(.vertical, showsIndicators: false) {
                     VStack(spacing: 0) {
-                        // Handle bar
-                        RoundedRectangle(cornerRadius: 3)
-                            .fill(Color.secondary.opacity(0.4))
-                            .frame(width: 36, height: 6)
-                            .padding(.top, 12)
-                            .padding(.bottom, 8)
-                        
-                        // Header
-                        HStack {
-                            VStack(alignment: .leading, spacing: 4) {
-                                HStack(spacing: 8) {
-                                    Image(systemName: tab.symbolImage)
-                                        .font(.title3)
-                                        .foregroundColor(tab.color)
-                                    
-                                    Text(tab.rawValue)
-                                        .font(.title2)
-                                        .fontWeight(.bold)
-                                        .foregroundColor(theme.primary)
-                                }
-                                
-                                Text(getTabSubtitle())
-                                    .font(.subheadline)
-                                    .foregroundColor(theme.secondary)
-                            }
-                            
-                            Spacer()
-                            
-                            Button("Done") {
-                                dismissSheet()
-                            }
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundColor(tab.color)
-                        }
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 16)
-                        
-                        // Content
-                        ScrollView(.vertical, showsIndicators: false) {
-                            VStack(spacing: 0) {
-                                switch tab {
-                                case .pinned:
-                                    PinnedSheetContent()
-                                case .wip:
-                                    WIPSheetContent()
-                                case .schedule:
-                                    ScheduleSheetContent()
-                                }
-                            }
-                            .padding(.horizontal, 20)
-                            .padding(.bottom, 100)
+                        switch tab {
+                        case .pinned:
+                            PinnedSheetContent()
+                        case .wip:
+                            WIPSheetContent()
+                        case .schedule:
+                            ScheduleSheetContent()
                         }
                     }
-                    .frame(height: calculateSheetHeight(geometry: geometry))
-                    .background(
-                        RoundedRectangle(cornerRadius: 20, style: .continuous)
-                            .fill(.clear)
-                            .glassEffect(.regular.interactive(), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                            .shadow(color: Color.black.opacity(0.1), radius: 20, x: 0, y: -5)
-                    )
-                    .offset(y: dragOffset)
-                                         .gesture(
-                         DragGesture()
-                             .onChanged { value in
-                                 isDragging = true
-                                 if value.translation.height > 0 {
-                                     // Dragging down - allow drag
-                                     dragOffset = value.translation.height
-                                 } else {
-                                     // Dragging up - expand to next detent
-                                     dragOffset = value.translation.height * 0.5
-                                 }
-                             }
-                             .onEnded { value in
-                                 isDragging = false
-                                 let translation = value.translation.height
-                                 let velocity = value.predictedEndTranslation.height
-                                 
-                                 withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                                     if translation > 100 || velocity > 300 {
-                                         // Dismiss if dragged down significantly
-                                         if currentDetent == .medium {
-                                             dismissSheet()
-                                         } else {
-                                             // Move to medium detent
-                                             currentDetent = .medium
-                                             dragOffset = 0
-                                         }
-                                     } else if translation < -100 || velocity < -300 {
-                                         // Expand to large detent if dragged up
-                                         currentDetent = .large
-                                         dragOffset = 0
-                                     } else {
-                                         // Return to current detent
-                                         dragOffset = 0
-                                     }
-                                 }
-                             }
-                     )
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 100)
                 }
             }
-        }
-        .transition(.asymmetric(
-            insertion: .move(edge: .bottom).combined(with: .opacity),
-            removal: .move(edge: .bottom).combined(with: .opacity)
-        ))
-    }
-    
-    private func calculateSheetHeight(geometry: GeometryProxy) -> CGFloat {
-        let mediumHeight: CGFloat = geometry.size.height * 0.5
-        let largeHeight: CGFloat = geometry.size.height * 0.85
-        
-        switch currentDetent {
-        case .compact:
-            return mediumHeight // Fallback to medium
-        case .medium:
-            return mediumHeight
-        case .large:
-            return largeHeight
-        }
-    }
-    
-    private func dismissSheet() {
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-            isPresented = false
-            dragOffset = 0
-            currentDetent = .medium
+            .background {
+                if #available(iOS 26, *) {
+                    // iOS 26 uses transparent background with glass effect handled by presentation
+                    Color.clear
+                } else {
+                    // Fallback for older iOS
+                    theme.background
+                }
+            }
+#if !os(macOS)
+            .navigationBarHidden(true)
+#endif
         }
     }
     
@@ -464,7 +432,7 @@ struct DashboardSheetOverlay: View {
                         hasCalendar: calendarDocuments.contains(document.id),
                         onTap: { 
                             onSelectDocument(document)
-                            dismissSheet()
+                            dismiss()
                         },
                         onPin: { onPin(document.id) },
                         onWIP: { onWIP(document.id) },
@@ -496,7 +464,7 @@ struct DashboardSheetOverlay: View {
                         hasCalendar: calendarDocuments.contains(document.id),
                         onTap: { 
                             onSelectDocument(document)
-                            dismissSheet()
+                            dismiss()
                         },
                         onPin: { onPin(document.id) },
                         onWIP: { onWIP(document.id) },
@@ -528,7 +496,7 @@ struct DashboardSheetOverlay: View {
                         hasCalendar: true,
                         onTap: { 
                             onSelectDocument(document)
-                            dismissSheet()
+                            dismiss()
                         },
                         onPin: { onPin(document.id) },
                         onWIP: { onWIP(document.id) },
@@ -651,5 +619,61 @@ struct EmptyStateView: View {
         }
         .padding(.vertical, 40)
         .frame(maxWidth: .infinity)
+    }
+}
+
+// MARK: - iOS 26 Helper Extension
+extension View {
+    var isiOS26: Bool {
+        if #available(iOS 26, *) {
+            return true
+        } else {
+            return false
+        }
+    }
+}
+
+// MARK: - Interactive Glass Effect Modifier (iOS 26)
+struct InteractiveGlassEffectModifier: ViewModifier {
+    let cornerRadius: CGFloat
+    @State private var isInteractive = true
+    
+    func body(content: Content) -> some View {
+        if #available(iOS 26, *) {
+            content
+                .glassEffect(.regular.interactive(isInteractive), in: .rect(cornerRadius: cornerRadius))
+                .onTapGesture {
+                    // Toggle interactivity for visual feedback
+                    withAnimation(.easeInOut(duration: 0.1)) {
+                        isInteractive.toggle()
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        withAnimation(.easeInOut(duration: 0.1)) {
+                            isInteractive.toggle()
+                        }
+                    }
+                }
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { _ in
+                            // Activate interactive mode while dragging
+                            if !isInteractive {
+                                withAnimation(.easeInOut(duration: 0.1)) {
+                                    isInteractive = true
+                                }
+                            }
+                        }
+                        .onEnded { _ in
+                            // Deactivate after drag ends
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                                withAnimation(.easeInOut(duration: 0.1)) {
+                                    isInteractive = false
+                                }
+                            }
+                        }
+                )
+        } else {
+            content
+        }
     }
 }
