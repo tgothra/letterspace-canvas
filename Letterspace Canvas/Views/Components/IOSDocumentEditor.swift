@@ -111,7 +111,7 @@ struct SimpleIOSTextView: UIViewRepresentable {
         textView.backgroundColor = UIColor.clear
         textView.textColor = colorScheme == .dark ? UIColor.white : UIColor.black
         textView.isScrollEnabled = false
-        textView.textContainerInset = UIEdgeInsets(top: 16, left: 24, bottom: 300, right: 24)
+        textView.textContainerInset = UIEdgeInsets(top: 16, left: 24, bottom: 400, right: 24)
         textView.textContainer.lineFragmentPadding = 0
         textView.text = text
         

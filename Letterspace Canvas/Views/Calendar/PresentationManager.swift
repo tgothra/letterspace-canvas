@@ -84,17 +84,19 @@ struct PresentationManager: View {
     }
     
     var body: some View {
-        VStack(spacing: 0) {
-            // Header with title and close button
-            headerView
-            
-            // Progress indicators
-            stepIndicatorView
-                .padding(.top, 16)
-                .padding(.bottom, 24)
-            
-            // Main content area that changes based on current step
-            ZStack {
+        GeometryReader { proxy in
+            let isCompact = proxy.size.height < 520
+            VStack(spacing: 0) {
+                // Header with title and close button
+                headerView
+                
+                // Progress indicators
+                stepIndicatorView
+                    .padding(.top, isCompact ? 6 : 12)
+                    .padding(.bottom, isCompact ? 8 : 12)
+                
+                // Main content area that changes based on current step
+                ZStack {
                 let fadeDuration = 0.15 // Quicker fade
                 let fadeInDelay = 0.12  // Shorter delay
                 
@@ -138,21 +140,15 @@ struct PresentationManager: View {
                     .offset(y: currentStep == 3 ? 0 : (currentStep > 3 ? -50 : 50))
                     .animation(.spring(response: 0.4, dampingFraction: 0.85), value: currentStep) // Quicker spring
                     .allowsHitTesting(currentStep == 3)
+                }
+                .frame(maxHeight: .infinity)
+                .padding(.bottom, isCompact ? 12 : 20)
+                
             }
-            .frame(height: 500) // Fixed height for content area to prevent resizing
-            .padding(.bottom, 30)
-            
-            Spacer()
-            
-            // Navigation buttons
-            navigationButtonsView
-        }
-        .padding(30)
-        .frame(width: 500)
-        // Remove minHeight to prevent expanding
-        .background(colorScheme == .dark ? Color(.sRGB, white: 0.12) : .white)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .onAppear {
+            .padding(.horizontal, 20)
+            .padding(.vertical, isCompact ? 8 : 20)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .onAppear {
             loadRecentLocations()
             
             // Initialize time to current hour + 1 (for future presentations)
@@ -202,12 +198,20 @@ struct PresentationManager: View {
             
             // Validate initial date/time
             validateTimeForSelectedDate()
-        }
-        .onChange(of: isPastPresentation) { oldValue, newValue in
-            validateTimeForSelectedDate()
-        }
-        .onChange(of: selectedDate) { oldValue, newValue in
-            validateTimeForSelectedDate()
+            }
+            .onChange(of: isPastPresentation) { oldValue, newValue in
+                validateTimeForSelectedDate()
+            }
+            .onChange(of: selectedDate) { oldValue, newValue in
+                validateTimeForSelectedDate()
+            }
+            // Keep the navigation buttons pinned above the bottom safe area so they are always visible
+            .safeAreaInset(edge: .bottom) {
+                navigationButtonsView
+                    .padding(.horizontal, 20)
+                    .padding(.top, 8)
+                    .padding(.bottom, max(proxy.safeAreaInsets.bottom, 12))
+            }
         }
     }
     
@@ -294,7 +298,7 @@ struct PresentationManager: View {
                 }
             }
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, 12)
         .onChange(of: currentStep) { oldValue, newValue in
             if oldValue < newValue { // Moving forward
                 animateTransition = true
@@ -308,8 +312,7 @@ struct PresentationManager: View {
     
     // Step 1: Mode Selection
     private var modeSelectionView: some View {
-        VStack(spacing: 24) {
-            Spacer() // Pushes content down from progress indicator
+        VStack(spacing: 16) {
             
             // Consistent Title Styling
             Text("How would you like to schedule this document?")
@@ -319,7 +322,7 @@ struct PresentationManager: View {
                 .padding(.top, 8) // Match date/time title padding
                 .fixedSize(horizontal: false, vertical: true)
             
-            VStack(spacing: 16) {
+            VStack(spacing: 12) {
                 // Schedule Future Button
                 Button(action: {
                     isPastPresentation = false
@@ -379,10 +382,10 @@ struct PresentationManager: View {
                 .contentShape(Rectangle()) // Apply to the Button itself
                 .onHover { hovering in isHoveringPast = hovering }
             }
-            .padding(.top, 16) // Match date/time title padding
+            .padding(.top, 8)
             .fixedSize(horizontal: false, vertical: true)
             
-            Spacer() // Pushes content up from the section below
+            // Removed spacer to allow the sheet to size to content
             
             // --- Modify Upcoming Section ---
             if !upcomingPresentations.isEmpty {
@@ -499,7 +502,7 @@ struct PresentationManager: View {
     
     // Step 2: Date & Time Selection
     private var dateSelectionView: some View {
-        VStack(spacing: 64) { // Further increased spacing below title
+        VStack(spacing: 28) {
             // Consistent Title Styling
             Text("Select a date and time")
                 .font(Font.system(size: 20, weight: .medium))
@@ -638,8 +641,8 @@ struct PresentationManager: View {
                     .background(backgroundColorForLocations)
                         .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
-                .padding(.horizontal, 24)
-                .padding(.vertical, 16)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
                     }
                 }
                 .frame(maxWidth: .infinity)
@@ -832,7 +835,7 @@ struct PresentationManager: View {
     
     // Step 3: Location Input
     private var locationInputView: some View {
-        VStack(spacing: 24) {
+        VStack(spacing: 16) {
             // Consistent Title Styling
             Text("Where will this be presented?")
                 .font(Font.system(size: 20, weight: .medium))
@@ -858,7 +861,7 @@ struct PresentationManager: View {
                 }
                 
                 Divider()
-                    .padding(.vertical, 8)
+                    .padding(.vertical, 6)
                 
                 // Other Locations section header
                 Text("Other Locations")
@@ -900,10 +903,10 @@ struct PresentationManager: View {
                         }
                     }
                 }
-                .frame(height: min(CGFloat(recentLocations.count * 44), 200))
+                .frame(height: min(CGFloat(recentLocations.count * 44), 180))
             }
             
-            Spacer() // Add spacer to fill available space
+            // Removed spacer to allow the sheet to size to content
         }
         .frame(maxWidth: .infinity)
     }
@@ -920,7 +923,7 @@ struct PresentationManager: View {
     // Step 4: Notes Input
     private var notesInputView: some View {
         ScrollView { // Wrap everything in ScrollView to allow scrolling when content exceeds fixed height
-            VStack(spacing: 24) {
+            VStack(spacing: 16) {
                 // Consistent Title Styling
                 Text("Any notes to add?")
                     .font(Font.system(size: 20, weight: .medium))
@@ -941,11 +944,11 @@ struct PresentationManager: View {
                         .cornerRadius(12)
                     
                     // Todo section title with matching style
-                    Text("Any tasks to add?") // Updated text
+                    Text("Any tasks to add?")
                         .font(Font.system(size: 20, weight: .medium))
                         .multilineTextAlignment(.center)
                         .foregroundStyle(theme.primary)
-                        .padding(.top, 12)
+                        .padding(.top, 8)
                         .onAppear {
                             // Force reload of todos every time this view appears
                             if let editId = editingPresentationId {
@@ -956,7 +959,7 @@ struct PresentationManager: View {
                     
                     // Todo list section - the gray box contains just the list
                     ScrollView {
-                        VStack(alignment: .leading, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 8) {
                             // Todo Items List
                             if todoItems.isEmpty {
                                 Text("No tasks yet. Add one below.")
@@ -1043,9 +1046,9 @@ struct PresentationManager: View {
                                 }
                             }
                         }
-                        .padding()
+                        .padding(10)
                     }
-                    .frame(height: 120) // Reduced height to fit
+                    .frame(height: 110)
                     .background(colorScheme == .dark ? Color(.sRGB, white: 0.15) : Color(.sRGB, white: 0.96))
                     .cornerRadius(12)
                     
@@ -1062,13 +1065,13 @@ struct PresentationManager: View {
                                 addTodoItem()
                             }
                     }
-                    .padding(.top, 8)
+                    .padding(.top, 6)
                     .padding(.horizontal, 4)
                 } else {
                     // Empty placeholder with same dimensions when not active
                     Rectangle()
                         .fill(colorScheme == .dark ? Color(.sRGB, white: 0.15) : Color(.sRGB, white: 0.96))
-                        .frame(height: 180)
+                        .frame(height: 160)
                         .cornerRadius(12)
                         .padding()
                 }

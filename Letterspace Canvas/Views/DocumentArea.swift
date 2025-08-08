@@ -351,6 +351,7 @@ struct DocumentArea: View {
             // Main container for all document UI
             documentContainer(geo: geo)
         }
+        .ignoresSafeArea(.all, edges: .top)
         // Add full-screen swipe gesture for iOS navigation (preserves scrolling with smart detection)
         #if os(iOS)
         .offset(x: dragOffset, y: slideDownOffset) // Apply both horizontal and vertical offsets
@@ -626,7 +627,8 @@ struct DocumentArea: View {
     // Background with tap gesture
     private var backgroundView: some View {
                 theme.background
-                    .ignoresSafeArea()
+                    .ignoresSafeArea(.all)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .onTapGesture {
                         // Dismiss search when clicking anywhere in the document area
                         #if os(macOS) // isSearchActive only seems relevant to macOS context here
@@ -669,7 +671,7 @@ struct DocumentArea: View {
                     documentContentView
                         .frame(minHeight: geo.size.height)
                 }
-                .padding(.top, 24) // Always the same padding
+                .padding(.top, 24) // Add breathing room between header and document editor
             }
             
             // Floating header overlay - never affects layout
@@ -1286,6 +1288,14 @@ struct DocumentArea: View {
                     // Clear focus to hide toolbar
                     window.makeFirstResponder(nil)
                 }
+                #elseif os(iOS)
+                // iOS: Force dismiss any active text views and their input accessory toolbars
+                if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                   let window = windowScene.windows.first {
+                    // Force end editing to dismiss any keyboards and input accessory views
+                    print("🎹 DocumentArea cleanup: Dismissing iOS text views and toolbars")
+                    window.endEditing(true)
+                }
                 #endif
                 // Reset editor focused state
                 isEditorFocused = false
@@ -1590,7 +1600,7 @@ struct DocumentArea: View {
     // Calculate the appropriate scroll distance for collapse based on actual header dimensions
     private func calculateDynamicMaxScrollForCollapse() -> CGFloat {
         guard let headerImage = headerImage else {
-            return maxScrollForCollapse // fallback to default
+            return 250 // Use same minimum as calculated version for consistency with minimal content
         }
         
         // Calculate actual header height (same logic as HeaderImageSection)

@@ -47,6 +47,7 @@ struct FloatingDashboardBottomBar: View {
     @State private var currentTabIndex: Int = 0
     @State private var dragOffset: CGFloat = 0
     @State private var isDragging: Bool = false
+    @State private var isVisible: Bool = false
     
     // Dashboard data bindings
     @Binding var documents: [Letterspace_CanvasDocument]
@@ -108,7 +109,7 @@ struct FloatingDashboardBottomBar: View {
                 .modifier(InteractiveGlassEffectModifier(cornerRadius: isiOS26 ? 24 : 28))
                 .padding(.leading, 25)
                 .padding(.trailing, 75)
-                .padding(.bottom, geometry.safeAreaInsets.bottom > 0 ? 8 : 20)
+                .padding(.bottom, geometry.safeAreaInsets.bottom > 0 ? 20 : 40)
                 .contentShape(Rectangle())
                 .offset(y: dragOffset)
                 .gesture(
@@ -158,6 +159,15 @@ struct FloatingDashboardBottomBar: View {
             }
         }
         .ignoresSafeArea(edges: .bottom)
+        .opacity(isVisible ? 1 : 0)
+        .onAppear {
+            // 0.3 second delay to let everything load and settle
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    isVisible = true
+                }
+            }
+        }
         .sheet(isPresented: $showSheet) {
             if let selectedTab = selectedTab {
                 DashboardSheetContent(

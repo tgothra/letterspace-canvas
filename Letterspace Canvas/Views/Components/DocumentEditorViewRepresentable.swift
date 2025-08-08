@@ -33,8 +33,8 @@ struct DocumentEditorView: NSViewRepresentable {
         customScroller.alphaValue = 1.0 // We'll handle transparency ourselves
         scrollView.verticalScroller = customScroller
         
-        // Set reasonable content insets with generous bottom padding for last lines visibility
-        scrollView.contentInsets = NSEdgeInsets(top: 16, left: 0, bottom: 300, right: 0)
+        // Set reasonable content insets with modest bottom padding for last lines visibility
+        scrollView.contentInsets = NSEdgeInsets(top: 16, left: 0, bottom: 100, right: 0)
         
         // Create a fixed size container with appropriate sizing
         let containerWidth = 752.0
@@ -601,7 +601,7 @@ struct DocumentEditorView: NSViewRepresentable {
             
             // Calculate the actual text height
             let textHeight = layoutManager.usedRect(for: textContainer).height
-            let totalHeight = textHeight + staticTopPadding + staticTopPadding + 300 // Add static top + bottom padding + extra bottom padding
+            let totalHeight = textHeight + staticTopPadding + staticTopPadding + 600 // Add static top + bottom padding + extra bottom padding
             
             // Update the text view frame to include bottom padding
             let newHeight = max(totalHeight, scrollView.frame.height)

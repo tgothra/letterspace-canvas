@@ -218,7 +218,10 @@ struct iOS26ScrollDetectingTextEditor: UIViewRepresentable {
             }
 
             // Apply both the top and bottom insets in a single, atomic operation.
-            let newInsets = UIEdgeInsets(top: interpolatedTopInset, left: 0, bottom: currentKeyboardHeight, right: 0)
+                    // Add modest bottom padding to ensure header collapse works even with minimal content
+        let largeBottomPadding: CGFloat = 100 // Modest padding for scroll capability and last line visibility
+        let totalBottomInset = currentKeyboardHeight + largeBottomPadding
+            let newInsets = UIEdgeInsets(top: interpolatedTopInset, left: 0, bottom: totalBottomInset, right: 0)
             
             // We use a transaction with disabled actions to prevent unwanted animations.
             CATransaction.begin()

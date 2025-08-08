@@ -147,9 +147,10 @@ struct Letterspace_CanvasApp: App {
                 #if os(macOS)
                 .frame(minWidth: 1200, minHeight: 800)
                 .frame(idealWidth: 1440, idealHeight: 900)
+                .ignoresSafeArea() // macOS can ignore safe area
                 #endif
                 .withTheme()
-                .ignoresSafeArea() // .ignoresSafeArea() is generally fine for both
+                // FIXED: iOS respects safe areas, only macOS ignores them
                 // Apply the color scheme preference
                 .preferredColorScheme(appearanceController.colorScheme)
                 .onAppear {

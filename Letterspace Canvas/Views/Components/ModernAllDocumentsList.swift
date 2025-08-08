@@ -15,6 +15,7 @@ struct ModernAllDocumentsList: View {
     let onPin: (Letterspace_CanvasDocument) -> Void
     let onWIP: (Letterspace_CanvasDocument) -> Void
     let onCalendar: (Letterspace_CanvasDocument) -> Void
+    let onCalendarAction: (Letterspace_CanvasDocument) -> Void
     let onOpen: (Letterspace_CanvasDocument) -> Void
     let onShowDetails: (Letterspace_CanvasDocument) -> Void
     let onDelete: ([String]) -> Void
@@ -79,6 +80,8 @@ struct ModernAllDocumentsList: View {
             switch dateFilterType {
             case .modified:
                 return doc1.modifiedAt > doc2.modifiedAt
+            case .created:
+                return doc1.createdAt > doc2.createdAt
             }
         }
     }
@@ -213,7 +216,11 @@ struct ModernAllDocumentsList: View {
                         onPin: { onPin(document) },
                         onWIP: { onWIP(document) },
                         onCalendar: { onCalendar(document) },
-                        onDelete: { onDelete([document.id]) }
+                        onCalendarAction: { onCalendarAction(document) },
+                        onDelete: { onDelete([document.id]) },
+                        selectedTags: selectedTags,
+                        selectedFilterColumn: selectedFilterColumn,
+                        dateFilterType: dateFilterType
                     )
                     .environment(\.documentStatus, DocumentStatus(
                         isPinned: pinnedDocuments.contains(document.id),

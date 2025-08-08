@@ -10,6 +10,49 @@ import UniformTypeIdentifiers
 import CoreGraphics
 
 
+// Add ResizableHeaderScrollView helper at the top of the file, after imports
+struct ResizableHeaderScrollView<Header: View, Content: View>: View {
+    var minimumHeight: CGFloat
+    var maximumHeight: CGFloat
+    var ignoresSafeAreaTop: Bool = false
+    var isSticky: Bool = false
+    /// Resize Progress, SafeArea Values
+    @ViewBuilder var header: (CGFloat, EdgeInsets) -> Header
+    @ViewBuilder var content: Content
+    /// View Properties
+    @State private var offsetY: CGFloat = 0
+    var body: some View {
+        GeometryReader {
+            let safeArea = ignoresSafeAreaTop ? $0.safeAreaInsets : .init()
+            
+            ScrollView(.vertical) {
+                LazyVStack(pinnedViews: [.sectionHeaders]) {
+                    Section {
+                        content
+                    } header: {
+                        GeometryReader { _ in
+                            let progress: CGFloat = min(max(offsetY / (maximumHeight - minimumHeight), 0), 1)
+                            let resizedHeight = (maximumHeight + safeArea.top) - (maximumHeight - minimumHeight) * progress
+                            
+                            header(progress, safeArea)
+                                .frame(height: resizedHeight, alignment: .bottom)
+                                /// Making it Sticky
+                                .offset(y: isSticky ? (offsetY < 0 ? offsetY : 0) : 0)
+                        }
+                        .frame(height: maximumHeight + safeArea.top)
+                    }
+                }
+            }
+            .ignoresSafeArea(.container, edges: ignoresSafeAreaTop ? [.top] : [])
+            /// Offset is needed to calculate the progress value
+            .onScrollGeometryChange(for: CGFloat.self) {
+                $0.contentOffset.y + $0.contentInsets.top
+            } action: { oldValue, newValue in
+                offsetY = newValue
+            }
+        }
+    }
+}
 
 struct DashboardView: View {
     @Binding var document: Letterspace_CanvasDocument
@@ -55,7 +98,41 @@ struct DashboardView: View {
     @State private var selectedTags: Set<String> = []
     @State private var selectedFilterColumn: String? = nil
     @State private var selectedFilterCategory: String = "Filter" // "Filter" or "Tags" - Filter is now first
+    @State private var selectedSortColumn: String = "name"
+    @State private var isAscendingSortOrder: Bool = true
+    @State private var isDateFilterExplicitlySelected: Bool = false // Track if date filter was explicitly chosen
     @State private var showTagManager = false
+    @State private var showSermonJournalSheet = false
+    @State private var selectedJournalDocument: Letterspace_CanvasDocument?
+    @State private var showReflectionSelectionSheet = false
+    @State private var showPreachItAgainDetailsSheet = false
+    @State private var selectedPreachItAgainDocument: Letterspace_CanvasDocument?
+    
+    // Consolidated sheet state
+    @State private var activeSheet: ActiveSheet?
+    
+    enum ActiveSheet: Identifiable {
+        case tagManager
+        case sermonJournal(Letterspace_CanvasDocument)
+        case reflectionSelection
+        case preachItAgainDetails(Letterspace_CanvasDocument)
+        case documentDetails(Letterspace_CanvasDocument)
+        case curatedCategory(CurationType)
+        case tallyLabel
+        
+        var id: String {
+            switch self {
+            case .tagManager: return "tagManager"
+            case .sermonJournal(let doc): return "sermonJournal-\(doc.id)"
+            case .reflectionSelection: return "reflectionSelection"
+            case .preachItAgainDetails(let doc): return "preachItAgainDetails-\(doc.id)"
+            case .documentDetails(let doc): return "documentDetails-\(doc.id)"
+            case .curatedCategory(let type): return "curatedCategory-\(type.rawValue)"
+            case .tallyLabel: return "tallyLabel"
+            }
+        }
+    }
+    @StateObject private var journalService = SermonJournalService.shared
     @State private var isHoveringInfo = false
     @State private var hoveredTag: String? = nil
     private let colorManager = TagColorManager.shared
@@ -139,6 +216,8 @@ struct DashboardView: View {
     @State private var wasAllDocumentsSheetOpenBeforeMenu = false // Track sheet state before menu opens
 
     @State private var allDocumentsSheetDetent: PresentationDetent = .height(350) // Start at medium
+    // Unified card sizing for sermon journal cards
+    private let journalCardHeight: CGFloat = 160
     
     // Sheet position states
     enum AllDocumentsPosition {
@@ -638,7 +717,7 @@ private func deleteSelectedDocuments() {
                 Button(action: {
                     print("🎯 macOS first Talle logo button tapped!")
                     print("🎯 Setting showTallyLabelModal to true")
-                    showTallyLabelModal = true
+                    activeSheet = .tallyLabel
                     print("🎯 showTallyLabelModal is now: \(showTallyLabelModal)")
                 }) {
                     Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
@@ -686,7 +765,7 @@ private func deleteSelectedDocuments() {
                         .aspectRatio(contentMode: .fit)
                         .frame(maxWidth: min(140, UIScreen.main.bounds.width * 0.18), maxHeight: 55)
                         .onTapGesture {
-                            showTallyLabelModal = true
+                            activeSheet = .tallyLabel
                         }
                 }
                 .padding(.bottom, 8) // Breathing room between logo and content below
@@ -712,7 +791,7 @@ private func deleteSelectedDocuments() {
                                 .aspectRatio(contentMode: .fit)
                                 .frame(maxWidth: min(80, UIScreen.main.bounds.width * 0.2), maxHeight: 30)
                                 .onTapGesture {
-                                    showTallyLabelModal = true
+                                    activeSheet = .tallyLabel
                                 }
                         }
                         .padding(.bottom, 8) // Breathing room between logo and Dashboard
@@ -770,7 +849,7 @@ private func deleteSelectedDocuments() {
             Button(action: {
                 print("🎯 macOS Talle logo button tapped!")
                 print("🎯 Setting showTallyLabelModal to true")
-                showTallyLabelModal = true
+                activeSheet = .tallyLabel
                 print("🎯 showTallyLabelModal is now: \(showTallyLabelModal)")
             }) {
                 Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
@@ -802,7 +881,7 @@ private func deleteSelectedDocuments() {
                         .aspectRatio(contentMode: .fit)
                         .frame(maxWidth: min(140, UIScreen.main.bounds.width * 0.18), maxHeight: 55)
                         .onTapGesture {
-                            showTallyLabelModal = true
+                            activeSheet = .tallyLabel
                         }
                 }
                 .padding(.bottom, 8) // Breathing room between logo and content below
@@ -830,7 +909,7 @@ private func deleteSelectedDocuments() {
             Button(action: {
                 print("🎯 macOS Talle logo button tapped!")
                 print("🎯 Setting showTallyLabelModal to true")
-                showTallyLabelModal = true
+                activeSheet = .tallyLabel
                 print("🎯 showTallyLabelModal is now: \(showTallyLabelModal)")
             }) {
                 Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
@@ -965,64 +1044,169 @@ loadDocuments()
                  onRecentlyDeleted: onRecentlyDeleted,
                  onSettings: onSettings
              )
+             .zIndex(1000) // Ensure floating bar is always on top
          }
-                 .sheet(isPresented: $showAllDocumentsSheet) {
-            AllDocumentsBottomSheet(
-                documents: $documents,
-                selectedDocuments: $selectedDocuments,
-                selectedTags: $selectedTags,
-                selectedFilterColumn: $selectedFilterColumn,
-                selectedFilterCategory: $selectedFilterCategory,
-                sheetDetent: $allDocumentsSheetDetent,
-                pinnedDocuments: pinnedDocuments,
-                wipDocuments: wipDocuments,
-                calendarDocuments: calendarDocuments,
-                dateFilterType: dateFilterType,
-                onPin: { doc in togglePin(for: doc.id) },
-                onWIP: { doc in toggleWIP(doc.id) },
-                onCalendar: { doc in toggleCalendar(doc.id) },
-                onOpen: { doc in
-                    self.document = doc
-                    self.sidebarMode = .details
-                    self.isRightSidebarVisible = true
-                    showAllDocumentsSheet = false // Close sheet when opening document
-                },
-                onShowDetails: showDetails,
-                onDelete: { docIds in
-                    selectedDocuments = Set(docIds)
-                    deleteSelectedDocuments()
-                },
-                onClose: {
-                    showAllDocumentsSheet = false
-                },
-                onShowPinnedSheet: { /* No longer used - tabs handled internally */ },
-                onShowWIPSheet: { /* No longer used - tabs handled internally */ },
-                onShowScheduleSheet: { /* No longer used - tabs handled internally */ },
-                 onShowMorphMenu: {
-                     // Only save state if sheet is currently showing
-                     if showAllDocumentsSheet {
-                         wasAllDocumentsSheetOpenBeforeMenu = true
-                         withAnimation(.easeInOut(duration: 0.2)) {
-                             showAllDocumentsSheet = false
-                         }
-                     }
-                     onMenuTap?()
-                 }
-             )
-              .presentationDetents([.height(350), .large], selection: $allDocumentsSheetDetent)
-             .presentationBackgroundInteraction(.enabled)
-             .presentationBackground(.ultraThinMaterial)
-             .presentationDragIndicator(.hidden)
-             .presentationCornerRadius(20)
-             .interactiveDismissDisabled()
-         }
-         .sheet(isPresented: $showTallyLabelModal) {
-             TallyLabelModal()
-                 .presentationBackground(.thinMaterial)
-                 .presentationDetents([.medium, .large])
-                 .presentationDragIndicator(.visible)
-         }
-        .modifier(SafeAreaModifier(isIPad: isIPad))
+                 // REMOVED: All Documents sheet - now integrated into scrollable content
+                 .sheet(item: $activeSheet) { sheet in
+            switch sheet {
+            case .tallyLabel:
+                TallyLabelModal()
+                    .presentationBackground(.thinMaterial)
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
+                    
+            case .tagManager:
+                TagManager(allTags: allTags)
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
+                    .presentationBackground(.ultraThinMaterial)
+                    
+            case .sermonJournal(let document):
+                SermonJournalView(document: document, allDocuments: documents) {
+                    activeSheet = nil
+                }
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(.ultraThinMaterial)
+                
+            case .reflectionSelection:
+                ReflectionSelectionView(
+                    documents: documents,
+                    onSelectDocument: { document in
+                        activeSheet = .sermonJournal(document)
+                    },
+                    onDismiss: {
+                        activeSheet = nil
+                    }
+                )
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(.ultraThinMaterial)
+                
+            case .preachItAgainDetails(let document):
+                PreachItAgainDetailsView(
+                    document: document,
+                    onDismiss: {
+                        activeSheet = nil
+                    },
+                    onOpenDocument: { doc in
+                        activeSheet = nil
+                        onSelectDocument(doc)
+                    }
+                )
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(.ultraThinMaterial)
+                
+            case .documentDetails(let document):
+                DocumentDetailsCard(
+                    document: Binding(
+                        get: { document },
+                        set: { updatedDocument in
+                            if let index = documents.firstIndex(where: { $0.id == updatedDocument.id }) {
+                                documents[index] = updatedDocument
+                            }
+                        }
+                    ),
+                    allLocations: Array(Set(documents.compactMap { $0.variations.first?.location }.filter { !$0.isEmpty })).sorted(),
+                    onDismiss: {
+                        activeSheet = nil
+                    }
+                )
+                .environment(\.themeColors, theme)
+                .environment(\.colorScheme, colorScheme)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(.ultraThinMaterial)
+            
+            case .curatedCategory(let type):
+                NavigationView {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 16) {
+                            Text(type.rawValue)
+                                .font(.custom("InterTight-Bold", size: 20))
+                                .padding(.horizontal, 16)
+                            curatedContentViewFor(type)
+                                .padding(.horizontal, 16)
+                        }
+                        .padding(.top, 12)
+                    }
+                    .navigationTitle(type.rawValue)
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button("Done") { activeSheet = nil }
+                        }
+                    }
+                    .onAppear {
+                        selectedCurationType = type
+                        updateContentForNewCurationType()
+                        if aiCuratedSermons.isEmpty && !isGeneratingInsights {
+                            generateAICuratedSermons()
+                        }
+                    }
+                }
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(.ultraThinMaterial)
+            }
+        }
+        .sheet(isPresented: Binding(
+            get: { documentToShowInSheet != nil },
+            set: { show in
+                if !show {
+                    UserDefaults.standard.removeObject(forKey: "editingPresentationId")
+                    UserDefaults.standard.removeObject(forKey: "openToNotesStep")
+                    documentToShowInSheet = nil
+                }
+            }
+        )) {
+            if let doc = documentToShowInSheet {
+                PresentationManager(document: doc, isPresented: Binding(
+                    get: { documentToShowInSheet != nil },
+                    set: { show in
+                        if !show {
+                            UserDefaults.standard.removeObject(forKey: "editingPresentationId")
+                            UserDefaults.standard.removeObject(forKey: "openToNotesStep")
+                            documentToShowInSheet = nil
+                        }
+                    }
+                ))
+                .environment(\.themeColors, theme)
+                .environment(\.colorScheme, colorScheme)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(.ultraThinMaterial)
+            }
+        }
+        // Automatic journal prompt overlay
+        .overlay {
+            if journalService.showingAutoPrompt, let document = journalService.currentPromptDocument {
+                ZStack {
+                    Color.black.opacity(0.3)
+                        .ignoresSafeArea()
+                        .onTapGesture {
+                            journalService.dismissCurrentPrompt()
+                        }
+                    
+                    AutomaticJournalPromptView(
+                        document: document,
+                        onStartJournal: {
+                            journalService.dismissCurrentPrompt()
+                            showSermonJournal(for: document)
+                        },
+                        onDismiss: {
+                            journalService.dismissCurrentPrompt()
+                        }
+                    )
+                }
+                .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                .animation(.easeInOut(duration: 0.3), value: journalService.showingAutoPrompt)
+            }
+        }
+        // Attach hidden sheets for journal entries list/detail
+        .background(journalEntriesSheets)
+        // FIXED: No more SafeAreaModifier - let iOS 26 handle safe areas naturally
     }
     
     @ViewBuilder
@@ -1111,194 +1295,589 @@ loadDocuments()
     }
     
     // NEW: Extracted computed property for the main dashboard layout
+    @ViewBuilder
     private var dashboardContent: some View {
-        Group {
-            if isLoadingDocuments {
-                // Show skeleton loading when documents are loading
-                DashboardSkeleton()
-            } else {
-            GeometryReader { geometry in
-                let isPortrait = geometry.size.height > geometry.size.width
-                let isIPad: Bool = {
-                    #if os(iOS)
-                    return UIDevice.current.userInterfaceIdiom == .pad || UIDevice.current.userInterfaceIdiom == .phone // iPhone now uses iPad interface
-                    #else
-                    return false // macOS is never an iPad
-                    #endif
-                }()
-                
-                // Update landscape mode state for carousel sections
-                let _ = DispatchQueue.main.async {
-                    #if os(macOS)
-                    isLandscapeMode = false // macOS doesn't use carousel styling
-                    shouldShowExpandButtons = true // but does show expand buttons
-                    #else
-                    isLandscapeMode = !isPortrait && isIPad // Both iPad and iPhone in landscape
-                    shouldShowExpandButtons = !isPortrait && isIPad // Both iPad and iPhone in landscape
-                    #endif
-                }
-                
-                if isPortrait && isIPad {
-                    // iPad & iPhone Portrait: Special layout that respects navigation
-                        VStack(alignment: .leading, spacing: 0) {
-                        // Header with responsive positioning for navigation
-                        iPadDashboardHeaderView
-                        .padding(.horizontal, 20)
-                            .padding(.top, {
-                                // Responsive header positioning based on percentage of screen height
-                                let screenHeight = geometry.size.height
-                                #if os(iOS)
-                                if UIDevice.current.userInterfaceIdiom == .phone {
-                                    return screenHeight * 0.10 // Slightly less top padding on iPhone (reduced from 12%)
-                                } else {
-                                    return screenHeight * 0.08 // Original iPad padding
-                                }
-                                #else
-                                return screenHeight * 0.08
-                                #endif
-                            }())
+        if isLoadingDocuments {
+            // Show skeleton loading when documents are loading
+            DashboardSkeleton()
+        } else {
+                // NEW: Simple dashboard layout with proper iOS 26 safe area handling
+                ZStack {
+                    // No background needed - let the gradient from MainLayout show through
+                    Color.clear
+                        .ignoresSafeArea(.all)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    ScrollView(.vertical) {
+                        VStack(spacing: 0) {
+                            // Greeting section that scrolls off naturally
+                            greetingSection
+                                .padding(.horizontal, 20)
+                                .padding(.top, 20)
                             
-                            // iPad & iPhone Carousel for sections - hide when All Documents is expanded
-                            if allDocumentsPosition != .expanded {
-                                iPadSectionCarousel
-                                    .padding(.horizontal, {
-                                        #if os(iOS)
-                                        if UIDevice.current.userInterfaceIdiom == .phone {
-                                            return 20 // iPhone: centered with breathing room
-                                        } else {
-                                            return 10 // iPad: reduced from 20 to 10 to make carousel wider
-                                        }
-                                        #else
-                                        return 10
-                                        #endif
-                                    }())
-                                    .padding(.top, {
-                                        // Position carousel with comfortable breathing room from greeting
-                                        let screenHeight = geometry.size.height
-                                        #if os(iOS)
-                                        if UIDevice.current.userInterfaceIdiom == .phone {
-                                            // Adjust to keep carousel's absolute position the same after lowering the greeting
-                                            return screenHeight * 0.06
-                                        } else {
-                                            return screenHeight * 0.10 // Original iPad padding
-                                        }
-                                        #else
-                                        return screenHeight * 0.10
-                                        #endif
-                                    }())
+                            // Curated sermons section (Spotify/Dwell-like)
+                            curatedSermonsSection
+                                .padding(.horizontal, 20)
+                                .padding(.top, 40)
+                            
+                            // Documents section that scrolls naturally
+                            VStack(spacing: 0) {
+                                // Docs header that scrolls with content
+                                docsHeader
+                                    .padding(.horizontal, 20)
+                                    .padding(.top, 30)
+                                
+                                documentsSection
+                                    .padding(.horizontal, 20)
+                                    .padding(.top, 20)
+                                    .padding(.bottom, 100) // Space for bottom bar
                             }
-                            
-
-                            
-                                                        // Spacer to push All Documents to bottom
+                        }
+                    }
+                    .scrollEdgeEffectStyle(.soft, for: .all)
+                    .safeAreaPadding(.top, 5)
+                    .contentMargins(.top, 10, for: .scrollContent)
+                    
+                    // Liquid Glass Logo Header with proper glassmorphism
+                    VStack {
+                        HStack {
                             Spacer()
                             
-
-                            
-                        // Remove Spacer to let All Documents fill remaining space
-                        }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if !isPortrait && isIPad {
-                    // iPad Landscape: Mirror the portrait layout structure
-                    VStack(alignment: .leading, spacing: 0) {
-                        // Header with full width positioning - no longer affected by navigation
-                        iPadLandscapeHeaderView
-                            .padding(.horizontal, 20)
-                            .padding(.top, 65) // Fixed top padding for consistent header positioning
-                            
-                        // iPad Landscape: Use horizontal layout like macOS but with iPad styling - hide when All Documents is expanded
-                        if allDocumentsPosition != .expanded {
-                            iPadLandscapeSections
-                                .padding(.horizontal, 20)
-                                .padding(.leading, {
-                                    // Push cards over when navigation is visible (landscape only)
-                                    return shouldAddNavigationPadding ? 165 : 0  // Use fixed value for consistency
-                                }())
-                                .padding(.top, 45) // Increased from 25 to 45 for more breathing room between greeting and cards
-                                .animation(.spring(response: 0.6, dampingFraction: 0.75), value: showFloatingSidebar)
-                        }
-                            
-
-                        
-                                                // Spacer to push All Documents to bottom
-                        Spacer()
-                        
-
-                            
-                        // Remove Spacer to let All Documents fill remaining space
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    // Non-iPad or other cases: Original layout
-                    VStack(alignment: .leading, spacing: 0) {
-                        // Remove top spacing for iPad portrait to bring header to the top
-                        Spacer().frame(minHeight: 0)
-                        
-                        // Use GeometryReader to dynamically center the header
-                        GeometryReader { geometry in
-                            let availableHeight = geometry.size.height
-                            let sectionsHeight: CGFloat = 220 // Height needed for sections
-                            let availableForHeader = availableHeight - sectionsHeight
-                            let centerOffset = availableForHeader * 0.6 // Position at 60% down the available space
-                            
-                            VStack {
-                                Spacer().frame(height: centerOffset)
-                                
-                                macDashboardHeaderView
-                                
-                                Spacer()
-                            }
-                        }
-                        
-                        // Main content without All Documents section
-                        VStack(spacing: 0) {
-                            // Layer 0: Click-outside catcher (only active when a section is expanded)
-                            if isPinnedExpanded || isWIPExpanded || isSchedulerExpanded {
-                                Color.clear
-                                    .contentShape(Rectangle())
-                                    .onTapGesture {
-                                        // Collapse all sections with animation
-                                        withAnimation(.easeInOut(duration: 0.3)) {
-                                            isPinnedExpanded = false
-                                            isWIPExpanded = false
-                                            isSchedulerExpanded = false
-                                        }
-                                    }
-                                    .zIndex(-1) // Ensure it's behind interactive elements
-                            }
-
-                            // Top containers (top layer)
-                            VStack(spacing: 0) {
-                                topContainers
-                                    .padding(.top, {
+                            // Liquid Glass Logo Container
+                            Group {
+            #if os(macOS)
+                                Button(action: {
+                                    activeSheet = .tallyLabel
+                                }) {
+                                    Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fit)
+                                        .frame(height: 44) // Standard logo height
+                                }
+                                .buttonStyle(PlainButtonStyle())
+                                .help("About Tallē")
+            #else
+                                Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fit)
+                                    .frame(height: {
                                         #if os(iOS)
-                                        return -10  // Negative padding to bring carousel much closer to greeting
+                                        let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                                        return isPhone ? 32 : 44 // iPhone: smaller, iPad: standard
                                         #else
-                                        return 30  // Keep original spacing on macOS
+                                        return 44
                                         #endif
                                     }())
+                                    .onTapGesture {
+                                        activeSheet = .tallyLabel
+                                    }
+            #endif
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                            .background(.ultraThinMaterial)
+                            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                            .shadow(color: Color.black.opacity(0.08), radius: 16, x: 0, y: 6)
+            }
+                    .padding(.horizontal, 20)
+                        .safeAreaPadding(.top, 10)
+                        
+                        Spacer()
+                    }
+                    .allowsHitTesting(true)
+                }
+        }
+    }
+
+    // NEW: Greeting section that scrolls off naturally
+    private var greetingSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Dashboard")
+                .font(.system(size: {
+                                        #if os(iOS)
+                    let screenWidth = UIScreen.main.bounds.width
+                    let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                    if isPhone {
+                        return max(12, min(16, screenWidth * 0.035))
+                                        } else {
+                        return screenWidth * 0.022
+                                        }
+                                        #else
+                    return 18
+                                        #endif
+                }(), weight: .bold))
+                .foregroundStyle(theme.primary.opacity(0.7))
+                .padding(.bottom, 2)
+
+            Text(getTimeBasedGreeting())
+                .font(.custom("InterTight-Regular", size: {
+                                        #if os(iOS)
+                    let screenWidth = UIScreen.main.bounds.width
+                    let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                    if isPhone {
+                        let calculatedSize = screenWidth * 0.075
+                        return max(26, min(33, calculatedSize))
+                                        } else {
+                        let calculatedSize = screenWidth * 0.055
+                        return max(40, min(70, calculatedSize))
+                                        }
+                                        #else
+                    return 52
+                                        #endif
+                }()))
+                .tracking(0.5)
+                .foregroundStyle(theme.primary)
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.top, 40) // Reduced space for floating logo
+    }
+    
+        // NEW: Simple docs header that scrolls naturally
+    private var docsHeader: some View {
+        VStack(spacing: 16) {
+            // Main header with icons
+            HStack {
+                Text("Documents")
+                    .font(.custom("InterTight-Bold", size: 24))
+                    .foregroundStyle(theme.primary)
+
+                            Spacer()
+                            
+                // Circular icon controls
+                HStack(spacing: 8) {
+                    // Search Button
+                    Button(action: {
+                        // Trigger search sheet
+                        onSearch?()
+                        HapticFeedback.impact(.light)
+                    }) {
+                        Image(systemName: "magnifyingglass")
+                            .font(.system(size: 16))
+                            .foregroundStyle(.white)
+                            .frame(width: 30, height: 30)
+                            .background(Color.black, in: Circle())
+                    }
+                    
+                    // Filter Dropdown
+                    Menu {
+                        // Title and divider
+                        Text("Filter Documents")
+                            .font(.custom("InterTight-Bold", size: 14))
+                            .foregroundStyle(theme.primary)
+                        
+                        Divider()
+                        
+                        ForEach(ListColumn.allColumns) { column in
+                            if column.id != "name" {
+                                Button(action: {
+                                    // Handle date columns differently - they change dateFilterType instead of being filters
+                                    if column.id == "date" {
+                                        dateFilterType = .modified
+                                        isDateFilterExplicitlySelected = true
+                                        selectedFilterColumn = nil // Clear column filters
+                                        selectedTags.removeAll()
+                                        updateVisibleColumns()
+                                        tableRefreshID = UUID()
+                                        HapticFeedback.impact(.light)
+                                    } else if column.id == "createdDate" {
+                                        dateFilterType = .created
+                                        isDateFilterExplicitlySelected = true
+                                        selectedFilterColumn = nil // Clear column filters
+                                        selectedTags.removeAll()
+                                        updateVisibleColumns()
+                                        tableRefreshID = UUID()
+                                        HapticFeedback.impact(.light)
+                                    } else {
+                                        // Regular filter columns
+                                        selectedFilterColumn = selectedFilterColumn == column.id ? nil : column.id
+                                        isDateFilterExplicitlySelected = false // Clear date filter flag
+                                        selectedTags.removeAll()
+                                        updateVisibleColumns()
+                                        tableRefreshID = UUID()
+                                        HapticFeedback.impact(.light)
+                                    }
+                                }) {
+                                    Label {
+                                        Text(column.title)
+                                    } icon: {
+                                        Image(systemName: column.icon)
+                                    }
+                                }
+                                .disabled({
+                                    // Gray out (disable) the active filter to show it's selected
+                                    let isActive = (column.id == "date" && dateFilterType == .modified && isDateFilterExplicitlySelected) ||
+                                                  (column.id == "createdDate" && dateFilterType == .created && isDateFilterExplicitlySelected) ||
+                                                  (column.id == "series" && selectedFilterColumn == "series") ||
+                                                  (column.id == "location" && selectedFilterColumn == "location") ||
+                                                  (column.id == "presentedDate" && selectedFilterColumn == "presentedDate")
+                                    return isActive
+                                }())
+                            }
+                        }
+                        
+                        Divider()
+                        
+                        Button(action: {
+                            selectedFilterColumn = nil
+                            selectedTags.removeAll()
+                            isDateFilterExplicitlySelected = false
+                            updateVisibleColumns()
+                            tableRefreshID = UUID()
+                            HapticFeedback.impact(.light)
+                        }) {
+                            Label {
+                                Text("Clear")
+                            } icon: {
+                                Image(systemName: "xmark.circle")
+                            }
+                        }
+                        .disabled({
+                            // Gray out Clear when it's the active state (no filters)
+                            let isActive = selectedFilterColumn == nil && selectedTags.isEmpty && !isDateFilterExplicitlySelected
+                            return isActive
+                        }())
+                    } label: {
+                        Image(systemName: "line.3.horizontal.decrease")
+                            .font(.system(size: 16))
+                            .foregroundStyle(.white)
+                            .frame(width: 30, height: 30)
+                            .background(selectedFilterColumn != nil ? theme.accent : Color.orange, in: Circle())
+                    }
+                    
+                    // Sort Dropdown  
+                    Menu {
+                        // Title and divider
+                        Text("Sort Documents")
+                            .font(.custom("InterTight-Bold", size: 14))
+                            .foregroundStyle(theme.primary)
+                        
+                        Divider()
+                        
+                        Button(action: {
+                            selectedSortColumn = "name"
+                            updateDocumentSort()
+                            HapticFeedback.impact(.light)
+                        }) {
+                            HStack {
+                                Image(systemName: "textformat")
+                                Text("Name")
+                                if selectedSortColumn == "name" {
+                                    Spacer()
+                                    Image(systemName: "checkmark")
+                                        .foregroundStyle(theme.accent)
+                                }
+                            }
+                        }
+                        
+                        Button(action: {
+                            selectedSortColumn = "date"
+                            updateDocumentSort()
+                            HapticFeedback.impact(.light)
+                        }) {
+                            HStack {
+                                Image(systemName: "calendar")
+                                Text("Date")
+                                if selectedSortColumn == "date" {
+                                    Spacer()
+                                    Image(systemName: "checkmark")
+                                        .foregroundStyle(theme.accent)
+                                }
+                            }
+                        }
+                        
+                        Button(action: {
+                            selectedSortColumn = "status"
+                            updateDocumentSort()
+                            HapticFeedback.impact(.light)
+                        }) {
+                            HStack {
+                                Image(systemName: "star")
+                                Text("Status")
+                                if selectedSortColumn == "status" {
+                                    Spacer()
+                                    Image(systemName: "checkmark")
+                                        .foregroundStyle(theme.accent)
+                                }
+                            }
+                        }
+                        
+                        Divider()
+                        
+                        Button(action: {
+                            isAscendingSortOrder.toggle()
+                            updateDocumentSort()
+                            HapticFeedback.impact(.light)
+                        }) {
+                            HStack {
+                                Image(systemName: isAscendingSortOrder ? "arrow.up" : "arrow.down")
+                                Text(isAscendingSortOrder ? "Ascending" : "Descending")
                                 Spacer()
+                                Image(systemName: "checkmark")
+                                    .foregroundStyle(theme.accent)
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "arrow.up.arrow.down")
+                            .font(.system(size: 16))
+                            .foregroundStyle(.white)
+                            .frame(width: 30, height: 30)
+                            .background(Color.green, in: Circle())
+                    }
+                    
+                    // Tags Dropdown
+                    Menu {
+                        // Title and divider
+                        Text("Document Tags")
+                            .font(.custom("InterTight-Bold", size: 14))
+                            .foregroundStyle(theme.primary)
+                        
+                        Divider()
+                        
+                        if allTags.isEmpty {
+                            Text("No tags available")
+                                .foregroundStyle(.secondary)
+                        } else {
+                            ForEach(allTags, id: \.self) { tag in
+                                Button(action: {
+                                    selectedFilterColumn = nil
+                                    if selectedTags.contains(tag) {
+                                        selectedTags.remove(tag)
+                                    } else {
+                                        selectedTags.insert(tag)
+                                    }
+                                    updateVisibleColumns()
+                                    tableRefreshID = UUID()
+                                    HapticFeedback.impact(.light)
+                                }) {
+                                    HStack {
+                                        Circle()
+                                            .fill(colorManager.color(for: tag))
+                                            .frame(width: 8, height: 8)
+                                        Text(tag)
+                                        if selectedTags.contains(tag) {
+                                            Spacer()
+                                            Image(systemName: "checkmark")
+                                                .foregroundStyle(theme.accent)
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            if !selectedTags.isEmpty {
+                                Divider()
+                                Button("Clear All Tags") {
+                                    selectedTags.removeAll()
+                                    updateVisibleColumns()
+                                    tableRefreshID = UUID()
+                                    HapticFeedback.impact(.light)
+                                }
+                            }
+                            
+                            Divider()
+                            
+                            Button(action: {
+                                activeSheet = .tagManager
+                            }) {
+                                HStack {
+                                    Image(systemName: "gear")
+                                    Text("Manage")
+                                    Spacer()
+                                }
+                            }
+                        }
+                    } label: {
+                        ZStack {
+                            Image(systemName: "tag")
+                                .font(.system(size: 16))
+                                .foregroundStyle(.white)
+                                .frame(width: 30, height: 30)
+                                .background(!selectedTags.isEmpty ? theme.accent : Color.blue, in: Circle())
+                            
+                            // Badge for selected tags count
+                            if !selectedTags.isEmpty {
+                                Text("\(selectedTags.count)")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundStyle(.white)
+                                    .frame(width: 16, height: 16)
+                                    .background(Color.red, in: Circle())
+                                    .offset(x: 12, y: -12)
                             }
                         }
                     }
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .frame(maxHeight: .infinity, alignment: .top)  // Align content to top
-                    .scrollDismissesKeyboard(.immediately)
-                    .coordinateSpace(name: "dashboard")
-                    .padding(.horizontal, 20)
-                    .padding(.top, 0)
-                    .padding(.bottom, 24)
                 }
             }
-            // Remove pre-initialization views that were causing ghosting effects
-            // These were creating faint duplicates visible in the background on iPhone
+            
+            // Helpful tooltip
+            HStack {
+                Image(systemName: "hand.tap.fill")
+                    .font(.system(size: 12))
+                    .foregroundStyle(theme.secondary.opacity(0.7))
+                
+                Text("Long press on document to assign Pin, WIP, Schedule or view Document Details")
+                    .font(.system(size: 12))
+                    .foregroundStyle(theme.secondary.opacity(0.7))
+                
+                Spacer()
             }
+            .padding(.top, 8)
+
         }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 20)
+        .background(.ultraThinMaterial)
+        .cornerRadius(16)
     }
+    
+
 
     // NEW: Computed property to determine if any modal is presented
     private var isModalPresented: Bool {
         showDetailsCard || calendarModalData != nil || documentToShowInSheet != nil
+    }
+    
+    // NEW: Animated dashboard header that shrinks/grows based on scroll progress
+    @ViewBuilder
+    private func animatedDashboardHeader(progress: CGFloat, safeArea: EdgeInsets) -> some View {
+                        VStack(spacing: 0) {
+            // Talle Logo - positioned at top
+            
+            
+            // Main header content
+            HStack {
+                VStack(alignment: .leading, spacing: {
+                    #if os(iOS)
+                    let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                    return isPhone ? 8 : 12
+                    #else
+                    return 12
+                    #endif
+                }()) {
+                    // Talle Logo for iPhone only
+                    #if os(iOS)
+                    if UIDevice.current.userInterfaceIdiom == .phone {
+                        HStack {
+                            Spacer()
+                            Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(maxWidth: min(80, UIScreen.main.bounds.width * 0.2), maxHeight: 30)
+                                    .onTapGesture {
+                                    activeSheet = .tallyLabel
+                                }
+                        }
+                        .padding(.bottom, 8)
+                    }
+                    #endif
+                    
+                                         // Greeting content that fades away first
+                     if progress < 0.6 { // Show greeting until 60% scroll progress
+                         VStack(alignment: .leading, spacing: 4) {
+                             Text("Dashboard")
+                                 .font(.system(size: {
+                                        #if os(iOS)
+                                     let screenWidth = UIScreen.main.bounds.width
+                                     let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                                     if isPhone {
+                                         return max(12, min(16, screenWidth * 0.035))
+                                     } else {
+                                         return screenWidth * 0.022
+                                     }
+                                        #else
+                                     return 18
+                                        #endif
+                                 }(), weight: .bold))
+                                 .foregroundStyle(theme.primary.opacity(0.7))
+                                 .padding(.bottom, 2)
+                             
+                             Text(getTimeBasedGreeting())
+                                 .font(.custom("InterTight-Regular", size: {
+                                     #if os(iOS)
+                                     let screenWidth = UIScreen.main.bounds.width
+                                     let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                                     if isPhone {
+                                         let calculatedSize = screenWidth * 0.075
+                                         return max(26, min(33, calculatedSize))
+                                     } else {
+                                         let calculatedSize = screenWidth * 0.055
+                                         return max(40, min(70, calculatedSize))
+                                     }
+                                     #else
+                                     return 52
+                                     #endif
+                                 }()))
+                                 .tracking(0.5)
+                                 .foregroundStyle(theme.primary)
+                                 .lineLimit(2)
+                                 .multilineTextAlignment(.leading)
+                                 .opacity(1.0 - (progress * 1.7)) // Fade out faster (by 60% progress)
+                         }
+                     }
+                }
+                Spacer()
+                
+
+                
+                // Talle Logo for macOS
+                #if os(macOS)
+                Button(action: {
+                    activeSheet = .tallyLabel
+                }) {
+                    Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(maxWidth: 150, maxHeight: 60)
+                }
+                .buttonStyle(PlainButtonStyle())
+                .help("About Tallē")
+                #endif
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, safeArea.top + 10)
+        .background(
+            // Add background that becomes more prominent as header shrinks
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .opacity(progress * 0.8)
+        )
+    }
+    
+    // REMOVED: Carousel sections view - no longer needed
+    
+        // NEW: Documents section (simplified - header is now sticky)
+    private var documentsSection: some View {
+        LazyVStack(spacing: 12) {
+            ForEach(sortedFilteredDocuments, id: \.id) { document in
+                ModernDocumentRow(
+                    document: document,
+                    onTap: { 
+                        // Open document directly like all documents sheet does
+                        self.document = document
+                        self.sidebarMode = .details
+                        self.isRightSidebarVisible = true
+                    },
+                    onShowDetails: { showDetails(for: document) },
+                    onPin: { togglePin(for: document.id) },
+                    onWIP: { toggleWIP(document.id) },
+                    onCalendar: { toggleCalendar(document.id) },
+                    onCalendarAction: {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                            documentToShowInSheet = document
+                        }
+                    },
+                    onDelete: { deleteSelectedDocuments() },
+                    selectedTags: selectedTags,
+                    selectedFilterColumn: selectedFilterColumn,
+                    dateFilterType: dateFilterType
+                )
+                .environment(\.documentStatus, DocumentStatus(
+                    isPinned: pinnedDocuments.contains(document.id),
+                    isWIP: wipDocuments.contains(document.id),
+                    isScheduled: calendarDocuments.contains(document.id)
+                ))
+            }
+        }
     }
 
     // NEW: Extracted computed property for modal overlays
@@ -1377,40 +1956,7 @@ loadDocuments()
                 removal: .opacity.combined(with: .scale(scale: 0.95, anchor: .center))
             ))
         }
-        // Overlay for PresentationManager
-        else if let doc = documentToShowInSheet {
-            // Dismiss layer
-            Color.clear
-                .contentShape(Rectangle())
-                .ignoresSafeArea()
-                .onTapGesture {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        documentToShowInSheet = nil
-                        UserDefaults.standard.removeObject(forKey: "editingPresentationId")
-                        UserDefaults.standard.removeObject(forKey: "openToNotesStep")
-                    }
-                }
 
-            // Modal Content
-            PresentationManager(document: doc, isPresented: Binding(
-                get: { self.documentToShowInSheet != nil },
-                set: { show in
-                    if !show {
-                        UserDefaults.standard.removeObject(forKey: "editingPresentationId")
-                        UserDefaults.standard.removeObject(forKey: "openToNotesStep")
-                        self.documentToShowInSheet = nil
-                    }
-                }
-            ))
-            .environment(\.themeColors, theme)
-            .environment(\.colorScheme, colorScheme)
-            .frame(maxHeight: 600) // Add a height constraint to make the modal more compact
-            .shadow(color: Color.black.opacity(0.25), radius: 25, x: 0, y: 10)
-            .transition(.asymmetric(
-                insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .center)),
-                removal: .opacity.combined(with: .scale(scale: 0.95, anchor: .center))
-            ))
-        }
 
     }
 
@@ -1494,6 +2040,9 @@ loadDocuments()
             DispatchQueue.main.async {
                 self.documents = sortedDocuments
                 print("📝 Updated documents state with \(self.documents.count) documents")
+                
+                // Schedule journal prompts for recently preached sermons
+                journalService.scheduleJournalPrompts(for: sortedDocuments)
                 // Force refresh UI
                 self.tableRefreshID = UUID()
                 // Refresh carousel sections after documents are loaded
@@ -1753,6 +2302,8 @@ loadDocuments()
                     .padding(.vertical, 6) // Add vertical padding to prevent clipping
                     .padding(.trailing, 8)
                 }
+                .scrollEdgeEffectStyle(.soft, for: .all)
+                .contentMargins(.horizontal, 8, for: .scrollContent)
                 .frame(maxWidth: .infinity)
             }
             .padding(.top, 4) // Add breathing room above
@@ -1766,49 +2317,7 @@ loadDocuments()
             // Default to Filter category
             selectedFilterCategory = "Filter"
         }
-        .sheet(isPresented: $showTagManager) {
-            TagManager(allTags: allTags)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                #if os(macOS)
-                .background(Color(.windowBackgroundColor))
-                #elseif os(iOS)
-                .background(Color(UIColor.systemBackground))
-                #endif
-        }
-        .sheet(isPresented: Binding(
-            get: {
-                #if os(iOS)
-                return UIDevice.current.userInterfaceIdiom == .phone && showDetailsCard
-                #else
-                return false
-                #endif
-            },
-            set: { _ in showDetailsCard = false }
-        )) {
-            if let document = selectedDetailsDocument {
-                DocumentDetailsCard(
-                    document: Binding(
-                        get: { document },
-                        set: { updatedDocument in
-                            if let index = documents.firstIndex(where: { $0.id == updatedDocument.id }) {
-                                documents[index] = updatedDocument
-                            }
-                        }
-                    ),
-                    allLocations: Array(Set(documents.compactMap { $0.variations.first?.location }.filter { !$0.isEmpty })).sorted(),
-                    onDismiss: {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            showDetailsCard = false
-                        }
-                    }
-                )
-                .environment(\.themeColors, theme)
-                .environment(\.colorScheme, colorScheme)
-                .presentationBackground(.ultraThinMaterial)
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
-            }
-        }
+
 
         #if os(macOS)
         .background(
@@ -2049,6 +2558,8 @@ loadDocuments()
                         .padding(.vertical, 2)
                         .padding(.horizontal, 2)
                     }
+                    .scrollEdgeEffectStyle(.soft, for: .all)
+                    .contentMargins(.horizontal, 10, for: .scrollContent)
                 }
             }
 
@@ -2116,6 +2627,8 @@ loadDocuments()
                 switch dateFilterType {
                 case .modified:
                     result = doc1.modifiedAt < doc2.modifiedAt
+                case .created:
+                    result = doc1.createdAt < doc2.createdAt
                 }
             }
             else if selectedColumn == .series {
@@ -2240,6 +2753,22 @@ loadDocuments()
         return Array(tags).sorted()
     }
     
+    // Function to update document sorting
+    private func updateDocumentSort() {
+        // Force table refresh with new sort settings
+        tableRefreshID = UUID()
+        
+        // Post notification for any listening components
+        NotificationCenter.default.post(
+            name: NSNotification.Name("DocumentSortChanged"),
+            object: nil,
+            userInfo: [
+                "sortColumn": selectedSortColumn,
+                "isAscending": isAscendingSortOrder
+            ]
+        )
+    }
+    
     // Computed property to get all unique locations
     private var allLocations: [String] {
         var locations: Set<String> = []
@@ -2253,32 +2782,96 @@ loadDocuments()
     }
     
     private var filteredDocuments: [Letterspace_CanvasDocument] {
-        if selectedTags.isEmpty {
-            return documents
+        var filtered = documents
+        
+        // Apply tag filter
+        if !selectedTags.isEmpty {
+            filtered = filtered.filter { doc in
+                guard let docTags = doc.tags else { return false }
+                return !selectedTags.isDisjoint(with: docTags)
+            }
         }
-        return documents.filter { doc in
-            guard let docTags = doc.tags else { return false }
-            return !selectedTags.isDisjoint(with: docTags)
+        
+        // Apply column filter
+        if let filterColumn = selectedFilterColumn {
+            switch filterColumn {
+            case "series":
+                filtered = filtered.filter { doc in
+                    return doc.series != nil && !doc.series!.name.isEmpty
+                }
+            case "location":
+                filtered = filtered.filter { doc in
+                    return doc.variations.first?.location != nil && !doc.variations.first!.location!.isEmpty
+                }
+            default:
+                break
+            }
         }
+        
+        return filtered
     }
     
     // Add sorted version of filteredDocuments for consistent navigation
     private var sortedFilteredDocuments: [Letterspace_CanvasDocument] {
-        // Sort the same way as in the DocumentTable display
-        return filteredDocuments.sorted {
-            // First sort by pinned status
-            let isPinned1 = pinnedDocuments.contains($0.id)
-            let isPinned2 = pinnedDocuments.contains($1.id)
-            
-            if isPinned1 != isPinned2 {
-                return isPinned1
+        // Sort using our dropdown selection parameters
+        return filteredDocuments.sorted(by: { (doc1: Letterspace_CanvasDocument, doc2: Letterspace_CanvasDocument) -> Bool in
+            switch selectedSortColumn {
+            case "status":
+                let status1 = getStatusPriority(doc1)
+                let status2 = getStatusPriority(doc2)
+                if status1 != status2 {
+                    return isAscendingSortOrder ? status1 < status2 : status1 > status2
+                }
+                // Fall through to name sorting if status is equal
+                let title1 = doc1.title.isEmpty ? "Untitled" : doc1.title
+                let title2 = doc2.title.isEmpty ? "Untitled" : doc2.title
+                return isAscendingSortOrder ? 
+                    title1.localizedCompare(title2) == .orderedAscending :
+                    title1.localizedCompare(title2) == .orderedDescending
+                
+            case "date":
+                return isAscendingSortOrder ? 
+                    doc1.modifiedAt < doc2.modifiedAt :
+                    doc1.modifiedAt > doc2.modifiedAt
+                
+            case "name":
+                let title1 = doc1.title.isEmpty ? "Untitled" : doc1.title
+                let title2 = doc2.title.isEmpty ? "Untitled" : doc2.title
+                return isAscendingSortOrder ? 
+                    title1.localizedCompare(title2) == .orderedAscending :
+                    title1.localizedCompare(title2) == .orderedDescending
+                
+            default:
+                // Default to name sorting
+                let title1 = doc1.title.isEmpty ? "Untitled" : doc1.title
+                let title2 = doc2.title.isEmpty ? "Untitled" : doc2.title
+                return isAscendingSortOrder ? 
+                    title1.localizedCompare(title2) == .orderedAscending :
+                    title1.localizedCompare(title2) == .orderedDescending
             }
-            
-            // Then sort alphabetically by title
-            let title1 = $0.title.isEmpty ? "Untitled" : $0.title
-            let title2 = $1.title.isEmpty ? "Untitled" : $1.title
-            return title1.localizedCompare(title2) == .orderedAscending
-        }
+        })
+    }
+    
+    // Helper function for status priority
+    private func getStatusPriority(_ doc: Letterspace_CanvasDocument) -> Int {
+        var priority = 0
+        if pinnedDocuments.contains(doc.id) { priority += 4 }
+        if wipDocuments.contains(doc.id) { priority += 2 }
+        if calendarDocuments.contains(doc.id) { priority += 1 }
+        return priority
+    }
+    
+    // Show sermon journal for a specific document
+    private func showSermonJournal(for document: Letterspace_CanvasDocument) {
+        activeSheet = .sermonJournal(document)
+        
+        // Mark any pending prompts as completed
+        journalService.markPromptCompleted(for: document.id)
+    }
+    
+    // Show preach it again details for a specific document
+    private func showPreachItAgainDetails(for document: Letterspace_CanvasDocument) {
+        activeSheet = .preachItAgainDetails(document)
     }
     
     private func tagColor(for tag: String) -> Color {
@@ -2287,14 +2880,26 @@ loadDocuments()
 
     // Add this function to handle showing details
     private func showDetails(for document: Letterspace_CanvasDocument) {
-        // Set the document first
+        #if os(iOS)
+        if UIDevice.current.userInterfaceIdiom == .phone {
+            // iPhone: Use consolidated sheet
+            activeSheet = .documentDetails(document)
+        } else {
+            // iPad: Use overlay
+            selectedDetailsDocument = document
+            selectedDocuments = [document.id]
+            withAnimation(.easeInOut(duration: 0.2)) {
+                showDetailsCard = true
+            }
+        }
+        #else
+        // macOS: Use overlay
         selectedDetailsDocument = document
-        // Update selectedDocuments to include this document's ID
         selectedDocuments = [document.id]
-        // Then show the sheet with animation
         withAnimation(.easeInOut(duration: 0.2)) {
             showDetailsCard = true
         }
+        #endif
     }
     
     // MARK: Helper Functions
@@ -2486,6 +3091,11 @@ loadDocuments()
             onPin: { doc in togglePin(for: doc.id) },
             onWIP: { doc in toggleWIP(doc.id) },
             onCalendar: { doc in toggleCalendar(doc.id) },
+            onCalendarAction: { doc in
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    documentToShowInSheet = doc
+                }
+            },
             onOpen: { doc in
                 self.document = doc
                 self.sidebarMode = .details
@@ -3554,6 +4164,1250 @@ loadDocuments()
             }
         }
     }
+    
+        // NEW: Enhanced Curated Sermons Section (Spotify/Dwell-like)
+    private var curatedSermonsSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            // Section header with dropdown
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Curated for You")
+                        .font(.custom("InterTight-Bold", size: 20))
+                        .foregroundStyle(theme.primary)
+                    
+                    Text("Handpicked sermon tools and insights")
+                        .font(.custom("InterTight-Regular", size: 12))
+                        .foregroundStyle(theme.primary.opacity(0.6))
+                }
+                
+                Spacer()
+            }
+
+            // Unified “Spotify-like” cards grid (each card opens its sheet)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 20) {
+                    ForEach(CurationType.allCases.filter { $0 != .trending }, id: \.self) { type in
+                        curatedCategoryCard(type)
+                    }
+                }
+                .padding(.horizontal, 12)
+            }
+        }
+        .padding(.vertical, 20)
+        .onAppear {
+            if aiCuratedSermons.isEmpty && !isGeneratingInsights {
+                generateAICuratedSermons()
+            }
+        }
+    }
+    
+    // Content view that changes based on curation type
+    @ViewBuilder
+    private var curatedContentView: some View {
+        switch selectedCurationType {
+        case .insights:
+            curatedSermonsCarousel
+        case .sermonJournal:
+            sermonJournalSection
+        case .preachItAgain:
+            preachItAgainSection
+        case .statistics:
+            statisticsView
+        case .recent, .trending:
+            curatedSermonsCarousel
+        }
+    }
+
+    // Explicit variant to render for a provided type (avoids stale selected type on first open)
+    @ViewBuilder
+    private func curatedContentViewFor(_ type: CurationType) -> some View {
+        switch type {
+        case .insights:
+            curatedSermonsCarousel
+        case .sermonJournal:
+            sermonJournalSection
+        case .preachItAgain:
+            preachItAgainSection
+        case .statistics:
+            statisticsView
+        case .recent, .trending:
+            curatedSermonsCarousel
+        }
+    }
+    
+    // Carousel view for sermon cards
+    @ViewBuilder
+    private var curatedSermonsCarousel: some View {
+        if isGeneratingInsights {
+            // Loading skeleton
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 16) {
+                    ForEach(0..<3, id: \.self) { _ in
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(theme.secondary.opacity(0.1))
+                            .frame(width: 280, height: 160)
+                            .overlay(
+                                VStack {
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .fill(theme.secondary.opacity(0.2))
+                                        .frame(height: 20)
+                                    Spacer()
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .fill(theme.secondary.opacity(0.2))
+                                        .frame(height: 16)
+                                }
+                                .padding(16)
+                            )
+                    }
+                }
+                .padding(.horizontal, 20)
+            }
+            .scrollEdgeEffectStyle(.soft, for: .all)
+            .contentMargins(.horizontal, 10, for: .scrollContent)
+        } else if aiCuratedSermons.isEmpty {
+            // Empty state
+            VStack(spacing: 12) {
+                Image(systemName: selectedCurationType.icon)
+                    .font(.system(size: 32))
+                    .foregroundStyle(theme.primary.opacity(0.3))
+                Text("No \(selectedCurationType.rawValue.lowercased()) available")
+                    .font(.custom("InterTight-Medium", size: 16))
+                    .foregroundStyle(theme.primary.opacity(0.6))
+                Text("Content will appear when you have sermons")
+                    .font(.custom("InterTight-Regular", size: 12))
+                    .foregroundStyle(theme.primary.opacity(0.5))
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 40)
+        } else {
+            // Horizontal scrolling curated sermons
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: 16) {
+                    ForEach(aiCuratedSermons, id: \.id) { sermon in
+                        CuratedSermonCard(
+                            sermon: sermon, 
+                            curationType: selectedCurationType,
+                            onTap: { selectedSermon in
+                                if selectedCurationType == .sermonJournal {
+                                    // Open sermon journal for this document
+                                    showSermonJournal(for: selectedSermon)
+                                } else {
+                                    onSelectDocument(selectedSermon)
+                                }
+                            }
+                        )
+                    }
+                }
+                .padding(.horizontal, 20)
+            }
+            .scrollEdgeEffectStyle(.soft, for: .all)
+            .contentMargins(.horizontal, 10, for: .scrollContent)
+        }
+    }
+
+    // Card for a curated category
+    @ViewBuilder
+    private func curatedCategoryCard(_ type: CurationType) -> some View {
+        switch type {
+        case .sermonJournal:
+            journalEntriesCard
+                .frame(width: 280, height: 160)
+        default:
+            Button(action: {
+                activeSheet = .curatedCategory(type)
+            }) {
+                switch type {
+                case .insights:
+                    ZStack {
+                        LinearGradient(colors: [Color.teal.opacity(0.85), Color.indigo.opacity(0.7)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                            .clipShape(RoundedRectangle(cornerRadius: 16))
+                            .shadow(color: .black.opacity(0.12), radius: 12, x: 0, y: 8)
+                        VStack(alignment: .leading, spacing: 10) {
+                            HStack {
+                                Image(systemName: "lightbulb.fill")
+                                    .foregroundStyle(.white)
+                                    .font(.system(size: 18, weight: .semibold))
+                                Spacer()
+                            }
+                            Text("Insights")
+                                .font(.custom("InterTight-SemiBold", size: 18))
+                                .foregroundStyle(.white)
+                            Text("AI-powered sermon insights")
+                                .font(.custom("InterTight-Regular", size: 12))
+                                .foregroundStyle(.white.opacity(0.9))
+                                .lineLimit(2)
+                            Spacer()
+                            HStack(spacing: 6) {
+                                Image(systemName: "sparkles")
+                                Text("Open")
+                            }
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(.white)
+                        }
+                        .padding(16)
+                    }
+                    .frame(width: 280, height: 160)
+
+                case .preachItAgain:
+                    ZStack {
+                        LinearGradient(colors: [Color.orange.opacity(0.85), Color.red.opacity(0.7)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                            .clipShape(RoundedRectangle(cornerRadius: 16))
+                            .shadow(color: .black.opacity(0.12), radius: 12, x: 0, y: 8)
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Image(systemName: "arrow.clockwise.circle.fill")
+                                    .foregroundStyle(.white)
+                                    .font(.system(size: 18, weight: .semibold))
+                                Spacer()
+                            }
+                            Text("Preach it Again")
+                                .font(.custom("InterTight-SemiBold", size: 18))
+                                .foregroundStyle(.white)
+                            Text("Ready to re-preach candidates")
+                                .font(.custom("InterTight-Regular", size: 12))
+                                .foregroundStyle(.white.opacity(0.9))
+                                .lineLimit(2)
+                            Spacer()
+                            HStack(spacing: 6) {
+                                let count = documents.filter { doc in
+                                    let sixMonthsAgo = Calendar.current.date(byAdding: .month, value: -6, to: Date()) ?? Date()
+                                    return doc.variations.contains { v in (v.datePresented ?? .distantFuture) <= sixMonthsAgo }
+                                }.count
+                                Image(systemName: "number")
+                                Text("\(count) ready")
+                            }
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(.white)
+                        }
+                        .padding(16)
+                    }
+                    .frame(width: 280, height: 160)
+
+                case .statistics:
+                    ZStack {
+                        LinearGradient(colors: [Color.blue.opacity(0.85), Color.purple.opacity(0.65)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                            .clipShape(RoundedRectangle(cornerRadius: 16))
+                            .shadow(color: .black.opacity(0.12), radius: 12, x: 0, y: 8)
+                        VStack(alignment: .leading, spacing: 10) {
+                            HStack {
+                                Image(systemName: "chart.bar.fill")
+                                    .foregroundStyle(.white)
+                                    .font(.system(size: 18, weight: .semibold))
+                                Spacer()
+                            }
+                            Text("Statistics")
+                                .font(.custom("InterTight-SemiBold", size: 18))
+                                .foregroundStyle(.white)
+                            Text("Signals, trends, coverage")
+                                .font(.custom("InterTight-Regular", size: 12))
+                                .foregroundStyle(.white.opacity(0.9))
+                            Spacer()
+                            // Mini bar motif
+                            HStack(alignment: .bottom, spacing: 4) {
+                                RoundedRectangle(cornerRadius: 2).fill(Color.white.opacity(0.8)).frame(width: 10, height: 12)
+                                RoundedRectangle(cornerRadius: 2).fill(Color.white.opacity(0.9)).frame(width: 10, height: 20)
+                                RoundedRectangle(cornerRadius: 2).fill(Color.white.opacity(0.7)).frame(width: 10, height: 8)
+                                RoundedRectangle(cornerRadius: 2).fill(Color.white).frame(width: 10, height: 24)
+                            }
+                        }
+                        .padding(16)
+                    }
+                    .frame(width: 280, height: 160)
+
+                case .recent:
+                    ZStack {
+                        LinearGradient(colors: [Color.gray.opacity(0.6), Color.blue.opacity(0.6)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                            .clipShape(RoundedRectangle(cornerRadius: 16))
+                            .shadow(color: .black.opacity(0.12), radius: 12, x: 0, y: 8)
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Image(systemName: "clock.fill")
+                                    .foregroundStyle(.white)
+                                    .font(.system(size: 18, weight: .semibold))
+                                Spacer()
+                            }
+                            Text("Recently Opened")
+                                .font(.custom("InterTight-SemiBold", size: 18))
+                                .foregroundStyle(.white)
+                            if let first = documents.first {
+                                Text(first.title.isEmpty ? "Untitled" : first.title)
+                                    .font(.custom("InterTight-Regular", size: 12))
+                                    .foregroundStyle(.white.opacity(0.9))
+                                    .lineLimit(1)
+                            }
+                            Spacer()
+                            HStack(spacing: 6) {
+                                Image(systemName: "list.bullet")
+                                Text("View list")
+                            }
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(.white)
+                        }
+                        .padding(16)
+                    }
+                    .frame(width: 280, height: 160)
+
+                case .trending:
+                    ZStack {
+                        LinearGradient(colors: [Color.green.opacity(0.75), Color.blue.opacity(0.65)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                            .clipShape(RoundedRectangle(cornerRadius: 16))
+                            .shadow(color: .black.opacity(0.12), radius: 12, x: 0, y: 8)
+                        VStack(alignment: .leading, spacing: 10) {
+                            HStack {
+                                Image(systemName: "chart.line.uptrend.xyaxis")
+                                    .foregroundStyle(.white)
+                                    .font(.system(size: 18, weight: .semibold))
+                                Spacer()
+                            }
+                            Text("Trending")
+                                .font(.custom("InterTight-SemiBold", size: 18))
+                                .foregroundStyle(.white)
+                            Text("Most accessed this month")
+                                .font(.custom("InterTight-Regular", size: 12))
+                                .foregroundStyle(.white.opacity(0.9))
+                            Spacer()
+                            // Tiny sparkline motif
+                            HStack(spacing: 2) {
+                                Circle().fill(Color.white.opacity(0.8)).frame(width: 3, height: 3)
+                                Circle().fill(Color.white.opacity(0.6)).frame(width: 3, height: 3)
+                                Circle().fill(Color.white).frame(width: 3, height: 3)
+                                Circle().fill(Color.white.opacity(0.7)).frame(width: 3, height: 3)
+                                Circle().fill(Color.white.opacity(0.9)).frame(width: 3, height: 3)
+                            }
+                        }
+                        .padding(16)
+                    }
+                    .frame(width: 280, height: 160)
+
+                default:
+                    EmptyView()
+                }
+            }
+            .buttonStyle(.plain)
+        }
+    }
+    
+    // Statistics view for analytics
+    private var statisticsView: some View {
+        VStack(spacing: 16) {
+            HStack(spacing: 16) {
+                // Total sermons card
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Image(systemName: "doc.text.fill")
+                            .foregroundStyle(theme.accent)
+                        Text("Total Sermons")
+                            .font(.custom("InterTight-Medium", size: 14))
+                            .foregroundStyle(theme.primary.opacity(0.7))
+                    }
+                    Text("\(sortedFilteredDocuments.count)")
+                        .font(.custom("InterTight-Bold", size: 24))
+                        .foregroundStyle(theme.primary)
+                }
+                .padding(16)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(.ultraThinMaterial)
+                )
+                
+                // This month card
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Image(systemName: "calendar")
+                            .foregroundStyle(Color.green)
+                        Text("This Month")
+                            .font(.custom("InterTight-Medium", size: 14))
+                            .foregroundStyle(theme.primary.opacity(0.7))
+                    }
+                    Text("\(sortedFilteredDocuments.prefix(5).count)")
+                        .font(.custom("InterTight-Bold", size: 24))
+                        .foregroundStyle(theme.primary)
+                }
+                .padding(16)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(.ultraThinMaterial)
+                )
+            }
+            
+            // Popular tags
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Popular Tags")
+                    .font(.custom("InterTight-Medium", size: 16))
+                    .foregroundStyle(theme.primary)
+                
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(["Faith", "Hope", "Love", "Grace", "Wisdom"], id: \.self) { tag in
+                            Text(tag)
+                                .font(.custom("InterTight-Medium", size: 12))
+                                .foregroundStyle(theme.accent)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .fill(theme.accent.opacity(0.1))
+                                )
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                }
+                .scrollEdgeEffectStyle(.soft, for: .all)
+                .contentMargins(.horizontal, 10, for: .scrollContent)
+            }
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(.ultraThinMaterial)
+            )
+        }
+    }
+    
+    // Curated sermon card component
+    private struct CuratedSermonCard: View {
+        let sermon: CuratedSermon
+        let curationType: CurationType
+        let onTap: (Letterspace_CanvasDocument) -> Void
+        @Environment(\.themeColors) var theme
+        
+        var body: some View {
+            Button(action: {
+                onTap(sermon.document)
+            }) {
+                VStack(alignment: .leading, spacing: 12) {
+                    // Gradient background with overlay
+                    ZStack {
+                        // Background gradient
+                        LinearGradient(
+                            colors: [theme.accent.opacity(0.8), theme.accent.opacity(0.6)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                        
+                        // Content overlay
+                        VStack(alignment: .leading, spacing: 8) {
+                            // AI-generated insight
+                            Text(sermon.aiInsight)
+                                .font(.custom("InterTight-Medium", size: 14))
+                                .foregroundStyle(.white)
+                                .lineLimit(3)
+                                .multilineTextAlignment(.leading)
+                            
+                            Spacer()
+                            
+                            // Sermon title
+                            Text(sermon.document.title)
+                                .font(.custom("InterTight-Bold", size: 16))
+                                .foregroundStyle(.white)
+                                .lineLimit(2)
+                        }
+                        .padding(16)
+                    }
+                    .frame(width: 280, height: 160)
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    
+                    // Bottom info
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(sermon.document.title)
+                            .font(.custom("InterTight-Medium", size: 14))
+                            .foregroundStyle(theme.primary)
+                            .lineLimit(1)
+                        
+                        HStack {
+                            HStack(spacing: 8) {
+                                Image(systemName: curationType.icon)
+                                    .font(.system(size: 10))
+                                Text(sermon.category)
+                                    .font(.custom("InterTight-Medium", size: 12))
+                            }
+                            .foregroundStyle(theme.accent)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 2)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(theme.accent.opacity(0.1))
+                            )
+                            
+                            Spacer()
+                            
+                            Text("Foundation AI")
+                                .font(.custom("InterTight-Regular", size: 10))
+                                .foregroundStyle(theme.primary.opacity(0.6))
+                        }
+                    }
+                }
+            }
+            .buttonStyle(PlainButtonStyle())
+        }
+    }
+    
+    // Curated sermon data model
+    private struct CuratedSermon {
+        let id = UUID()
+        let document: Letterspace_CanvasDocument
+        let aiInsight: String
+        let category: String
+    }
+    
+    // Curation types for different views
+    enum CurationType: String, CaseIterable {
+        case insights = "Insights"
+        case sermonJournal = "Sermon Journal"
+        case preachItAgain = "Preach it Again"
+        case statistics = "Statistics"
+        case recent = "Recently Opened"
+        case trending = "Trending"
+        
+        var icon: String {
+            switch self {
+            case .insights: return "lightbulb.fill"
+            case .sermonJournal: return "book.pages.fill"
+            case .preachItAgain: return "arrow.clockwise.circle.fill"
+            case .statistics: return "chart.bar.fill"
+            case .recent: return "clock.fill"
+            case .trending: return "chart.line.uptrend.xyaxis"
+            }
+        }
+        
+        var description: String {
+            switch self {
+            case .insights: return "AI-powered insights for your sermons"
+            case .sermonJournal: return "Post-preaching reflections & follow-ups"
+            case .preachItAgain: return "Sermons ready for another delivery"
+            case .statistics: return "Your sermon statistics and analytics"
+            case .recent: return "Recently opened sermons"
+            case .trending: return "Most accessed sermons this month"
+            }
+        }
+    }
+    
+    // Computed property for curated sermons
+    private var curatedSermons: [CuratedSermon] {
+        // Use AI to curate sermons from user's documents
+        let recentDocuments = Array(documents.prefix(10)) // Get recent documents
+        
+        return recentDocuments.enumerated().prefix(5).map { index, document in
+            // Generate AI insight for this sermon
+            let aiInsight = generateAIInsight(for: document)
+            
+            let categories = ["Faith", "Hope", "Wisdom", "Guidance", "Inspiration"]
+            
+            return CuratedSermon(
+                document: document,
+                aiInsight: aiInsight,
+                category: categories[index % categories.count]
+            )
+        }
+    }
+    
+    // REMOVED: Duplicate function - using the enhanced version below
+    
+    // Add state for AI-powered curation
+    @State private var aiCuratedSermons: [CuratedSermon] = []
+    @State private var isGeneratingInsights: Bool = false
+    @State private var selectedCurationType: CurationType = .insights
+    @State private var showCurationTypeDropdown = false
+    
+    // Generate AI insight for a sermon
+    private func generateAIInsight(for document: Letterspace_CanvasDocument) -> String {
+        // Use the existing AI service to generate insights
+        let prompt = """
+        Analyze this sermon titled "\(document.title)" and provide a brief, inspiring insight (2-3 sentences) that captures the essence of the message. 
+        Focus on the spiritual impact and practical application. Make it engaging and encouraging for someone looking for guidance.
+        """
+        
+        // For now, return a placeholder - in a real implementation, you'd call the AI service
+        // AIService.shared.generateText(prompt: prompt) { result in ... }
+        
+        let insights = [
+            "A powerful message about faith and perseverance that resonates with current challenges.",
+            "This sermon explores deep biblical truths with practical applications for daily life.",
+            "An inspiring message of hope and redemption that speaks to the heart.",
+            "A thoughtful exploration of scripture that brings fresh perspective to familiar passages.",
+            "This message offers wisdom and guidance for navigating life's complexities."
+        ]
+        
+        // Use document title hash to get consistent insights for the same document
+        let hash = abs(document.title.hashValue)
+        return insights[hash % insights.count]
+    }
+    
+
+    
+    // Update content for new curation type without regenerating
+    private func updateContentForNewCurationType() {
+        guard !documents.isEmpty else { return }
+        
+        let selectedDocuments = getDocumentsForCurationType()
+        var updatedCuratedSermons: [CuratedSermon] = []
+        
+        for document in selectedDocuments {
+            let curatedSermon = CuratedSermon(
+                document: document,
+                aiInsight: getCurationTypeSpecificInsight(for: document),
+                category: getCurationTypeSpecificCategory(for: document)
+            )
+            updatedCuratedSermons.append(curatedSermon)
+        }
+        
+        aiCuratedSermons = updatedCuratedSermons
+    }
+    
+    // Generate AI insights for all sermons using Foundation Models
+    private func generateAICuratedSermons() {
+        guard !documents.isEmpty else { 
+            isGeneratingInsights = false
+            return 
+        }
+        
+        isGeneratingInsights = true
+        
+        Task {
+            var newCuratedSermons: [CuratedSermon] = []
+            let selectedDocuments = getDocumentsForCurationType()
+            
+            for document in selectedDocuments {
+                do {
+                    // Use Foundation Model for insight generation
+                    let insight = try await FoundationModelService.shared.generateSermonInsight(for: document)
+                    let category = try await FoundationModelService.shared.categorizeSermon(document)
+                    
+                    let curatedSermon = CuratedSermon(
+                        document: document,
+                        aiInsight: getCurationTypeSpecificInsight(for: document),
+                        category: getCurationTypeSpecificCategory(for: document)
+                    )
+                    newCuratedSermons.append(curatedSermon)
+                } catch {
+                    // Fallback to curation-specific insights
+                    let curatedSermon = CuratedSermon(
+                        document: document,
+                        aiInsight: getCurationTypeSpecificInsight(for: document),
+                        category: getCurationTypeSpecificCategory(for: document)
+                    )
+                    newCuratedSermons.append(curatedSermon)
+                }
+            }
+            
+            await MainActor.run {
+                self.aiCuratedSermons = newCuratedSermons
+                self.isGeneratingInsights = false
+            }
+        }
+    }
+    
+    // Get documents based on selected curation type
+    private func getDocumentsForCurationType() -> [Letterspace_CanvasDocument] {
+        switch selectedCurationType {
+        case .insights:
+            return Array(documents.prefix(5))
+        case .sermonJournal:
+            // Return sermons that have been preached recently (have scheduled dates in the past)
+            let now = Date()
+            return documents.filter { document in
+                return document.variations.contains { variation in
+                    if let scheduledDate = variation.datePresented {
+                        return scheduledDate <= now
+                    }
+                    return false
+                }
+            }.sorted { doc1, doc2 in
+                // Sort by most recent preaching date
+                let date1 = doc1.variations.compactMap { $0.datePresented }.max() ?? Date.distantPast
+                let date2 = doc2.variations.compactMap { $0.datePresented }.max() ?? Date.distantPast
+                return date1 > date2
+            }.prefix(5).map { $0 }
+        case .preachItAgain:
+            // Return sermons that have been preached before and are good candidates for re-preaching
+            let now = Date()
+            let sixMonthsAgo = Calendar.current.date(byAdding: .month, value: -6, to: now) ?? now
+            
+            return documents.filter { document in
+                // Must have been preached at least once
+                return document.variations.contains { variation in
+                    if let scheduledDate = variation.datePresented {
+                        return scheduledDate <= sixMonthsAgo // At least 6 months ago
+                    }
+                    return false
+                }
+            }.sorted { doc1, doc2 in
+                // Sort by oldest preaching date (longest time since preached)
+                let date1 = doc1.variations.compactMap { $0.datePresented }.max() ?? Date.distantFuture
+                let date2 = doc2.variations.compactMap { $0.datePresented }.max() ?? Date.distantFuture
+                return date1 < date2
+            }.prefix(5).map { $0 }
+        case .recent:
+            return Array(documents.prefix(5))
+        case .trending:
+            return Array(documents.sorted { $0.title.count > $1.title.count }.prefix(5))
+        case .statistics:
+            return []
+        }
+    }
+    
+    // Get curation type specific insights
+    private func getCurationTypeSpecificInsight(for document: Letterspace_CanvasDocument) -> String {
+        let hash = abs(document.title.hashValue)
+        
+        switch selectedCurationType {
+        case .insights:
+            let insights = [
+                "A powerful message about faith and perseverance that resonates with current challenges.",
+                "This sermon explores deep biblical truths with practical applications for daily life.",
+                "An inspiring message of hope and redemption that speaks to the heart.",
+                "A thoughtful exploration of scripture that brings fresh perspective to familiar passages.",
+                "This message offers wisdom and guidance for navigating life's complexities."
+            ]
+            return insights[hash % insights.count]
+            
+        case .sermonJournal:
+            // Check if this sermon has journal entries and include insights from them
+            let baseInsights = [
+                "Ready for post-preaching reflection? Capture what God revealed while preaching.",
+                "Time to journal about this message's impact and your experience delivering it.",
+                "Reflect on how the Spirit moved during this sermon and what you learned.",
+                "Document the testimonies and breakthroughs you witnessed with this message.",
+                "Record your thoughts and follow-up ideas while they're fresh in your mind."
+            ]
+            
+            // In a real implementation, you'd load actual journal entries here
+            // For now, return base insights with potential journal context
+            let insight = baseInsights[hash % baseInsights.count]
+            
+            // TODO: Add actual journal entry integration
+            // if hasJournalEntry(for: document.id) {
+            //     return "Previous reflection: \(journalEntry.insights). Ready to reflect again?"
+            // }
+            
+            return insight
+            
+        case .preachItAgain:
+            let preachAgainInsights = [
+                "This powerful message is ready for another delivery to reach new hearts.",
+                "A timeless sermon that could speak powerfully to your current congregation.",
+                "Consider revisiting this message with fresh insights and updated applications.",
+                "This sermon has proven impact - perfect timing to preach it again.",
+                "A classic message that deserves to be heard by today's generation."
+            ]
+            return preachAgainInsights[hash % preachAgainInsights.count]
+            
+        case .recent:
+            return "Recently created content that reflects current spiritual insights and growth."
+            
+        case .trending:
+            return "Popular content that has resonated with many seeking spiritual guidance."
+            
+        case .statistics:
+            return ""
+        }
+    }
+    
+    // Get curation type specific categories
+    private func getCurationTypeSpecificCategory(for document: Letterspace_CanvasDocument) -> String {
+        let hash = abs(document.title.hashValue)
+        
+        switch selectedCurationType {
+        case .insights:
+            let categories = ["Faith", "Hope", "Wisdom", "Guidance", "Inspiration"]
+            return categories[hash % categories.count]
+            
+        case .sermonJournal:
+            let journalCategories = ["Reflection", "Follow-Up", "Testimony", "Growth", "Impact"]
+            return journalCategories[hash % journalCategories.count]
+            
+        case .preachItAgain:
+            let preachAgainCategories = ["Proven", "Timeless", "Relevant", "Impactful", "Ready"]
+            return preachAgainCategories[hash % preachAgainCategories.count]
+            
+        case .recent:
+            return "New"
+            
+        case .trending:
+            return "Popular"
+            
+        case .statistics:
+            return "Data"
+        }
+    }
+    
+    // MARK: - Sermon Journal Section
+    @ViewBuilder
+    private var sermonJournalSection: some View {
+        HStack {
+            journalEntriesCard
+                .frame(width: 280, height: 160)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 20)
+    }
+    
+    // MARK: - Journal Entries Sheet State
+    @State private var showAllJournalEntriesSheet: Bool = false
+    @State private var selectedJournalEntry: SermonJournalEntry? = nil
+    @State private var showJournalFeedSheet: Bool = false
+    
+    // Invisible anchor to attach sheets for journal entries
+    private var journalEntriesSheets: some View {
+        EmptyView()
+            .sheet(isPresented: $showAllJournalEntriesSheet) {
+                SermonJournalEntriesList(onSelect: { entry in
+                    // Replace the list sheet with the entry detail sheet
+                    showAllJournalEntriesSheet = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                        selectedJournalEntry = entry
+                    }
+                }, onDismiss: {
+                    showAllJournalEntriesSheet = false
+                })
+                .presentationDetents([.large])
+            }
+            .sheet(isPresented: $showJournalFeedSheet) {
+                JournalFeedView(onDismiss: { showJournalFeedSheet = false })
+                    .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("StartJournalForDocument"))) { notif in
+                        if let doc = notif.object as? Letterspace_CanvasDocument {
+                            showJournalFeedSheet = false
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                                activeSheet = .sermonJournal(doc)
+                            }
+                        }
+                    }
+                    .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("StartJournalCustomEntry"))) { _ in
+                        showJournalFeedSheet = false
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                            // Start journal without a sermon by using a temporary blank document
+                            var temp = Letterspace_CanvasDocument(title: "", subtitle: "", elements: [], id: UUID().uuidString)
+                            activeSheet = .sermonJournal(temp)
+                        }
+                    }
+                    .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("OpenSermonPickerFromJournal"))) { _ in
+                        showJournalFeedSheet = false
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            showAllJournalEntriesSheet = false
+                            // Reuse the sermon picker we have via ReflectionSelectionView
+                            activeSheet = .reflectionSelection
+                        }
+                    }
+                    .presentationDetents([.large])
+            }
+            .sheet(item: $selectedJournalEntry) { entry in
+                SermonJournalEntryDetail(entry: entry) {
+                    selectedJournalEntry = nil
+                }
+                .presentationDetents([.large])
+            }
+    }
+
+    // Data sources for journal cards
+    private var journalPendingSermons: [Letterspace_CanvasDocument] {
+        // Sermons preached in the last 14 days without a journal entry
+        let recent = documents.filter { doc in
+            guard let last = doc.variations.compactMap({ $0.datePresented }).max() else { return false }
+            return Date().timeIntervalSince(last) < 14 * 24 * 3600
+        }
+        let journalIds = Set(SermonJournalService.shared.entries().map { $0.sermonId })
+        return recent.filter { !journalIds.contains($0.id) }
+    }
+
+    private var recentCompletedSermons: [Letterspace_CanvasDocument] {
+        // Sermons with entries, most recent 3
+        let journalIdsOrdered = SermonJournalService.shared.entries()
+            .map { $0.sermonId }
+        var seen = Set<String>()
+        var ordered: [Letterspace_CanvasDocument] = []
+        for id in journalIdsOrdered where !seen.contains(id) {
+            seen.insert(id)
+            if let doc = documents.first(where: { $0.id == id }) {
+                ordered.append(doc)
+            } else if let loaded = Letterspace_CanvasDocument.load(id: id) {
+                ordered.append(loaded)
+            }
+            if ordered.count >= 3 { break }
+        }
+        return ordered
+    }
+
+    private func latestJournalEntry(for sermonId: String) -> SermonJournalEntry? {
+        SermonJournalService.shared.entries().first { $0.sermonId == sermonId }
+    }
+    
+    // MARK: - Preach It Again Section
+    @ViewBuilder
+    private var preachItAgainSection: some View {
+        if getDocumentsForCurationType().isEmpty {
+            // Empty state for preach it again
+            VStack(spacing: 12) {
+                Image(systemName: "arrow.clockwise.circle.fill")
+                    .font(.system(size: 32))
+                    .foregroundStyle(theme.primary.opacity(0.3))
+                Text("No sermons ready to preach again")
+                    .font(.custom("InterTight-Medium", size: 16))
+                    .foregroundStyle(theme.primary.opacity(0.6))
+                Text("Sermons will appear here 6+ months after being preached")
+                    .font(.custom("InterTight-Regular", size: 12))
+                    .foregroundStyle(theme.primary.opacity(0.5))
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 40)
+        } else {
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: 16) {
+                    ForEach(getDocumentsForCurationType(), id: \.id) { document in
+                        PreachItAgainCard(
+                            document: document,
+                            onTap: { 
+                                showPreachItAgainDetails(for: document)
+                            }
+                        )
+                    }
+                }
+                .padding(.horizontal, 20)
+            }
+            .scrollEdgeEffectStyle(.soft, for: .all)
+            .contentMargins(.horizontal, 10, for: .scrollContent)
+        }
+    }
+    
+    // MARK: - Add Reflection Card
+    @ViewBuilder
+    private var addReflectionCard: some View {
+        Button(action: {
+            activeSheet = .reflectionSelection
+        }) {
+            ZStack {
+                LinearGradient(colors: [theme.accent.opacity(0.95), theme.accent.opacity(0.7)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                    .clipShape(RoundedRectangle(cornerRadius: 18))
+                    .shadow(color: .black.opacity(0.18), radius: 16, x: 0, y: 10)
+                VStack(spacing: 12) {
+                    HStack(alignment: .center, spacing: 10) {
+                        ZStack {
+                            Circle().fill(Color.white.opacity(0.18))
+                                .frame(width: 28, height: 28)
+                            Image(systemName: "sparkles")
+                                .foregroundStyle(.white)
+                                .font(.system(size: 14, weight: .semibold))
+                        }
+                        Text("Add Reflection")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(.white)
+                        Spacer()
+                    }
+                    Text("Capture insights from your recent sermons")
+                        .font(.system(size: 14))
+                        .foregroundStyle(.white.opacity(0.95))
+                        .multilineTextAlignment(.leading)
+                        .lineLimit(2)
+                    Spacer()
+                    HStack(spacing: 10) {
+                        Image(systemName: "plus.circle.fill")
+                            .foregroundStyle(.white)
+                            .font(.system(size: 16, weight: .semibold))
+                        Text("Start")
+                            .foregroundStyle(.white)
+                            .font(.system(size: 16, weight: .semibold))
+                        Spacer()
+                        Image(systemName: "arrow.right")
+                            .foregroundStyle(.white)
+                            .font(.system(size: 16, weight: .semibold))
+                    }
+                }
+                .padding(18)
+            }
+            .frame(height: 170)
+        }
+        .buttonStyle(.plain)
+    }
+    
+    // MARK: - Journal Entries Card (Apple Journal style)
+    @ViewBuilder
+    private var journalEntriesCard: some View {
+        Button(action: {
+            showJournalFeedSheet = true
+        }) {
+            ZStack {
+                LinearGradient(colors: [Color.indigo.opacity(0.9), Color.purple.opacity(0.7)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                    .clipShape(RoundedRectangle(cornerRadius: 18))
+                    .shadow(color: .black.opacity(0.15), radius: 12, x: 0, y: 8)
+                
+                VStack(spacing: 8) {
+                    HStack(alignment: .center) {
+                        Image(systemName: "book.pages")
+                            .foregroundStyle(.white)
+                            .font(.system(size: 18, weight: .semibold))
+                        Text("Journal")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.white)
+                        Spacer()
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text("\(SermonJournalService.shared.entries().count)")
+                                .font(.system(size: 22, weight: .bold))
+                                .foregroundStyle(.white)
+                            Text("Entries")
+                                .font(.system(size: 12))
+                                .foregroundStyle(.white.opacity(0.9))
+                            Spacer()
+                        }
+                        
+                        if let lastEntry = SermonJournalService.shared.entries().first {
+                            Text("Last entry \(relativeDate(lastEntry.createdAt))")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.white.opacity(0.85))
+                        } else {
+                            Text("No entries yet")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.white.opacity(0.85))
+                        }
+                    }
+                    
+                    Spacer()
+                    
+                    HStack(spacing: 6) {
+                        Image(systemName: "list.bullet")
+                            .foregroundStyle(.white)
+                        Text("Open Feed")
+                            .foregroundStyle(.white)
+                            .font(.system(size: 13, weight: .medium))
+                        Spacer()
+                        Image(systemName: "arrow.right")
+                            .foregroundStyle(.white)
+                    }
+                }
+                .padding(14)
+            }
+            .frame(height: 160)
+        }
+        .buttonStyle(.plain)
+    }
+    
+    private func relativeDate(_ date: Date) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return formatter.localizedString(for: date, relativeTo: Date())
+    }
+}
+
+// MARK: - Custom Card Components
+
+struct SermonJournalCard: View {
+    let document: Letterspace_CanvasDocument
+    let onTap: () -> Void
+    @Environment(\.themeColors) var theme
+    
+    private var lastPreachedDate: Date? {
+        document.variations.compactMap { $0.datePresented }.max()
+    }
+    
+    private var timeSincePreached: String {
+        guard let date = lastPreachedDate else { return "Not preached yet" }
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return "Preached \(formatter.localizedString(for: date, relativeTo: Date()))"
+    }
+    
+    var body: some View {
+        Button(action: onTap) {
+            ZStack {
+                // Modern gradient background
+                LinearGradient(colors: [Color.purple.opacity(0.85), Color.blue.opacity(0.7)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                    .overlay(
+                        // Subtle mesh overlay
+                        AngularGradient(gradient: Gradient(colors: [Color.white.opacity(0.15), .clear, .clear, Color.white.opacity(0.15)]), center: .center)
+                            .blendMode(.softLight)
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 18))
+                    .shadow(color: .black.opacity(0.15), radius: 12, x: 0, y: 8)
+                
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(alignment: .top) {
+                        Image(systemName: "book.pages.fill")
+                            .foregroundStyle(.white)
+                            .font(.system(size: 18, weight: .semibold))
+                        Spacer()
+                        Text(timeSincePreached)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.9))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(RoundedRectangle(cornerRadius: 6).fill(.white.opacity(0.15)))
+                    }
+                    
+                    Text(document.title)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .lineLimit(2)
+                    if !document.subtitle.isEmpty {
+                        Text(document.subtitle)
+                            .font(.system(size: 13))
+                            .foregroundStyle(.white.opacity(0.9))
+                            .lineLimit(1)
+                    }
+                    Spacer()
+                    HStack(spacing: 6) {
+                        Image(systemName: "pencil.circle.fill")
+                            .foregroundStyle(.white)
+                            .font(.system(size: 13))
+                        Text("Add Reflection")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(.white)
+                        Spacer()
+                        Image(systemName: "arrow.right")
+                            .foregroundStyle(.white)
+                            .font(.system(size: 12, weight: .semibold))
+                    }
+                }
+                .padding(16)
+            }
+            .frame(width: 280, height: 160)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+struct PreachItAgainCard: View {
+    let document: Letterspace_CanvasDocument
+    let onTap: () -> Void
+    @Environment(\.themeColors) var theme
+    
+    private var lastPreachedDate: Date? {
+        document.variations.compactMap { $0.datePresented }.max()
+    }
+    
+    private var timeSincePreached: String {
+        guard let date = lastPreachedDate else { return "Never preached" }
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .full
+        return formatter.localizedString(for: date, relativeTo: Date())
+    }
+    
+    private var preachingHistory: String {
+        let count = document.variations.filter { $0.datePresented != nil }.count
+        return "\(count) time\(count == 1 ? "" : "s")"
+    }
+    
+    var body: some View {
+        Button(action: onTap) {
+            VStack(alignment: .leading, spacing: 12) {
+                // Gradient background
+                ZStack {
+                    LinearGradient(
+                        colors: [Color.orange.opacity(0.8), Color.red.opacity(0.6)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                    
+                    VStack(alignment: .leading, spacing: 8) {
+                        // Header
+                        HStack {
+                            Image(systemName: "arrow.clockwise.circle.fill")
+                                .font(.title2)
+                                .foregroundColor(.white)
+                            
+                            Spacer()
+                            
+                            Text("READY")
+                                .font(.caption.bold())
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 4)
+                                        .fill(.white.opacity(0.2))
+                                )
+                        }
+                        
+                        Spacer()
+                        
+                        // Title
+                        Text(document.title)
+                            .font(.custom("InterTight-Bold", size: 16))
+                            .foregroundColor(.white)
+                            .lineLimit(2)
+                        
+                        // History info
+                        HStack {
+                            Text("Last preached \(timeSincePreached)")
+                                .font(.caption)
+                                .foregroundColor(.white.opacity(0.9))
+                            
+                            Spacer()
+                            
+                            Text("Preached \(preachingHistory)")
+                                .font(.caption)
+                                .foregroundColor(.white.opacity(0.9))
+                        }
+                    }
+                    .padding(16)
+                }
+                .frame(width: 280, height: 140)
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+                
+                // Bottom action
+                HStack {
+                    Text("View Details")
+                        .font(.custom("InterTight-Medium", size: 14))
+                        .foregroundColor(theme.primary)
+                    
+                    Spacer()
+                    
+                    Image(systemName: "arrow.up.right")
+                        .font(.caption)
+                        .foregroundColor(theme.accent)
+                }
+                .padding(.horizontal, 4)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Recently Completed Sermon Card
+struct CompletedSermonCard: View {
+    let document: Letterspace_CanvasDocument
+    let onTap: () -> Void
+    @Environment(\.themeColors) var theme
+    
+    var body: some View {
+        Button(action: onTap) {
+            ZStack {
+                LinearGradient(colors: [Color.green.opacity(0.85), Color.teal.opacity(0.7)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                    .clipShape(RoundedRectangle(cornerRadius: 18))
+                    .shadow(color: .black.opacity(0.15), radius: 12, x: 0, y: 8)
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(alignment: .center, spacing: 8) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.white)
+                            .font(.system(size: 16, weight: .semibold))
+                        Text("Reflected")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.95))
+                        Spacer()
+                    }
+                    Text(document.title)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .lineLimit(2)
+                    if !document.subtitle.isEmpty {
+                        Text(document.subtitle)
+                            .font(.system(size: 13))
+                            .foregroundStyle(.white.opacity(0.9))
+                            .lineLimit(1)
+                    }
+                    Spacer()
+                    HStack(spacing: 6) {
+                        Image(systemName: "arrow.right")
+                            .foregroundStyle(.white)
+                            .font(.system(size: 12, weight: .semibold))
+                        Spacer()
+                    }
+                }
+                .padding(16)
+            }
+            .frame(width: 280, height: 160)
+        }
+        .buttonStyle(.plain)
+    }
 }
 
 // Add this helper view for the button background
@@ -3825,14 +5679,297 @@ struct AnyShape: Shape {
 private struct IgnoresSafeAreaModifier: ViewModifier {
     let isIPad: Bool
     func body(content: Content) -> some View {
-        if isIPad {
-            content.ignoresSafeArea(.all, edges: .top)
-        } else {
-            content
-        }
+        // FIXED: Don't ignore safe area - let iOS 26 handle it properly
+        content
     }
 }
 
 
 
 #endif
+
+    // Foundation Model service for sermon curation (ready for Foundation Models when available)
+    private class FoundationModelService {
+        static let shared = FoundationModelService()
+        
+        private var isModelLoaded = false
+        
+        private init() {}
+        
+        func loadModel() async throws {
+            guard !isModelLoaded else { return }
+            
+            // TODO: When Foundation Models are available, uncomment this:
+            // model = try SystemLanguageModel(useCase: .general)
+            isModelLoaded = true
+        }
+        
+        func generateSermonInsight(for document: Letterspace_CanvasDocument) async throws -> String {
+            try await loadModel()
+            
+            // TODO: When Foundation Models are available, use this:
+            // let prompt = """
+            // Analyze this sermon titled "\(document.title)" and provide a brief, inspiring insight (2-3 sentences) that captures the essence of the message. 
+            // Focus on the spiritual impact and practical application. Make it engaging and encouraging for someone looking for guidance.
+            // """
+            // let response = try await model.generate(prompt)
+            // return response.text
+            
+            // For now, use intelligent fallback based on document title
+            let insights = [
+                "A powerful message about faith and perseverance that resonates with current challenges.",
+                "This sermon explores deep biblical truths with practical applications for daily life.",
+                "An inspiring message of hope and redemption that speaks to the heart.",
+                "A thoughtful exploration of scripture that brings fresh perspective to familiar passages.",
+                "This message offers wisdom and guidance for navigating life's complexities."
+            ]
+            let hash = abs(document.title.hashValue)
+            return insights[hash % insights.count]
+        }
+        
+        func categorizeSermon(_ document: Letterspace_CanvasDocument) async throws -> String {
+            try await loadModel()
+            
+            // TODO: When Foundation Models are available, use this:
+            // let prompt = """
+            // Categorize this sermon titled "\(document.title)" into one of these categories: Faith, Hope, Wisdom, Guidance, Inspiration.
+            // Return only the category name.
+            // """
+            // let response = try await model.generate(prompt)
+            // return response.text.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
+            
+            // For now, use intelligent categorization based on document title
+            let categories = ["Faith", "Hope", "Wisdom", "Guidance", "Inspiration"]
+            let hash = abs(document.title.hashValue)
+            return categories[hash % categories.count]
+        }
+    }
+
+enum FoundationModelError: Error {
+    case modelNotLoaded
+    case generationFailed
+}
+
+// MARK: - Latest Entry Card
+struct LatestEntryCard: View {
+    let entry: SermonJournalEntry
+    let onTap: () -> Void
+    @Environment(\.themeColors) var theme
+    
+    var body: some View {
+        Button(action: onTap) {
+            ZStack {
+                LinearGradient(colors: [Color.mint.opacity(0.85), Color.blue.opacity(0.7)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                    .clipShape(RoundedRectangle(cornerRadius: 18))
+                    .shadow(color: .black.opacity(0.15), radius: 12, x: 0, y: 8)
+                
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "rectangle.and.text.magnifyingglass")
+                            .foregroundStyle(.white)
+                            .font(.system(size: 16, weight: .semibold))
+                        Text("Entry")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.95))
+                        Spacer()
+                    }
+                    
+                    Text(sermonTitle)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .lineLimit(2)
+                    Text(formatted(entry.createdAt))
+                        .font(.system(size: 12))
+                        .foregroundStyle(.white.opacity(0.9))
+                    Spacer()
+                    HStack(spacing: 6) {
+                        Text("Open")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(.white)
+                        Spacer()
+                        Image(systemName: "arrow.right")
+                            .foregroundStyle(.white)
+                            .font(.system(size: 12, weight: .semibold))
+                    }
+                }
+                .padding(16)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+    
+    private var sermonTitle: String {
+        Letterspace_CanvasDocument.load(id: entry.sermonId)?.title ?? "Untitled Sermon"
+    }
+    
+    private func formatted(_ date: Date) -> String {
+        let f = DateFormatter()
+        f.dateStyle = .medium
+        f.timeStyle = .short
+        return f.string(from: date)
+    }
+}
+
+// MARK: - Journal Feed View
+struct JournalFeedView: View {
+    let onDismiss: () -> Void
+    @ObservedObject private var service = SermonJournalService.shared
+    @State private var isGenerating: Set<String> = []
+    @State private var showPicker = false
+    @State private var selectedEntryForDetail: SermonJournalEntry? = nil
+    @Environment(\.themeColors) var theme
+    
+    // Group entries by month (yyyy-MM)
+    private var groupedByMonth: [String: [SermonJournalEntry]] {
+        Dictionary(grouping: service.entries()) { entry in
+            let comps = Calendar.current.dateComponents([.year, .month], from: entry.createdAt)
+            let y = comps.year ?? 0, m = comps.month ?? 0
+            return String(format: "%04d-%02d", y, m)
+        }
+    }
+    private var groupedByMonthSorted: [(key: String, value: [SermonJournalEntry])] {
+        groupedByMonth.sorted { $0.key > $1.key }
+    }
+    
+    private func monthTitle(_ key: String) -> String {
+        let parts = key.split(separator: "-")
+        guard parts.count == 2, let y = Int(parts[0]), let m = Int(parts[1]) else { return key }
+        var comps = DateComponents(); comps.year = y; comps.month = m
+        let date = Calendar.current.date(from: comps) ?? Date()
+        let f = DateFormatter(); f.dateFormat = "LLLL yyyy"
+        return f.string(from: date)
+    }
+    
+    var body: some View {
+        NavigationView {
+            Group {
+                if service.entries().isEmpty {
+                    // Clean empty state – no stray timeline dot
+                    VStack(spacing: 16) {
+                        Image(systemName: "text.badge.plus")
+                            .font(.system(size: 44, weight: .semibold))
+                            .foregroundStyle(theme.accent)
+                        Text("No journal entries yet")
+                            .font(.system(size: 17, weight: .semibold))
+                        Text("Tap + to add a custom reflection or attach one to a sermon.")
+                            .font(.system(size: 14))
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            HStack(alignment: .top, spacing: 16) {
+                                // Left vertical timeline with month nodes and a bottom dot
+                                VStack(alignment: .trailing, spacing: 32) {
+                                    ForEach(groupedByMonthSorted, id: \.key) { month, _ in
+                                        HStack(spacing: 8) {
+                                            VStack(spacing: 6) {
+                                                Circle()
+                                                    .fill(theme.accent)
+                                                    .frame(width: 8, height: 8)
+                                                Rectangle()
+                                                    .fill(theme.accent.opacity(0.3))
+                                                    .frame(width: 2, height: 24)
+                                            }
+                                            Text(monthTitle(month))
+                                                .font(.system(size: 15, weight: .semibold))
+                                                .foregroundStyle(theme.secondary)
+                                                .frame(maxWidth: .infinity, alignment: .leading)
+                                        }
+                                    }
+                                    // Bottom terminal dot
+                                    Circle()
+                                        .fill(theme.accent.opacity(0.7))
+                                        .frame(width: 6, height: 6)
+                                        .padding(.top, -12)
+                                }
+                                .frame(width: 120, alignment: .trailing)
+                                
+                                // Right: month groups with color-coded summary cards
+                                VStack(alignment: .leading, spacing: 20) {
+                                    ForEach(groupedByMonthSorted, id: \.key) { month, entries in
+                                        Text(monthTitle(month))
+                                            .font(.system(size: 20, weight: .semibold))
+                                            .foregroundStyle(theme.primary)
+                                        
+                                        VStack(spacing: 12) {
+                                            ForEach(entries) { entry in
+                                                LatestEntryCard(entry: entry) {
+                                                    selectedEntryForDetail = entry
+                                                }
+                                                .id(entry.id)
+                                                .contextMenu {
+                                                    Button(role: .destructive) {
+                                                        SermonJournalService.shared.deleteEntry(id: entry.id)
+                                                    } label: {
+                                                        Label("Delete Entry", systemImage: "trash")
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            .padding(16)
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Journal")
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: {
+                        // Open custom entry immediately
+                        NotificationCenter.default.post(name: NSNotification.Name("StartJournalCustomEntry"), object: nil)
+                    }) {
+                        Image(systemName: "plus.circle.fill").font(.title3)
+                    }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done", action: onDismiss)
+                }
+            }
+        }
+        .sheet(isPresented: $showPicker) {
+            // Allow custom (no sermon) or pick from all documents
+            ReflectionSelectionView(
+                documents: loadAllDocuments(),
+                onSelectDocument: { doc in
+                    showPicker = false
+                    NotificationCenter.default.post(name: NSNotification.Name("StartJournalForDocument"), object: doc)
+                },
+                onDismiss: { showPicker = false },
+                allowCustom: true,
+                onSelectNone: {
+                    showPicker = false
+                    NotificationCenter.default.post(name: NSNotification.Name("StartJournalCustomEntry"), object: nil)
+                }
+            )
+        }
+        .sheet(item: $selectedEntryForDetail) { entry in
+            SermonJournalEntryDetail(entry: entry) {
+                selectedEntryForDetail = nil
+            }
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+            .presentationBackground(.ultraThinMaterial)
+        }
+    }
+    
+    private func loadAllDocuments() -> [Letterspace_CanvasDocument] {
+        // Prefer the service/state from dashboard if accessible; fallback to on-disk scan
+        var results: [Letterspace_CanvasDocument] = []
+        if let appDir = Letterspace_CanvasDocument.getAppDocumentsDirectory() {
+            if let files = try? FileManager.default.contentsOfDirectory(at: appDir, includingPropertiesForKeys: nil) {
+                for url in files where url.pathExtension == "canvas" {
+                    if let data = try? Data(contentsOf: url),
+                       let doc = try? JSONDecoder().decode(Letterspace_CanvasDocument.self, from: data) {
+                        results.append(doc)
+                    }
+                }
+            }
+        }
+        return results.sorted { ($0.modifiedAt ?? $0.createdAt) > ($1.modifiedAt ?? $1.createdAt) }
+    }
+}

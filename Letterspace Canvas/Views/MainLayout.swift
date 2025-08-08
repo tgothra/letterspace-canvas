@@ -275,10 +275,14 @@ struct MainLayout: View {
                 } detail: {
                     // Main content area
                     content
+                        .safeAreaPadding(.top, 0) // Let NavigationSplitView handle safe area naturally
                 }
             } else {
-                // iPhone: Keep existing floating sidebar
+                // iPhone: Keep existing floating sidebar with proper safe area respect
                 content
+                    .safeAreaInset(edge: .top, spacing: 0) {
+                        Color.clear.frame(height: 0) // Ensure safe area is respected
+                    }
             }
             #else
             // macOS: Keep existing layout
@@ -310,6 +314,8 @@ struct MainLayout: View {
                 SearchView(onDismiss: {
                     showSearchModal = false
                 })
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
                 .presentationBackground(.ultraThinMaterial)
             }
             .sheet(isPresented: $showUserProfileSheet) {
@@ -1706,7 +1712,7 @@ private func mainContentView(availableWidth: CGFloat) -> some View {
                                         insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .center)),
                                         removal: .opacity.combined(with: .scale(scale: 1.05, anchor: .center))
                                     ))
-                                    .animation(.spring(response: 1.8, dampingFraction: 0.85), value: sidebarMode)
+                                    .animation(.spring(response: 0.6, dampingFraction: 0.8), value: sidebarMode)
             // .frame(maxWidth: .infinity) // Already applied by parent ZStack
             // .frame(maxHeight: dashboardGeo.size.height) // Use available height
                             } else {
@@ -1750,9 +1756,9 @@ private func mainContentView(availableWidth: CGFloat) -> some View {
                                 .id(document.id)
                                 .transition(.asymmetric(
                                     insertion: .opacity,
-                                    removal: isSwipeDownDismissing ? .opacity : .move(edge: .trailing)
+                                    removal: .opacity // Use opacity for all removals to prevent layout conflicts
                                 ))
-                                .animation(isSwipeDownDismissing ? .none : .easeOut(duration: 0.3), value: sidebarMode)
+                                .animation(.easeOut(duration: 0.2), value: sidebarMode) // Faster removal
                             }
     }
     
@@ -1850,7 +1856,7 @@ private func mainContentView(availableWidth: CGFloat) -> some View {
                 // Gradient wallpaper background
                 Rectangle()
                     .fill(gradientManager.getCurrentGradient(for: colorScheme))
-                    .ignoresSafeArea()
+                    .ignoresSafeArea(.all) // Ignore all safe areas to prevent gaps during transitions
                 
                 HStack(spacing: 0) {
                 let isLeftSidebarActuallyVisible = !viewMode.isDistractionFreeMode
@@ -2000,7 +2006,7 @@ private func mainContentView(availableWidth: CGFloat) -> some View {
                     
                     Spacer() // Push everything to the top
                 }
-                .ignoresSafeArea()
+                // FIXED: Don't ignore safe area - let content respect top safe area
                 
                 // No swipe indicators needed - iPad uses native sidebar, iPhone uses circular menu
                 // Removed all gesture code - no longer needed
@@ -2443,10 +2449,12 @@ private func mainContentView(availableWidth: CGFloat) -> some View {
                                 }
                             }
                         }
-                        .padding(.trailing, 20)
-                        .padding(.bottom, 20)
+                        .padding(.trailing, 25)
+                        .padding(.bottom, sidebarMode == .allDocuments ? 
+                                 (UIScreen.main.bounds.height > 800 ? 10 : 8) : 6) // Brought up by 1 more point
                     }
                 }
+                .ignoresSafeArea(.keyboard, edges: .bottom) // Keep buttons fixed when keyboard appears
                 .allowsHitTesting(true)
             }
             #else
@@ -2519,8 +2527,8 @@ private func mainContentView(availableWidth: CGFloat) -> some View {
                             isHoveringDistraction = hovering
                         }
                     }
-                        .padding(.trailing, 20)
-                    .padding(.bottom, 20)
+                                                .padding(.trailing, 20)
+                        .padding(.bottom, 32)
                 }
             }
             .allowsHitTesting(true)

@@ -320,7 +320,7 @@ class TrackingTableView: NSTableView {
             menu.items = [
                 NSMenuItem(title: "Pin", action: #selector(handlePin(_:)), keyEquivalent: ""),
                 NSMenuItem(title: "Mark as WIP", action: #selector(handleWIP(_:)), keyEquivalent: ""),
-                NSMenuItem(title: "Add to Calendar", action: #selector(handleCalendar(_:)), keyEquivalent: ""),
+                NSMenuItem(title: "Schedule Presentation", action: #selector(handleCalendar(_:)), keyEquivalent: ""),
                 NSMenuItem.separator(),
                 NSMenuItem(title: "Create Variation", action: #selector(handleCreateVariation(_:)), keyEquivalent: ""),
                 NSMenuItem(title: "Duplicate", action: #selector(handleDuplicate(_:)), keyEquivalent: ""),
@@ -391,7 +391,7 @@ class TrackingTableView: NSTableView {
             menu.items = [
                 NSMenuItem(title: "Pin", action: #selector(handlePin(_:)), keyEquivalent: ""),
                 NSMenuItem(title: "Mark as WIP", action: #selector(handleWIP(_:)), keyEquivalent: ""),
-                NSMenuItem(title: "Add to Calendar", action: #selector(handleCalendar(_:)), keyEquivalent: ""),
+                NSMenuItem(title: "Schedule Presentation", action: #selector(handleCalendar(_:)), keyEquivalent: ""),
                 NSMenuItem.separator(),
                 NSMenuItem(title: "Create Variation", action: #selector(handleCreateVariation(_:)), keyEquivalent: ""),
                 NSMenuItem(title: "Duplicate", action: #selector(handleDuplicate(_:)), keyEquivalent: ""),
@@ -442,7 +442,7 @@ class TrackingTableView: NSTableView {
     
     @objc private func handleCalendar(_ sender: NSMenuItem) {
         if let documentId = sender.representedObject as? String {
-            onCalendar?(documentId)
+            onCalendarAction?(documentId)
         }
     }
     

@@ -114,7 +114,7 @@ struct GlassCircularMenuButton: View {
             // ✨ iOS 26 Animated SF Symbol: Bounce during menu toggle
             .symbolEffect(.bounce, value: menuToggleAnimationTrigger)
             .frame(width: 56, height: 56)
-            .glassEffect(.regular.tint(theme.accent.opacity(0.8)).interactive())
+            .glassEffect(.regular.tint(Color.black.opacity(0.9)).interactive())
             .shadow(color: Color.black.opacity(0.2), radius: 8, x: 0, y: 2)
             .contentShape(Circle())
             .onTapGesture {
@@ -247,7 +247,7 @@ struct GlassCircularMenuButton: View {
                     onSettings: {}
                 )
                 .padding(.trailing, 20)
-                .padding(.bottom, 20)
+                .padding(.bottom, 32)
             }
         }
     }

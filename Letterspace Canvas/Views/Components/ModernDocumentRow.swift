@@ -7,7 +7,11 @@ struct ModernDocumentRow: View {
     let onPin: () -> Void
     let onWIP: () -> Void
     let onCalendar: () -> Void
+    let onCalendarAction: () -> Void
     let onDelete: () -> Void
+    let selectedTags: Set<String>
+    let selectedFilterColumn: String?
+    let dateFilterType: DateFilterType
     
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.themeColors) var theme
@@ -19,20 +23,40 @@ struct ModernDocumentRow: View {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
         formatter.timeStyle = .none
-        return formatter.string(from: document.modifiedAt)
+        let date = dateFilterType == .created ? document.createdAt : document.modifiedAt
+        let prefix = dateFilterType == .created ? "Created" : "Last modified"
+        return "\(prefix): \(formatter.string(from: date))"
     }
     
-    private var primaryFilter: String {
-        // Return the most relevant filter for this document
-        if let tags = document.tags, !tags.isEmpty {
-            return tags.first ?? "Document"
-        } else if let series = document.series?.name, !series.isEmpty {
-            return series
-        } else if let location = document.variations.first?.location, !location.isEmpty {
-            return location
-        } else {
-            return "Document"
+    private var primaryFilter: String? {
+        // Only show badge if there's an active filter or selected tags
+        if !selectedTags.isEmpty {
+            // Show the first matching tag from selected tags
+            if let docTags = document.tags {
+                for selectedTag in selectedTags {
+                    if docTags.contains(selectedTag) {
+                        return selectedTag
+                    }
+                }
+            }
         }
+        
+        if let filterColumn = selectedFilterColumn {
+            switch filterColumn {
+            case "series":
+                if let series = document.series?.name, !series.isEmpty {
+                    return series
+                }
+            case "location":
+                if let location = document.variations.first?.location, !location.isEmpty {
+                    return location
+                }
+            default:
+                break
+            }
+        }
+        
+        return nil
     }
     
     var body: some View {
@@ -103,26 +127,28 @@ struct ModernDocumentRow: View {
                     .fill(Color.clear)
                     .frame(width: 20, height: 20)
                 
-                // Last modified
-                Text("Last modified: \(formattedDate)")
+                // Date (modified or created based on dateFilterType)
+                Text(formattedDate)
                     .font(.system(size: 11))
                     .foregroundColor(.secondary)
                 
-                // Bullet separator
-                Text("•")
-                    .font(.system(size: 11))
-                    .foregroundColor(.secondary)
-                
-                // Primary filter/tag
-                Text(primaryFilter)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(theme.primary)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(theme.primary.opacity(0.1))
-                    )
+                // Primary filter/tag (only show if there's an active filter)
+                if let filter = primaryFilter {
+                    // Bullet separator
+                    Text("•")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                    
+                    Text(filter)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(theme.primary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(theme.primary.opacity(0.1))
+                        )
+                }
                 
                 Spacer()
                 
@@ -150,7 +176,11 @@ struct ModernDocumentRow: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(isHovered ? Color.gray.opacity(0.1) : Color.clear)
+        )
+        .contentShape(Rectangle())
         .scaleEffect(isHovered ? 1.02 : 1.0)
         .animation(.easeInOut(duration: 0.2), value: isHovered)
         .onHover { hovering in
@@ -165,6 +195,7 @@ struct ModernDocumentRow: View {
             Button(documentStatus.isPinned ? "Unpin" : "Pin") { onPin() }
             Button(documentStatus.isWIP ? "Remove from WIP" : "Add to WIP") { onWIP() }
             Button(documentStatus.isScheduled ? "Remove from Calendar" : "Add to Calendar") { onCalendar() }
+            Button("Schedule Presentation") { onCalendarAction() }
             Divider()
             Button("Delete", role: .destructive) { onDelete() }
         }
