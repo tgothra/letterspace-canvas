@@ -46,7 +46,7 @@ struct GlassCircularMenuButton: View {
                 cornerRadius: 20
             ) {
             // Menu content - all the navigation items with finger tracking
-            VStack(spacing: 2) {
+            VStack(spacing: 4) {
                 menuItem(icon: "rectangle.3.group", title: "Dashboard", action: onDashboard, index: 0)
                 menuItem(icon: "magnifyingglass", title: "Search", action: onSearch, index: 1)
                 menuItem(icon: "plus.square", title: "New Document", action: onNewDocument, index: 2)
@@ -56,8 +56,8 @@ struct GlassCircularMenuButton: View {
                 menuItem(icon: "trash", title: "Recently Deleted", action: onRecentlyDeleted, index: 6)
                 menuItem(icon: "person.crop.circle.fill", title: "Settings", action: onSettings, index: 7, isUserProfile: true)
             }
-            .padding(.vertical, 8)
-            .frame(width: 240)
+            .padding(.vertical, 10)
+            .frame(width: 280)
             .simultaneousGesture(
                 DragGesture(minimumDistance: 5, coordinateSpace: .local)
                     .onChanged { value in
@@ -65,8 +65,8 @@ struct GlassCircularMenuButton: View {
                         isDragging = true
                         
                         // Calculate which button is being hovered
-                        let startY: CGFloat = 8 // top padding
-                        let buttonHeight: CGFloat = 40 // button height including padding
+                        let startY: CGFloat = 10 // top padding
+                        let buttonHeight: CGFloat = 48 // button height including padding
                         let adjustedY = value.location.y - startY
                         
                         let newButtonIndex = Int(adjustedY / buttonHeight)
@@ -157,7 +157,7 @@ struct GlassCircularMenuButton: View {
                     if let profileImage = UserProfileManager.shared.getProfileImage() {
                         PlatformImageView(platformImage: profileImage)
                             .scaledToFill()
-                            .frame(width: 20, height: 20)
+                            .frame(width: 22, height: 22)
                             .clipShape(Circle())
                             .overlay(
                                 Circle()
@@ -167,10 +167,10 @@ struct GlassCircularMenuButton: View {
                         // Fallback to initials
                         Circle()
                             .fill(theme.accent.opacity(0.2))
-                            .frame(width: 20, height: 20)
+                            .frame(width: 22, height: 22)
                             .overlay(
                                 Text(UserProfileManager.shared.userProfile.initials)
-                                    .font(.system(size: 10, weight: .medium))
+                                    .font(.system(size: 12, weight: .medium))
                                     .foregroundColor(theme.accent)
                             )
                     }
@@ -190,25 +190,25 @@ struct GlassCircularMenuButton: View {
                             .frame(width: 10, height: 3)
                             .cornerRadius(0.5)
                     }
-                    .frame(width: 20, height: 20)
+                    .frame(width: 22, height: 22)
                 } else {
                     Image(systemName: icon)
-                        .font(.system(size: 16, weight: .medium))
+                        .font(.system(size: 18, weight: .medium))
                         .foregroundColor(theme.primary)
-                        .frame(width: 20, height: 20)
+                        .frame(width: 22, height: 22)
                         // ✨ iOS 26 Animated SF Symbol: Bounce when menu item is tapped
                         .symbolEffect(.bounce, value: menuItemAnimationTriggers[index] ?? 0)
                 }
                 
                 // Title
                 Text(title)
-                    .font(.system(size: 16, weight: .medium))
+                    .font(.system(size: 18, weight: .medium))
                     .foregroundColor(theme.primary)
                 
                 Spacer()
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 8)
+            .padding(.vertical, 10)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

@@ -120,7 +120,7 @@ struct CircularMenuOverlay: View {
                     GlassEffectContainer {
                         VStack(spacing: 0) {
                             // Menu items container - use VStack instead of LazyVStack for faster rendering
-                            VStack(spacing: 2) {
+                            VStack(spacing: 4) {
                                 menuItem(icon: "rectangle.3.group", title: "Dashboard", action: onDashboard, index: 0)
                                 menuItem(icon: "magnifyingglass", title: "Search", action: onSearch, index: 1)
                                 menuItem(icon: "plus.square", title: "New Document", action: onNewDocument, index: 2)
@@ -130,15 +130,15 @@ struct CircularMenuOverlay: View {
                                 menuItem(icon: "trash", title: "Recently Deleted", action: onRecentlyDeleted, index: 6)
                                 menuItem(icon: "person.crop.circle.fill", title: "Settings", action: onSettings, index: 7, isUserProfile: true)
                             }
-                            .padding(.vertical, 8) // Add breathing room above and below menu items
-                            .frame(width: 240)
+                            .padding(.vertical, 10) // Add breathing room above and below menu items
+                            .frame(width: 280)
                             .glassEffect(
                                 .regular,
                                 in: RoundedRectangle(cornerRadius: isDragging ? 20 : 16)
                             )
                             .scaleEffect(isDragging ? 1.02 : 1.0)
                             .offset(
-                                x: isDragging ? (dragLocation.x - 120) * 0.05 : 0,
+                                x: isDragging ? (dragLocation.x - 140) * 0.05 : 0,
                                 y: isDragging ? (dragLocation.y - 160) * 0.03 : 0
                             )
                             .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isDragging)
@@ -151,8 +151,8 @@ struct CircularMenuOverlay: View {
                                         isDragging = true
                                         
                                         // Calculate which button is being hovered
-                                        let startY: CGFloat = 8 // top padding
-                                        let buttonHeight: CGFloat = 40 // button height including padding
+                                        let startY: CGFloat = 10 // top padding
+                                        let buttonHeight: CGFloat = 48 // button height including padding
                                         let adjustedY = value.location.y - startY
                                         
                                         let newButtonIndex = Int(adjustedY / buttonHeight)
@@ -216,7 +216,7 @@ struct CircularMenuOverlay: View {
                     if let profileImage = cachedProfileImage {
                         PlatformImageView(platformImage: profileImage)
                             .scaledToFill()
-                            .frame(width: 20, height: 20)
+                            .frame(width: 22, height: 22)
                             .clipShape(Circle())
                             .overlay(
                                 Circle()
@@ -226,10 +226,10 @@ struct CircularMenuOverlay: View {
                         // Fallback to cached initials
                         Circle()
                             .fill(theme.accent.opacity(0.2))
-                            .frame(width: 20, height: 20)
+                            .frame(width: 22, height: 22)
                             .overlay(
                                 Text(cachedUserProfile.initials)
-                                    .font(.system(size: 10, weight: .medium))
+                                    .font(.system(size: 12, weight: .medium))
                                     .foregroundColor(theme.accent)
                             )
                     }
@@ -249,23 +249,23 @@ struct CircularMenuOverlay: View {
                             .frame(width: 10, height: 3)
                             .cornerRadius(0.5)
                     }
-                    .frame(width: 20, height: 20)
+                    .frame(width: 22, height: 22)
                 } else {
                     Image(systemName: icon)
-                        .font(.system(size: 16, weight: .medium))
+                        .font(.system(size: 18, weight: .medium))
                         .foregroundColor(theme.primary)
-                        .frame(width: 20, height: 20)
+                        .frame(width: 22, height: 22)
                 }
                 
                 // Title
                 Text(title)
-                    .font(.system(size: 16, weight: .medium))
+                    .font(.system(size: 18, weight: .medium))
                     .foregroundColor(theme.primary)
                 
                 Spacer()
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 8)
+            .padding(.vertical, 10)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
