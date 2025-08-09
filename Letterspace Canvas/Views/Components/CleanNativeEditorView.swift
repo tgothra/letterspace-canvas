@@ -475,9 +475,3 @@ private struct FloatingHeaderCard: View {
         .shadow(color: (colorScheme == .dark ? .white.opacity(0.04) : .black.opacity(0.06)), radius: 6, x: 0, y: 4)
     }
 }
-
-
-
-#endif
-
-
