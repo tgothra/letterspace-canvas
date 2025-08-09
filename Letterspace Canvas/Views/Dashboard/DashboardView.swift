@@ -1132,12 +1132,20 @@ loadDocuments()
                         .padding(.top, 12)
                     }
                     .navigationTitle(type.rawValue)
+                    #if os(iOS)
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
                         ToolbarItem(placement: .topBarTrailing) {
                             Button("Done") { activeSheet = nil }
                         }
                     }
+                    #else
+                    .toolbar {
+                        ToolbarItem(placement: .automatic) {
+                            Button("Done") { activeSheet = nil }
+                        }
+                    }
+                    #endif
                     .onAppear {
                         selectedCurationType = type
                         updateContentForNewCurationType()
@@ -5918,6 +5926,7 @@ struct JournalFeedView: View {
             }
             .navigationTitle("Journal")
             .toolbar {
+                #if os(iOS)
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: {
                         // Open custom entry immediately
@@ -5929,6 +5938,19 @@ struct JournalFeedView: View {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Done", action: onDismiss)
                 }
+                #else
+                ToolbarItem(placement: .automatic) {
+                    Button(action: {
+                        // Open custom entry immediately
+                        NotificationCenter.default.post(name: NSNotification.Name("StartJournalCustomEntry"), object: nil)
+                    }) {
+                        Image(systemName: "plus.circle.fill").font(.title3)
+                    }
+                }
+                ToolbarItem(placement: .automatic) {
+                    Button("Done", action: onDismiss)
+                }
+                #endif
             }
         }
         .sheet(isPresented: $showPicker) {
