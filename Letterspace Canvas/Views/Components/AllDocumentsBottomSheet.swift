@@ -294,7 +294,20 @@ struct AllDocumentsBottomSheet: View {
                 .padding(.vertical, 12)
                 .background(
                     RoundedRectangle(cornerRadius: 25)
-                        .fill(colorScheme == .dark ? Color(.systemGray5) : Color(.systemGray6))
+                        .fill(
+                            {
+                                #if os(iOS)
+                                return Color(UIColor { trait in
+                                    trait.userInterfaceStyle == .dark ? .systemGray5 : .systemGray6
+                                })
+                                #else
+                                // macOS fallback tints
+                                let dark = NSColor.windowBackgroundColor.blended(withFraction: 0.2, of: .black) ?? .windowBackgroundColor
+                                let light = NSColor.separatorColor.withAlphaComponent(0.6)
+                                return Color(colorScheme == .dark ? dark : light)
+                                #endif
+                            }()
+                        )
                 )
             }
             
