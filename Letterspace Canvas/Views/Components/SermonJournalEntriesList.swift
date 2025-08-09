@@ -17,7 +17,11 @@ struct SermonJournalEntriesList: View {
             .listStyle(.plain)
             .navigationTitle("Journal Entries")
             .toolbar {
+                #if os(iOS)
                 ToolbarItem(placement: .navigationBarTrailing) { Button("Done", action: onDismiss) }
+                #else
+                ToolbarItem(placement: .automatic) { Button("Done", action: onDismiss) }
+                #endif
             }
         }
     }

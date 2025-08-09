@@ -55,7 +55,11 @@ struct SermonJournalEntryDetail: View {
             }
             .navigationTitle("Journal Detail")
             .toolbar {
+                #if os(iOS)
                 ToolbarItem(placement: .navigationBarTrailing) { Button("Done", action: onDismiss) }
+                #else
+                ToolbarItem(placement: .automatic) { Button("Done", action: onDismiss) }
+                #endif
             }
         }
     }
