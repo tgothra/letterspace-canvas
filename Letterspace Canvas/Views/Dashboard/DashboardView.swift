@@ -4080,7 +4080,7 @@ loadDocuments()
         .padding(.vertical, isIPad ? 16 : 12) // More vertical padding for iPad
         .animation(.spring(response: 0.6, dampingFraction: 0.75), value: showFloatingSidebar)
     }
-
+    
     @State private var cachedFilteredDocuments: [Letterspace_CanvasDocument] = []
     @State private var cachedSortedFilteredDocuments: [Letterspace_CanvasDocument] = []
 
@@ -5205,6 +5205,7 @@ loadDocuments()
         formatter.unitsStyle = .abbreviated
         return formatter.localizedString(for: date, relativeTo: Date())
     }
+}
 
 // MARK: - Custom Card Components
 
