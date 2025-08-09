@@ -98,11 +98,19 @@ struct ReflectionSelectionView: View {
                 .padding(.bottom, 20)
             }
             .navigationTitle("Add Reflection")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
+                #if os(iOS)
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Cancel", action: onDismiss)
                 }
+                #else
+                ToolbarItem(placement: .automatic) {
+                    Button("Cancel", action: onDismiss)
+                }
+                #endif
             }
         }
     }
