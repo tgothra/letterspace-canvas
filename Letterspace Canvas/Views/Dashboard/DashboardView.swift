@@ -104,6 +104,8 @@ struct DashboardView: View {
     @State private var showTagManager = false
     @State private var showSermonJournalSheet = false
     @State private var selectedJournalDocument: Letterspace_CanvasDocument?
+    @State private var cachedFilteredDocuments: [Letterspace_CanvasDocument] = []
+    @State private var cachedSortedFilteredDocuments: [Letterspace_CanvasDocument] = []
     @State private var showReflectionSelectionSheet = false
     @State private var showPreachItAgainDetailsSheet = false
     @State private var selectedPreachItAgainDocument: Letterspace_CanvasDocument?
@@ -4080,9 +4082,6 @@ loadDocuments()
         .padding(.vertical, isIPad ? 16 : 12) // More vertical padding for iPad
         .animation(.spring(response: 0.6, dampingFraction: 0.75), value: showFloatingSidebar)
     }
-    
-    @State private var cachedFilteredDocuments: [Letterspace_CanvasDocument] = []
-    @State private var cachedSortedFilteredDocuments: [Letterspace_CanvasDocument] = []
 
     // MARK: - Notification Setup
     
@@ -5205,7 +5204,6 @@ loadDocuments()
         formatter.unitsStyle = .abbreviated
         return formatter.localizedString(for: date, relativeTo: Date())
     }
-}
 
 // MARK: - Custom Card Components
 
