@@ -469,7 +469,7 @@ private struct FloatingHeaderCard: View {
                             let panel = NSOpenPanel()
                             panel.allowedContentTypes = [.image]
                             panel.allowsMultipleSelection = false
-                            if panel.runModal() == .OK, let url = panel.url, let data = try? Data(contentsOf: url), let img = Self.decodeImage(from: data) {
+                            if panel.runModal() == .OK, let url = panel.url, let data = try? Data(contentsOf: url), let img = decodeImage(from: data) {
                                 image = img
                                 onImagePicked(img, data)
                             }
