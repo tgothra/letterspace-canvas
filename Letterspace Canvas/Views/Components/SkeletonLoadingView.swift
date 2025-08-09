@@ -56,11 +56,16 @@ struct SkeletonLoadingView: View {
     }
     
     private var skeletonBaseColor: Color {
-        if colorScheme == .dark {
-            return Color(.systemGray5).opacity(0.3)
-        } else {
-            return Color(.systemGray6).opacity(0.6)
-        }
+        #if os(iOS)
+        return Color(UIColor { trait in
+            trait.userInterfaceStyle == .dark ? .systemGray5 : .systemGray6
+        }).opacity(colorScheme == .dark ? 0.3 : 0.6)
+        #else
+        // Map to AppKit equivalents
+        let darkBase = NSColor.windowBackgroundColor.blended(withFraction: 0.2, of: .black) ?? .windowBackgroundColor
+        let lightBase = NSColor.separatorColor.withAlphaComponent(0.6)
+        return Color(colorScheme == .dark ? darkBase : lightBase)
+        #endif
     }
     
     private var shimmerGradient: LinearGradient {
@@ -180,19 +185,19 @@ struct SectionCardSkeleton: View {
     }
     
     private var cardBackground: Color {
-        if colorScheme == .dark {
-            return Color(.systemGray6).opacity(0.1)
-        } else {
-            return Color(.systemBackground)
-        }
+        #if os(iOS)
+        return Color(UIColor { trait in
+            trait.userInterfaceStyle == .dark ? .systemGray6 : .systemBackground
+        }).opacity(colorScheme == .dark ? 0.1 : 1.0)
+        #else
+        let darkBg = NSColor.windowBackgroundColor
+        let lightBg = NSColor.textBackgroundColor
+        return Color(colorScheme == .dark ? darkBg : lightBg)
+        #endif
     }
     
     private var shadowColor: Color {
-        if colorScheme == .dark {
-            return Color.black.opacity(0.3)
-        } else {
-            return Color.black.opacity(0.06)
-        }
+        Color.black.opacity(colorScheme == .dark ? 0.3 : 0.06)
     }
 }
 
@@ -352,5 +357,9 @@ struct FloatingActionButtonSkeleton: View {
         Spacer()
     }
     .padding()
-    .background(Color(.systemBackground))
+    #if os(iOS)
+    .background(Color(UIColor.systemBackground))
+    #else
+    .background(Color(NSColor.textBackgroundColor))
+    #endif
 } 

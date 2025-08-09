@@ -53,7 +53,10 @@ struct CleanNativeEditorView: View {
                     subtitle: Binding(get: { document.subtitle }, set: { document.subtitle = $0; document.save() }),
                     image: $headerImage,
                     onRemoveImage: { removeHeaderImage() },
-                    photosPickerItem: $photosPickerItem
+                    photosPickerItem: $photosPickerItem,
+                    onImagePicked: { img, data in
+                        Task { await saveHeaderImageToDocument(img, data: data) }
+                    }
                 )
                 .padding(.horizontal, 6)
                 .padding(.top, 8)
@@ -315,6 +318,7 @@ private struct FloatingHeaderCard: View {
     @Binding var image: PlatformImage?
     let onRemoveImage: () -> Void
     @Binding var photosPickerItem: PhotosPickerItem?
+    let onImagePicked: (PlatformImage, Data) -> Void
     @Environment(\.colorScheme) private var colorScheme
     @State private var isExpanded = false
     @Namespace private var imageNamespace
@@ -350,8 +354,8 @@ private struct FloatingHeaderCard: View {
                             panel.allowedContentTypes = [.image]
                             panel.allowsMultipleSelection = false
                             if panel.runModal() == .OK, let url = panel.url, let data = try? Data(contentsOf: url), let img = Self.decodeImage(from: data) {
-                                headerImage = img
-                                Task { await saveHeaderImageToDocument(img, data: data) }
+                                image = img
+                                onImagePicked(img, data)
                             }
                         } label: {
                             Image(systemName: "photo")
@@ -442,8 +446,8 @@ private struct FloatingHeaderCard: View {
                             panel.allowedContentTypes = [.image]
                             panel.allowsMultipleSelection = false
                             if panel.runModal() == .OK, let url = panel.url, let data = try? Data(contentsOf: url), let img = Self.decodeImage(from: data) {
-                                headerImage = img
-                                Task { await saveHeaderImageToDocument(img, data: data) }
+                                image = img
+                                onImagePicked(img, data)
                             }
                         } label: {
                             Image(systemName: "photo.badge.plus")
