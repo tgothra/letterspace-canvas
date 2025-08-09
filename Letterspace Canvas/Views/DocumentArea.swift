@@ -750,8 +750,8 @@ struct DocumentArea: View {
             VStack(spacing: 0) {
                 // Header section with dynamic spacer for smooth transition
                 if viewMode != .focus && !isDistractionFreeMode {
-                    // When using the new AttributedCollapsingEditorView on iOS 26+, it renders
-                    // its own expanded/collapsed headers. Avoid duplicating a stickied header here.
+                    // Avoid duplicate legacy header when using the new unified SwiftUI editor
+                    // that renders its own floating/expanded header.
                     #if os(iOS)
                     if #available(iOS 26.0, *) {
                         EmptyView()
@@ -761,9 +761,14 @@ struct DocumentArea: View {
                             .transition(createHeaderTransition())
                     }
                     #else
-                    headerView
-                        .opacity(headerCollapseProgress < 0.85 ? 1.0 : 0.0)
-                        .transition(createHeaderTransition())
+                    if #available(macOS 15.0, *) {
+                        // On macOS 15+, CleanNativeEditorView provides the header.
+                        EmptyView()
+                    } else {
+                        headerView
+                            .opacity(headerCollapseProgress < 0.85 ? 1.0 : 0.0)
+                            .transition(createHeaderTransition())
+                    }
                     #endif
                 }
                 
