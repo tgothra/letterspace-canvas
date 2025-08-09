@@ -355,7 +355,7 @@ private struct FloatingHeaderCard: View {
                     ZStack(alignment: .topTrailing) {
                         platformImage(image)
                             .resizable()
-                            .aspectRatio(contentMode: .fill)
+                            .aspectRatio(contentMode: .fit)
                             .frame(maxWidth: .infinity, maxHeight: 140)
                             .clipShape(RoundedRectangle(cornerRadius: 14))
                             .matchedGeometryEffect(id: "headerImage", in: imageNamespace)
