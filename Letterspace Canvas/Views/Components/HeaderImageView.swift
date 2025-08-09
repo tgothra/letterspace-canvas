@@ -21,6 +21,8 @@ struct HeaderImageView: View {
     @Environment(\.themeColors) var theme
     
     var body: some View {
+        let isIcon = element.content.contains("header_icon_")
+        
         Group {
             #if os(macOS)
             if let image = nsImage {
@@ -28,14 +30,17 @@ struct HeaderImageView: View {
                     ZStack {
                         Image(nsImage: image)
                             .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .frame(width: geo.size.width + 96, alignment: .center)
-                            .position(x: (geo.size.width + 96) / 2, y: headerImageHeight / 2)
-                            .padding(.horizontal, -48)
+                            .aspectRatio(contentMode: isIcon ? .fit : .fit)
+                            .frame(width: isIcon ? min(geo.size.width, 300) : geo.size.width + 96, 
+                                   height: isIcon ? min(geo.size.width, 300) : nil,
+                                   alignment: .center)
+                            .clipShape(isIcon ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: 12)))
+                            .position(x: geo.size.width / 2, y: headerImageHeight / 2)
+                            .padding(.horizontal, isIcon ? 0 : -48)
                             .background(Color.clear)
                             .opacity(isAppeared ? 1 : 0)  // Simple fade in
                             .onAppear {
-                                headerImageHeight = calculateHeaderImageHeight(platformImage: image, containerWidth: geo.size.width + 96)
+                                headerImageHeight = isIcon ? min(geo.size.width, 300) : calculateHeaderImageHeight(platformImage: image, containerWidth: geo.size.width + 96)
                                 // Allow layout to settle first, then animate in
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                                     withAnimation(.easeInOut(duration: 0.4)) {
@@ -45,7 +50,7 @@ struct HeaderImageView: View {
                                 }
                             }
                             .onChange(of: geo.size.width) { oldValue, newValue in
-                                headerImageHeight = calculateHeaderImageHeight(platformImage: image, containerWidth: newValue + 96)
+                                headerImageHeight = isIcon ? min(newValue, 300) : calculateHeaderImageHeight(platformImage: image, containerWidth: newValue + 96)
                             }
                     }
                     .overlay(alignment: .topLeading) {
@@ -77,14 +82,17 @@ struct HeaderImageView: View {
                     ZStack {
                         Image(uiImage: image)
                             .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .frame(width: geo.size.width + 96, alignment: .center) // Adjust padding as needed for iOS
-                            .position(x: (geo.size.width + 96) / 2, y: headerImageHeight / 2)
-                            .padding(.horizontal, -48) // Adjust padding as needed for iOS
+                            .aspectRatio(contentMode: isIcon ? .fit : .fit)
+                            .frame(width: isIcon ? min(geo.size.width, 300) : geo.size.width + 96,
+                                   height: isIcon ? min(geo.size.width, 300) : nil,
+                                   alignment: .center)
+                            .clipShape(isIcon ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: 12)))
+                            .position(x: geo.size.width / 2, y: headerImageHeight / 2)
+                            .padding(.horizontal, isIcon ? 0 : -48)
                             .background(Color.clear)
                             .opacity(isAppeared ? 1 : 0)  // Simple fade in
                             .onAppear {
-                                headerImageHeight = calculateHeaderImageHeight(platformImage: image, containerWidth: geo.size.width + 96)
+                                headerImageHeight = isIcon ? min(geo.size.width, 300) : calculateHeaderImageHeight(platformImage: image, containerWidth: geo.size.width + 96)
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                                     withAnimation(.easeInOut(duration: 0.4)) {
                                         isAppeared = true
@@ -93,7 +101,7 @@ struct HeaderImageView: View {
                                 }
                             }
                             .onChange(of: geo.size.width) { oldValue, newValue in
-                                headerImageHeight = calculateHeaderImageHeight(platformImage: image, containerWidth: newValue + 96)
+                                headerImageHeight = isIcon ? min(newValue, 300) : calculateHeaderImageHeight(platformImage: image, containerWidth: newValue + 96)
                             }
                     }
                     // Options menu might need different presentation on iOS (e.g., long press or tap)

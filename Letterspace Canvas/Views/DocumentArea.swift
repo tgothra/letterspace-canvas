@@ -344,6 +344,7 @@ struct DocumentArea: View {
     @FocusState private var isFloatingTitleFocused: Bool
     @FocusState private var isFloatingSubtitleFocused: Bool
     @State private var showFloatingImageActionSheet: Bool = false
+    @State private var showFloatingHeaderImageMenu: Bool = false
     
     // Photo picker coordinators for floating header
     #if os(iOS)
@@ -549,6 +550,13 @@ struct DocumentArea: View {
                 }
             )
         )
+        .onChange(of: isShowingImagePicker) { oldValue, newValue in
+            print("🔍 DEBUG: isShowingImagePicker changed from \(oldValue) to \(newValue)")
+            if newValue {
+                print("🔍 DEBUG: Image picker is being triggered! Stack trace:")
+                // This will help us see what's triggering the image picker
+            }
+        }
         #else
         .fileImporter(
             isPresented: $isShowingImagePicker,
@@ -1849,6 +1857,65 @@ struct DocumentArea: View {
             print("🗑️ Header image settings saved, document updated.")
         }
     }
+    
+    // MARK: - Icon Selection Handler for Floating Header
+    private func handleFloatingIconSelection(_ iconName: String) {
+        print("📸 Floating header icon selected: \(iconName)")
+        
+        // Create circular icon image from SF Symbol
+        guard let iconImage = IconToImageConverter.createCircularIcon(
+            from: iconName,
+            size: CGSize(width: 120, height: 120),
+            backgroundColor: theme.accent,
+            iconColor: .white
+        ) else {
+            print("❌ Failed to create icon image")
+            return
+        }
+        
+        // Create image data for saving
+        guard let imageData = IconToImageConverter.createImageData(
+            from: iconName,
+            backgroundColor: theme.accent,
+            iconColor: .white,
+            isCircular: true
+        ) else {
+            print("❌ Failed to create icon image data")
+            return
+        }
+        
+        // Save the image to the document
+        let filename = "header_icon_\(iconName)_\(UUID().uuidString).jpg"
+        
+        do {
+            if let documentsDirectory = Letterspace_CanvasDocument.getAppDocumentsDirectory() {
+                let imageURL = documentsDirectory.appendingPathComponent(filename)
+                try imageData.write(to: imageURL)
+                
+                // Update the document
+                DispatchQueue.main.async {
+                    // Remove any existing header image element
+                    self.document.elements.removeAll { $0.type == .headerImage }
+                    
+                    // Create new header image element
+                    let headerElement = DocumentElement(type: .headerImage, content: filename)
+                    
+                    // Add to document
+                    self.document.elements.append(headerElement)
+                    
+                    // Update header image
+                    self.headerImage = iconImage
+                    
+                    // Save document
+                    self.document.save()
+                    
+                    print("✅ Floating icon header image saved: \(filename)")
+                }
+            }
+        } catch {
+            print("❌ Error saving floating icon image: \(error)")
+        }
+    }
     #endif
     
     private var collapsedTextOnlyHeaderView: some View {
@@ -1898,13 +1965,10 @@ struct DocumentArea: View {
                 
                 // Button to add header image
                 Button(action: {
-                    // When user clicks the photo button, enable header image mode
-                    withAnimation(.easeInOut(duration: 0.35)) {
-                        isHeaderExpanded = true
-                        document.isHeaderExpanded = true
-                        isImageExpanded = false // Start with collapsed image placeholder
-                        document.save()
-                    }
+                    print("🔍 DEBUG: Floating header image button tapped!")
+                    // Show the header image menu directly
+                    showFloatingHeaderImageMenu = true
+                    print("🔍 DEBUG: Set showFloatingHeaderImageMenu = true")
                 }) {
                     Image(systemName: "photo")
                         .font(.system(size: 14))
@@ -1947,28 +2011,41 @@ struct DocumentArea: View {
                     HStack(spacing: 12) {
                         // Image thumbnail - tappable for photo selection
                         Button(action: {
-                            // Trigger photo picker action sheet
-                            showFloatingImageActionSheet = true
+                            // Trigger header image menu
+                            showFloatingHeaderImageMenu = true
                         }) {
+                            // Detect if this is an icon by checking the filename
+                            let isIcon = document.elements.first(where: { $0.type == .headerImage })?.content.contains("header_icon_") ?? false
+                            
                             #if os(macOS)
                             Image(nsImage: headerImage)
                                 .resizable()
-                                .aspectRatio(contentMode: .fill)
+                                .aspectRatio(contentMode: isIcon ? .fit : .fill)
                                 .frame(width: 40, height: 40)
-                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                                .clipShape(isIcon ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: 8)))
                                 .overlay(
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                                    Group {
+                                        if isIcon {
+                                            Circle().stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                                        } else {
+                                            RoundedRectangle(cornerRadius: 8).stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                                        }
+                                    }
                                 )
                             #elseif os(iOS)
                             Image(uiImage: headerImage)
                                 .resizable()
-                                .aspectRatio(contentMode: .fill)
+                                .aspectRatio(contentMode: isIcon ? .fit : .fill)
                                 .frame(width: 40, height: 40)
-                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                                .clipShape(isIcon ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: 8)))
                                 .overlay(
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                                    Group {
+                                        if isIcon {
+                                            Circle().stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                                        } else {
+                                            RoundedRectangle(cornerRadius: 8).stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                                        }
+                                    }
                                 )
                             #endif
                         }
@@ -2099,6 +2176,68 @@ struct DocumentArea: View {
             Button("Cancel", role: .cancel) { }
         } message: {
             Text("Choose how to change your header image")
+        }
+        .onChange(of: showFloatingHeaderImageMenu) { oldValue, newValue in
+            print("🔍 DEBUG: showFloatingHeaderImageMenu changed from \(oldValue) to \(newValue)")
+            if newValue {
+                print("🔍 DEBUG: HeaderImageMenuView should be showing now!")
+            }
+        }
+        .sheet(isPresented: $showFloatingHeaderImageMenu) {
+            HeaderImageMenuView(
+                onFilesSelected: {
+                    showFloatingHeaderImageMenu = false
+                    // Enable header image mode first
+                    withAnimation(.easeInOut(duration: 0.35)) {
+                        isHeaderExpanded = true
+                        document.isHeaderExpanded = true
+                        isImageExpanded = false
+                        document.save()
+                    }
+                    // Then present file picker
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        presentFloatingDocumentPicker()
+                    }
+                },
+                onPhotoLibrarySelected: {
+                    showFloatingHeaderImageMenu = false
+                    // Enable header image mode first
+                    withAnimation(.easeInOut(duration: 0.35)) {
+                        isHeaderExpanded = true
+                        document.isHeaderExpanded = true
+                        isImageExpanded = false
+                        document.save()
+                    }
+                    // Then present photo picker
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        presentFloatingPhotoLibraryPicker()
+                    }
+                },
+                onIconSelected: { iconName in
+                    showFloatingHeaderImageMenu = false
+                    // Enable header image mode first
+                    withAnimation(.easeInOut(duration: 0.35)) {
+                        isHeaderExpanded = true
+                        document.isHeaderExpanded = true
+                        isImageExpanded = false
+                        document.save()
+                    }
+                    // Then handle icon selection
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        handleFloatingIconSelection(iconName)
+                    }
+                },
+                onCancel: {
+                    showFloatingHeaderImageMenu = false
+                }
+            )
+            #if os(iOS)
+            .presentationDetents([.height(600)])
+            .presentationDragIndicator(.visible)
+            .presentationBackground(.clear)
+            #else
+            .frame(width: 400, height: 600)
+            #endif
         }
         #endif
     }

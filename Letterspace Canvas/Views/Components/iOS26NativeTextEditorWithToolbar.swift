@@ -1453,8 +1453,13 @@ struct CollapsingHeaderView: View {
     let progress: CGFloat
     let headerImage: UIImage?
     let onImageAdded: (UIImage) -> Void
+    let document: Letterspace_CanvasDocument
     
     @State private var showImagePicker = false
+    
+    private var isIcon: Bool {
+        document.elements.first(where: { $0.type == .headerImage })?.content.contains("header_icon_") ?? false
+    }
     
     var body: some View {
         VStack(spacing: 0) {

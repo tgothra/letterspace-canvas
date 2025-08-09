@@ -18,6 +18,9 @@ struct CleanNativeEditorView: View {
     // Floating header state
     @State private var headerImage: PlatformImage? = nil
     @State private var photosPickerItem: PhotosPickerItem? = nil
+    @State private var showHeaderImageMenu: Bool = false
+    @State private var showPhotosPicker: Bool = false
+    @State private var showDocumentPicker: Bool = false
     @FocusState private var isTitleFocused: Bool
     @FocusState private var isSubtitleFocused: Bool
 
@@ -52,8 +55,17 @@ struct CleanNativeEditorView: View {
                     title: Binding(get: { document.title }, set: { document.title = $0; document.save() }),
                     subtitle: Binding(get: { document.subtitle }, set: { document.subtitle = $0; document.save() }),
                     image: $headerImage,
+                    isIcon: {
+                        let isIcon = document.elements.first(where: { $0.type == .headerImage })?.content.contains("header_icon_") ?? false
+                        print("🔍 CleanNativeEditorView: isIcon = \(isIcon)")
+                        if let headerElement = document.elements.first(where: { $0.type == .headerImage }) {
+                            print("🔍 CleanNativeEditorView: header content = '\(headerElement.content)'")
+                        }
+                        return isIcon
+                    }(),
                     onRemoveImage: { removeHeaderImage() },
                     photosPickerItem: $photosPickerItem,
+                    showHeaderImageMenu: $showHeaderImageMenu,
                     onImagePicked: { img, data in
                         Task { await saveHeaderImageToDocument(img, data: data) }
                     }
@@ -72,6 +84,122 @@ struct CleanNativeEditorView: View {
                     headerImage = img
                      await saveHeaderImageToDocument(img, data: data)
                 }
+            }
+        }
+        .sheet(isPresented: $showHeaderImageMenu) {
+            HeaderImageMenuView(
+                onFilesSelected: {
+                    showHeaderImageMenu = false
+                    // Browse Files - trigger document picker as nested sheet
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        showDocumentPicker = true
+                    }
+                },
+                onPhotoLibrarySelected: {
+                    showHeaderImageMenu = false
+                    // Photo Library - trigger photos picker
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        showPhotosPicker = true
+                    }
+                },
+                onIconSelected: { iconName in
+                    showHeaderImageMenu = false
+                    // Icon selected - create image from SF Symbol with matching color
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        // Find the color for this icon
+                        let iconColors: [String: Color] = [
+                            "book.fill": .indigo,
+                            "cross.fill": .purple,
+                            "heart.fill": .pink,
+                            "star.fill": .orange,
+                            "flame.fill": .red,
+                            "leaf.fill": .green,
+                            "mountain.2.fill": .teal,
+                            "sun.max.fill": .yellow,
+                            "moon.fill": .blue,
+                            "hands.sparkles.fill": .mint
+                        ]
+                        let iconColor = iconColors[iconName] ?? .blue
+                        
+                        if let iconImage = IconToImageConverter.createCircularIcon(
+                            from: iconName,
+                            size: CGSize(width: 120, height: 120),
+                            backgroundColor: iconColor,
+                            iconColor: .white
+                        ),
+                        let imageData = IconToImageConverter.createImageData(
+                            from: iconName,
+                            backgroundColor: iconColor,
+                            iconColor: .white,
+                            isCircular: true
+                        ) {
+                            headerImage = iconImage
+                            Task { await saveHeaderImageToDocument(iconImage, data: imageData, isIcon: true, iconName: iconName) }
+                        }
+                    }
+                },
+                onCancel: {
+                    showHeaderImageMenu = false
+                }
+            )
+            .presentationDetents([.height(600)])
+            .presentationDragIndicator(.visible)
+            .presentationBackground(.clear)
+        }
+        .sheet(isPresented: $showPhotosPicker) {
+            PhotosPickerView(photosPickerItem: $photosPickerItem)
+        }
+        .fileImporter(
+            isPresented: $showDocumentPicker,
+            allowedContentTypes: [.image],
+            allowsMultipleSelection: false
+        ) { result in
+            print("🔍 File picker result received")
+            switch result {
+            case .success(let urls):
+                print("🔍 File picker success with \(urls.count) URLs")
+                guard let url = urls.first else { 
+                    print("❌ No URL in file picker result")
+                    return 
+                }
+                print("🔍 Selected file URL: \(url)")
+                
+                // Load the image data
+                DispatchQueue.global(qos: .userInitiated).async {
+                    print("🔍 Attempting to load data from URL...")
+                    
+                    // Start accessing security scoped resource
+                    let gotAccess = url.startAccessingSecurityScopedResource()
+                    defer {
+                        if gotAccess {
+                            url.stopAccessingSecurityScopedResource()
+                        }
+                    }
+                    
+                    do {
+                        let data = try Data(contentsOf: url)
+                        print("🔍 Successfully loaded \(data.count) bytes")
+                        
+                        if let img = Self.decodeImage(from: data) {
+                            print("🔍 Successfully decoded image")
+                            DispatchQueue.main.async {
+                                print("🔍 Setting headerImage on main thread")
+                                headerImage = img
+                                Task { 
+                                    print("🔍 Saving image to document...")
+                                    await saveHeaderImageToDocument(img, data: data) 
+                                    print("🔍 Image save completed")
+                                }
+                            }
+                        } else {
+                            print("❌ Failed to decode image from data")
+                        }
+                    } catch {
+                        print("❌ Failed to load data from URL: \(error)")
+                    }
+                }
+            case .failure(let error):
+                print("❌ Document picker error: \(error)")
             }
         }
     }
@@ -165,7 +293,7 @@ struct CleanNativeEditorView: View {
         }
     }
     
-    private func saveHeaderImageToDocument(_ image: PlatformImage, data: Data) async {
+    private func saveHeaderImageToDocument(_ image: PlatformImage, data: Data, isIcon: Bool = false, iconName: String? = nil) async {
         guard let appDirectory = Letterspace_CanvasDocument.getAppDocumentsDirectory() else {
             print("❌ Could not access documents directory for header image")
             return
@@ -180,8 +308,8 @@ struct CleanNativeEditorView: View {
                 try FileManager.default.createDirectory(at: imagesPath, withIntermediateDirectories: true, attributes: nil)
             }
             
-            // Generate a unique filename
-            let fileName = "header_\(UUID().uuidString).png"
+            // Generate a unique filename with appropriate prefix
+            let fileName = isIcon ? "header_icon_\(iconName ?? "unknown")_\(UUID().uuidString).png" : "header_\(UUID().uuidString).png"
             let fileURL = imagesPath.appendingPathComponent(fileName)
             
             // Remove old header image if it exists
@@ -329,14 +457,59 @@ struct CleanNativeEditorView: View {
     }
 }
 
+// MARK: - Photos Picker View (Direct Access)
+@available(iOS 26.0, macOS 15.0, *)
+private struct PhotosPickerView: View {
+    @Binding var photosPickerItem: PhotosPickerItem?
+    @Environment(\.dismiss) var dismiss
+    
+    var body: some View {
+        NavigationView {
+            PhotosPicker(selection: $photosPickerItem, matching: .images) {
+                VStack(spacing: 20) {
+                    Image(systemName: "photo.on.rectangle.angled")
+                        .font(.system(size: 60))
+                        .foregroundStyle(.blue.gradient)
+                    
+                    VStack(spacing: 8) {
+                        Text("Choose Photo")
+                            .font(.title2.bold())
+                        Text("Select a photo from your library")
+                            .font(.body)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(.ultraThinMaterial)
+            }
+            .navigationTitle("Photo Library")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+        .onChange(of: photosPickerItem) { _, newItem in
+            if newItem != nil {
+                dismiss()
+            }
+        }
+    }
+}
+
 // MARK: - Floating Header Card
 @available(iOS 26.0, macOS 15.0, *)
 private struct FloatingHeaderCard: View {
     @Binding var title: String
     @Binding var subtitle: String
     @Binding var image: PlatformImage?
+    let isIcon: Bool // Whether the current image is an icon
     let onRemoveImage: () -> Void
     @Binding var photosPickerItem: PhotosPickerItem?
+    @Binding var showHeaderImageMenu: Bool
     let onImagePicked: (PlatformImage, Data) -> Void
     @Environment(\.colorScheme) private var colorScheme
     @State private var isExpanded = false
@@ -377,16 +550,21 @@ private struct FloatingHeaderCard: View {
                     ZStack(alignment: .topTrailing) {
                         platformImage(image)
                             .resizable()
-                            // Fit the image using its intrinsic aspect ratio so the container sizes
-                            .aspectRatio(imageAspectRatio(image), contentMode: .fit)
-                            .frame(maxWidth: .infinity)
-                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                            // Use icon-appropriate sizing and content mode
+                            .aspectRatio(isIcon ? 1.0 : imageAspectRatio(image), contentMode: isIcon ? .fit : .fit)
+                            .frame(maxWidth: isIcon ? 150 : .infinity)
+                            .clipShape({
+                                print("🔍 FloatingHeaderCard expanded: isIcon = \(isIcon), using \(isIcon ? "Circle" : "RoundedRectangle")")
+                                return isIcon ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: 14))
+                            }())
                             .matchedGeometryEffect(id: "headerImage", in: imageNamespace)
                         
                         // Subtle action buttons overlay
                         HStack(spacing: 8) {
                         #if os(iOS)
-                        PhotosPicker(selection: $photosPickerItem, matching: .images) {
+                        Button {
+                            showHeaderImageMenu = true
+                        } label: {
                                 Image(systemName: "photo")
                                     .font(.system(size: 14, weight: .medium))
                                     .foregroundColor(.white)
@@ -467,19 +645,29 @@ private struct FloatingHeaderCard: View {
                         } label: {
                             platformImage(image)
                                 .resizable()
-                                .aspectRatio(16/9, contentMode: .fill)
-                                .frame(width: 120, height: 68) // Larger 16:9 ratio (120x68)
-                                .clipShape(RoundedRectangle(cornerRadius: 14))
+                                .aspectRatio(isIcon ? 1.0 : 16/9, contentMode: isIcon ? .fit : .fill)
+                                .frame(width: isIcon ? 50 : 120, height: isIcon ? 50 : 68) // Smaller square for icons, 16:9 for images
+                                .clipShape({
+                                    print("🔍 FloatingHeaderCard collapsed: isIcon = \(isIcon), using \(isIcon ? "Circle" : "RoundedRectangle")")
+                                    return isIcon ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: 14))
+                                }())
                                 .overlay(
-                                    RoundedRectangle(cornerRadius: 14)
-                                        .stroke(.quaternary, lineWidth: 0.5)
+                                    Group {
+                                        if isIcon {
+                                            Circle().stroke(.quaternary, lineWidth: 0.5)
+                                        } else {
+                                            RoundedRectangle(cornerRadius: 14).stroke(.quaternary, lineWidth: 0.5)
+                                        }
+                                    }
                                 )
                                 .matchedGeometryEffect(id: "headerImage", in: imageNamespace)
                         }
                         .buttonStyle(.plain)
                     } else {
                         #if os(iOS)
-                        PhotosPicker(selection: $photosPickerItem, matching: .images) {
+                        Button {
+                            showHeaderImageMenu = true
+                        } label: {
                             Image(systemName: "photo.badge.plus")
                                 .font(.title)
                                 .foregroundStyle(.primary)

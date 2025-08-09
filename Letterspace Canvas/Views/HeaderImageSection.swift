@@ -8,6 +8,8 @@ import UIKit
 import PhotosUI
 #endif
 
+
+
 // MARK: - Preference Key for Image Picker Source Rect
 struct ImagePickerSourceRectKey: PreferenceKey {
     static var defaultValue: CGRect = .zero
@@ -32,6 +34,7 @@ struct HeaderImageSection: View {
     #endif
     @Binding var isShowingImagePicker: Bool
     @Binding var document: Letterspace_CanvasDocument
+    @Environment(\.themeColors) var theme
     @State private var isHoveringSubtitle = false
     @Binding var viewMode: ViewMode
     let colorScheme: ColorScheme
@@ -60,14 +63,25 @@ struct HeaderImageSection: View {
     @State private var isDismissing: Bool = false
     let onDismiss: (() -> Void)?
     @Binding var swipeDownProgress: CGFloat
+    
+    // Computed property to detect if document has an icon header
+    private var documentHasIconHeader: Bool {
+        guard let headerElement = document.elements.first(where: { $0.type == .headerImage }),
+              !headerElement.content.isEmpty else { return false }
+        return headerElement.content.contains("header_icon_")
+    }
 
     
     // iOS-specific state for action sheet
     #if os(iOS)
     @State private var showImageActionSheet: Bool = false
+    @State private var showHeaderImageMenu: Bool = false
     // Store coordinators to prevent weak reference issues
     @State private var photoPickerCoordinator: PhotoPickerCoordinator?
     @State private var documentPickerCoordinator: DocumentPickerCoordinator?
+    #else
+    // macOS-specific state for menu
+    @State private var showHeaderImageMenu: Bool = false
     #endif
     
     // Heights for the collapsed header bar
@@ -234,7 +248,7 @@ struct HeaderImageSection: View {
                             Button(action: {
                                 print("🖼️ User clicked expanded placeholder background.")
                                 withAnimation(.spring(response: 1.2, dampingFraction: 0.7)) {
-                                    isShowingImagePicker = true
+                                    showHeaderImageMenu = true
                                 }
                             }) {
                             placeholderImageView
@@ -303,6 +317,60 @@ struct HeaderImageSection: View {
             } message: {
                 Text("What would you like to do with this image?")
             }
+            .sheet(isPresented: $showHeaderImageMenu) {
+                HeaderImageMenuView(
+                    onFilesSelected: {
+                        showHeaderImageMenu = false
+                        presentDocumentPicker()
+                    },
+                    onPhotoLibrarySelected: {
+                        showHeaderImageMenu = false
+                        presentPhotoLibraryPicker()
+                    },
+                    onIconSelected: { iconName in
+                        showHeaderImageMenu = false
+                        handleIconSelection(iconName)
+                    },
+                    onCancel: {
+                        showHeaderImageMenu = false
+                    }
+                )
+                .presentationDetents([.height(600)])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(.clear)
+            }
+            #endif
+            #if os(macOS)
+            .sheet(isPresented: $showHeaderImageMenu) {
+                HeaderImageMenuView(
+                    onFilesSelected: {
+                        showHeaderImageMenu = false
+                        // Clear text editor focus
+                        if let window = NSApp.keyWindow,
+                           window.firstResponder is NSTextView {
+                            window.makeFirstResponder(nil)
+                        }
+                        isShowingImagePicker = true
+                    },
+                    onPhotoLibrarySelected: {
+                        showHeaderImageMenu = false
+                        // On macOS, Photo Library is same as Files
+                        if let window = NSApp.keyWindow,
+                           window.firstResponder is NSTextView {
+                            window.makeFirstResponder(nil)
+                        }
+                        isShowingImagePicker = true
+                    },
+                    onIconSelected: { iconName in
+                        showHeaderImageMenu = false
+                        handleIconSelection(iconName)
+                    },
+                    onCancel: {
+                        showHeaderImageMenu = false
+                    }
+                )
+                .frame(width: 400, height: 600)
+            }
             #endif
 
         }
@@ -313,7 +381,20 @@ struct HeaderImageSection: View {
     private func expandedHeaderView(_ image: PlatformSpecificImage) -> some View {
         let size = image.size
         let aspectRatioValue = size.height / size.width // Calculate aspect ratio once
-        let baseHeaderHeight = paperWidth * aspectRatioValue
+        
+        // Detect if this is an icon by checking the filename (icons have "header_icon_" prefix)
+        let isIconContent = document.elements.first(where: { $0.type == .headerImage })?.content.contains("header_icon_") ?? false
+        
+        let baseHeaderHeight: CGFloat = {
+            if isIconContent {
+                // For icons, use a square container that fits within reasonable bounds
+                let maxIconSize: CGFloat = min(paperWidth * 0.4, 200) // Max 40% of paper width or 200pt
+                return maxIconSize
+            } else {
+                // For regular images, use the image's aspect ratio
+                return paperWidth * aspectRatioValue
+            }
+        }()
         
         // Apply scroll-based scaling using headerCollapseProgress
         // When progress = 0.0 (fully expanded), use full height
@@ -340,23 +421,22 @@ struct HeaderImageSection: View {
         let imageExitProgress = max(0, min(1, (headerCollapseProgress - imageExitThreshold) / 0.1))
         let expandedOpacity = 1.0 - imageExitProgress
         
-        // Calculate scroll-based visual effects based on collapse progress
-
         // Clean design without expensive effects - smooth transitions
         ZStack {
+            
             // Expanded state: clean image without blur or overlay
             Group {
         #if os(macOS)
         Image(nsImage: image)
             .resizable()
-            .aspectRatio(contentMode: .fill)
-                    .frame(width: paperWidth, height: currentHeight)
+            .aspectRatio(contentMode: isIconContent ? .fit : .fill)
+                    .frame(width: isIconContent ? currentHeight : paperWidth, height: currentHeight)
             .clipped()
         #elseif os(iOS)
         Image(uiImage: image)
                                     .resizable()
-                                    .aspectRatio(contentMode: .fill)
-                    .frame(width: paperWidth, height: currentHeight)
+                                    .aspectRatio(contentMode: isIconContent ? .fit : .fill)
+                    .frame(width: isIconContent ? currentHeight : paperWidth, height: currentHeight)
                                     .clipped()
                                     .onTapGesture {
                                         // iOS: Show action sheet when tapping the expanded image
@@ -383,8 +463,8 @@ struct HeaderImageSection: View {
             
 
         }
-        .frame(width: paperWidth, height: currentHeight)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .frame(width: isIconContent ? currentHeight : paperWidth, height: currentHeight)
+        .clipShape(isIconContent ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: 12)))
         .transition(.asymmetric(
             insertion: .opacity.combined(with: .move(edge: .top).combined(with: .scale(scale: 0.98))),
             removal: .opacity.combined(with: .move(edge: .top).combined(with: .scale(scale: 0.98)))
@@ -405,10 +485,10 @@ struct HeaderImageSection: View {
                                                        window.firstResponder is NSTextView {
                                                         window.makeFirstResponder(nil)
                                                     }
-                                                    isShowingImagePicker = true
+                                                    showHeaderImageMenu = true
                 #elseif os(iOS)
-                                                    // On iOS, show the action sheet to choose Photo Library or Browse Files
-                                                    showImageActionSheet = true
+                                                    // On iOS, show the new header image menu
+                                                    showHeaderImageMenu = true
                 #endif
                                                 }) {
                                                     Label("Replace Image", systemImage: "photo")
@@ -493,13 +573,11 @@ struct HeaderImageSection: View {
             )
                                 .overlay(
                                     Button(action: {
-                    // Action to show the image picker
-                    print("📸 iOS: Add Header Image button tapped")
-                    print("📸 iOS: Before - isShowingImagePicker: \(isShowingImagePicker)")
+                    // Action to show the image menu
+                    print("📸 Header Image button tapped - showing menu")
                                         withAnimation(.easeInOut(duration: 0.35)) {
-                                            isShowingImagePicker = true
+                                            showHeaderImageMenu = true
                                         }
-                    print("📸 iOS: After - isShowingImagePicker: \(isShowingImagePicker)")
                                     }) {
                                         VStack {
                                             Image(systemName: "photo")
@@ -625,6 +703,65 @@ struct HeaderImageSection: View {
         topController.present(documentPicker, animated: true)
     }
     #endif
+    
+    // MARK: - Icon Selection Handler
+    private func handleIconSelection(_ iconName: String) {
+        print("📸 Icon selected: \(iconName)")
+        
+        // Create circular icon image from SF Symbol
+        guard let iconImage = IconToImageConverter.createCircularIcon(
+            from: iconName,
+            size: CGSize(width: 120, height: 120),
+            backgroundColor: theme.accent,
+            iconColor: .white
+        ) else {
+            print("❌ Failed to create icon image")
+            return
+        }
+        
+        // Create image data for saving
+        guard let imageData = IconToImageConverter.createImageData(
+            from: iconName,
+            backgroundColor: theme.accent,
+            iconColor: .white,
+            isCircular: true
+        ) else {
+            print("❌ Failed to create icon image data")
+            return
+        }
+        
+        // Save the image to the document
+        let filename = "header_icon_\(iconName)_\(UUID().uuidString).jpg"
+        
+        do {
+            if let documentsDirectory = Letterspace_CanvasDocument.getAppDocumentsDirectory() {
+                let imageURL = documentsDirectory.appendingPathComponent(filename)
+                try imageData.write(to: imageURL)
+                
+                // Update the document
+                DispatchQueue.main.async {
+                    // Remove any existing header image element
+                    self.document.elements.removeAll { $0.type == .headerImage }
+                    
+                    // Create new header image element
+                    let headerElement = DocumentElement(type: .headerImage, content: filename)
+                    
+                    // Add to document
+                    self.document.elements.append(headerElement)
+                    
+                    // Update header image
+                    self.headerImage = iconImage
+                    
+                    // Save document
+                    self.document.save()
+                    
+                    print("✅ Icon header image saved: \(filename)")
+                }
+            }
+        } catch {
+            print("❌ Error saving icon image: \(error)")
+        }
+    }
     
     // MARK: - Scroll to Top Function
     private func scrollToTop() {

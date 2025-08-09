@@ -135,19 +135,22 @@ struct ModernDocumentRow: View {
             HStack(alignment: .center, spacing: 8) {
                 // Document icon or header image thumbnail
                 if let headerImage = loadHeaderImage() {
+                    // Detect if this is an icon by checking if filename contains "header_icon_"
+                    let isIcon = document.elements.first(where: { $0.type == .headerImage })?.content.contains("header_icon_") ?? false
+                    
                     // Header image thumbnail
                     #if os(macOS)
                     Image(nsImage: headerImage)
                         .resizable()
-                        .aspectRatio(contentMode: .fill)
+                        .aspectRatio(contentMode: isIcon ? .fit : .fill)
                         .frame(width: iconDimension, height: iconDimension)
-                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                        .clipShape(isIcon ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: 4)))
                     #else
                     Image(uiImage: headerImage)
                         .resizable()
-                        .aspectRatio(contentMode: .fill)
+                        .aspectRatio(contentMode: isIcon ? .fit : .fill)
                         .frame(width: iconDimension, height: iconDimension)
-                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                        .clipShape(isIcon ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: 4)))
                     #endif
                 } else {
                     // Default document icon
