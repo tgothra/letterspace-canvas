@@ -2208,15 +2208,7 @@ struct DocumentArea: View {
                 #elseif os(iOS)
                 // iOS 26 Attributed editor with built-in collapsing headers
                 if #available(iOS 26.0, *) {
-                    AttributedCollapsingEditorView(
-                        text: $attributedTextBuffer,
-                        expandedHeader: {
-                            headerView
-                        },
-                        collapsedHeader: {
-                            collapsedTextOnlyHeaderView
-                        }
-                    )
+                    CleanNativeEditorView(document: $document, isDistractionFreeMode: viewMode.isDistractionFreeMode)
                     .onAppear {
                         loadDocumentContent()
                     }

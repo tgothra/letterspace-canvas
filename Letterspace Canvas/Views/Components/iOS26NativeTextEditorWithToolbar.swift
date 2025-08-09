@@ -3,10 +3,30 @@ import SwiftUI
 import Foundation
 import UIKit
 
+// MARK: - Header Height Preference Key
+private struct HeaderHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
 // MARK: - iOS 26 Native Text Editor With Custom Toolbar
 @available(iOS 26.0, *)
-struct iOS26NativeTextEditorWithToolbar: View {
+struct iOS26NativeTextEditorWithToolbar<ExpandedHeader: View, CollapsedHeader: View>: View {
     @Binding var document: Letterspace_CanvasDocument
+    private let expandedHeader: () -> ExpandedHeader
+    private let collapsedHeader: () -> CollapsedHeader
+
+    init(
+        document: Binding<Letterspace_CanvasDocument>,
+        @ViewBuilder expandedHeader: @escaping () -> ExpandedHeader,
+        @ViewBuilder collapsedHeader: @escaping () -> CollapsedHeader
+    ) {
+        self._document = document
+        self.expandedHeader = expandedHeader
+        self.collapsedHeader = collapsedHeader
+    }
     @State private var attributedText: AttributedString = AttributedString()
     @State private var selection: AttributedTextSelection = AttributedTextSelection()
     @State private var isEditing: Bool = false
@@ -32,6 +52,29 @@ struct iOS26NativeTextEditorWithToolbar: View {
     // Current formatting states for visual feedback
     @State private var currentIsBold: Bool = false
     @State private var currentIsItalic: Bool = false
+    
+    // Floating header state
+    @State private var expandedHeaderHeight: CGFloat = 200
+    @State private var collapseProgress: CGFloat = 0 // 0=expanded, 1=collapsed
+    @State private var headerImage: UIImage? = nil
+    private let collapsedHeaderHeight: CGFloat = 64
+    
+    private var currentHeaderHeight: CGFloat {
+        collapsedHeaderHeight + (expandedHeaderHeight - collapsedHeaderHeight) * (1 - collapseProgress)
+    }
+    
+    // Update collapse progress based on scroll offset
+    private func updateCollapseProgress(from offset: CGPoint) {
+        let scrollY = offset.y
+        let collapseDistance = expandedHeaderHeight - collapsedHeaderHeight
+        
+        // Map scroll offset to collapse progress (0 = expanded, 1 = collapsed)
+        let newProgress = max(0, min(1, scrollY / collapseDistance))
+        
+        withAnimation(.easeOut(duration: 0.1)) {
+            collapseProgress = newProgress
+        }
+    }
     
     // Color arrays for compact picker
     private var textColors: [Color] {
@@ -61,9 +104,10 @@ struct iOS26NativeTextEditorWithToolbar: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Main Text Editor
+            // Full screen native TextEditor without any header
             textEditorView
-            
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
             // Custom Toolbar (slides up when text is selected)
             if showToolbar {
                 iOS26NativeToolbarWrapper(
@@ -74,6 +118,7 @@ struct iOS26NativeTextEditorWithToolbar: View {
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
             loadDocumentContent()
         }
@@ -95,16 +140,11 @@ struct iOS26NativeTextEditorWithToolbar: View {
     private var textEditorView: some View {
         TextEditor(text: $attributedText, selection: $selection)
             .font(.system(size: 16))
-            .padding()
+            .padding(.horizontal)
             .background(Color(UIColor.systemBackground))
-                .onTapGesture {
-                    isEditing = true
-                }
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(isEditing ? Color.blue : Color(UIColor.systemGray4), lineWidth: isEditing ? 2 : 1)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .onTapGesture {
+                isEditing = true
+            }
                 .toolbar {
                         ToolbarItemGroup(placement: .keyboard) {
                         if activeInlinePicker != .none {
@@ -1068,6 +1108,18 @@ struct iOS26NativeTextEditorWithToolbar: View {
 
 }
 
+// MARK: - Convenience init (no headers)
+@available(iOS 26.0, *)
+extension iOS26NativeTextEditorWithToolbar where ExpandedHeader == EmptyView, CollapsedHeader == EmptyView {
+    init(document: Binding<Letterspace_CanvasDocument>) {
+        self.init(
+            document: document,
+            expandedHeader: { EmptyView() },
+            collapsedHeader: { EmptyView() }
+        )
+    }
+}
+
 // MARK: - Compact Color Picker
 struct CompactColorPicker: View {
     let title: String
@@ -1333,12 +1385,206 @@ struct iOS26NativeElementEditor: View {
     #endif
 }
 
+// MARK: - Scroll Offset Reader
+struct ScrollOffsetReader: UIViewRepresentable {
+    let onOffsetChange: (CGPoint) -> Void
+    
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView()
+        view.backgroundColor = .clear
+        view.isUserInteractionEnabled = false
+        return view
+    }
+    
+    func updateUIView(_ uiView: UIView, context: Context) {
+        DispatchQueue.main.async {
+            if let scrollView = uiView.findScrollView() {
+                context.coordinator.scrollView = scrollView
+            }
+        }
+    }
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onOffsetChange: onOffsetChange)
+    }
+    
+    class Coordinator: NSObject {
+        let onOffsetChange: (CGPoint) -> Void
+        weak var scrollView: UIScrollView? {
+            didSet {
+                oldValue?.removeObserver(self, forKeyPath: "contentOffset")
+                scrollView?.addObserver(self, forKeyPath: "contentOffset", options: .new, context: nil)
+            }
+        }
+        
+        init(onOffsetChange: @escaping (CGPoint) -> Void) {
+            self.onOffsetChange = onOffsetChange
+        }
+        
+        override func observeValue(forKeyPath keyPath: String?, of object: Any?, change: [NSKeyValueChangeKey : Any]?, context: UnsafeMutableRawPointer?) {
+            guard keyPath == "contentOffset",
+                  let scrollView = object as? UIScrollView else { return }
+            onOffsetChange(scrollView.contentOffset)
+        }
+        
+        deinit {
+            scrollView?.removeObserver(self, forKeyPath: "contentOffset")
+        }
+    }
+}
+
+extension UIView {
+    func findScrollView() -> UIScrollView? {
+        if let scrollView = self as? UIScrollView {
+            return scrollView
+        }
+        for subview in subviews {
+            if let scrollView = subview.findScrollView() {
+                return scrollView
+            }
+        }
+        return nil
+    }
+}
+
+// MARK: - Collapsing Header View
+@available(iOS 26.0, *)
+struct CollapsingHeaderView: View {
+    let progress: CGFloat
+    let headerImage: UIImage?
+    let onImageAdded: (UIImage) -> Void
+    
+    @State private var showImagePicker = false
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            // Main header content
+            VStack(spacing: 12) {
+                // Header image (if present)
+                if let headerImage = headerImage {
+                    Image(uiImage: headerImage)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(height: 120 * (1 - progress)) // Shrinks as we collapse
+                        .clipped()
+                        .opacity(1 - progress) // Fades out as we collapse
+                }
+                
+                // Title and subtitle
+                VStack(spacing: 8) {
+                    HStack {
+                        Text("Document Title")
+                            .modifier(TitleFontModifier())
+                            .opacity(1.0 - (progress * 0.5)) // Slightly fades
+                        
+                        Spacer()
+                        
+                        // Add image button
+                        Button(action: {
+                            showImagePicker = true
+                        }) {
+                            Image(systemName: headerImage == nil ? "photo.badge.plus" : "photo")
+                                .font(.title2)
+                                .foregroundColor(.primary)
+                        }
+                        .opacity(1 - progress) // Hides when collapsed
+                    }
+                    
+                    if progress < 0.7 { // Hide subtitle when mostly collapsed
+                        Text("Document subtitle or description")
+                            .modifier(SubtitleFontModifier())
+                            .foregroundColor(.secondary)
+                            .opacity(1.0 - (progress * 1.5)) // Fades faster than title
+                    }
+                }
+                .padding(.horizontal)
+            }
+            .padding(.vertical, 16)
+            .background(.ultraThinMaterial) // Liquid glass effect
+            .overlay(
+                // Bottom border
+                Rectangle()
+                    .frame(height: 1)
+                    .foregroundColor(Color.primary.opacity(0.1))
+                    .opacity(progress), // Only show border when collapsed
+                alignment: .bottom
+            )
+        }
+        .sheet(isPresented: $showImagePicker) {
+            HeaderImagePicker { image in
+                onImageAdded(image)
+            }
+        }
+    }
+}
+
+// MARK: - Header Image Picker
+struct HeaderImagePicker: UIViewControllerRepresentable {
+    let onImageSelected: (UIImage) -> Void
+    @Environment(\.dismiss) private var dismiss
+    
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let picker = UIImagePickerController()
+        picker.delegate = context.coordinator
+        picker.sourceType = .photoLibrary
+        return picker
+    }
+    
+    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onImageSelected: onImageSelected, dismiss: dismiss)
+    }
+    
+    class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+        let onImageSelected: (UIImage) -> Void
+        let dismiss: DismissAction
+        
+        init(onImageSelected: @escaping (UIImage) -> Void, dismiss: DismissAction) {
+            self.onImageSelected = onImageSelected
+            self.dismiss = dismiss
+        }
+        
+        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
+            if let image = info[.originalImage] as? UIImage {
+                onImageSelected(image)
+            }
+            dismiss()
+        }
+        
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+            dismiss()
+        }
+    }
+}
+
+// MARK: - Font Modifiers
+struct TitleFontModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .font(.system(size: 28, weight: .bold, design: .default))
+    }
+}
+
+struct SubtitleFontModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .font(.system(size: 16, weight: .regular, design: .default))
+    }
+}
+
 // MARK: - Preview
 @available(iOS 26.0, *)
 struct iOS26NativeTextEditorWithToolbar_Previews: PreviewProvider {
     static var previews: some View {
         iOS26NativeTextEditorWithToolbar(
-            document: .constant(Letterspace_CanvasDocument())
+            document: .constant(Letterspace_CanvasDocument()),
+            expandedHeader: {
+                VStack { Text("Expanded Header") }.background(.ultraThinMaterial)
+            },
+            collapsedHeader: {
+                HStack { Text("Collapsed Header") }.background(.ultraThinMaterial)
+            }
         )
     }
 }

@@ -203,8 +203,8 @@ struct iOS26ScrollDetectingTextEditor: UIViewRepresentable {
             let currentProgress = headerCollapseProgress.wrappedValue
             let transitionStart: CGFloat = 0.70
             let transitionEnd: CGFloat = 1.20
-            let normalInset: CGFloat = 16
-            let floatingInset: CGFloat = 160
+            let normalInset: CGFloat = 150 // Increased from 16 to clear the floating header properly
+            let floatingInset: CGFloat = 200 // Increased from 160 to prevent header from getting too close to top
             
             let interpolatedTopInset: CGFloat
             if currentProgress < transitionStart {
