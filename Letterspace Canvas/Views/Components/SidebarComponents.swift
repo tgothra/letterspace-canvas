@@ -140,6 +140,20 @@ struct SidebarButton: View {
     @State private var profileImageVersion: UUID = UUID() // Force refresh when image changes
     @State private var isDocumentSelectionActive = false // Track if document selection sheet is open
     
+    // Added state to observe screen width dynamically (for iOS 16+ compliance)
+    #if os(iOS)
+    @State private var observedScreenWidth: CGFloat = 0
+    #endif
+    
+    // Computed property for screen width
+    private var screenWidth: CGFloat {
+        #if os(iOS)
+        return observedScreenWidth > 0 ? observedScreenWidth : UIScreen.main.bounds.width
+        #else
+        return 1194 // Default width for macOS
+        #endif
+    }
+    
     private var shouldShowPopupOnTap: Bool { // For iOS tap behavior
         #if os(iOS)
         return popupType != .none
@@ -194,37 +208,37 @@ struct SidebarButton: View {
             .frame(width: 14, height: 18)
             #else
             // Responsive sizes for iPad
-            VStack(spacing: responsiveSize(base: 2.6, min: 2, max: 3)) {  // Consistent spacing
+            VStack(spacing: responsiveSize(base: 2.6, width: screenWidth, min: 2, max: 3)) {  // Consistent spacing
                 // Top rectangle (small)
                 Rectangle()
                     .fill(.black)
                     .frame(
-                        width: responsiveSize(base: 13, min: 10, max: 16),
-                        height: responsiveSize(base: 8, min: 6, max: 10)
+                        width: responsiveSize(base: 13, width: screenWidth, min: 10, max: 16),
+                        height: responsiveSize(base: 8, width: screenWidth, min: 6, max: 10)
                     )
-                    .cornerRadius(responsiveSize(base: 2, min: 1.5, max: 2.5))
+                    .cornerRadius(responsiveSize(base: 2, width: screenWidth, min: 1.5, max: 2.5))
                 
                 // Middle rectangle (largest)
                 Rectangle()
                     .fill(.black)
                     .frame(
-                        width: responsiveSize(base: 21, min: 16, max: 26),
-                        height: responsiveSize(base: 9, min: 7, max: 11)
+                        width: responsiveSize(base: 21, width: screenWidth, min: 16, max: 26),
+                        height: responsiveSize(base: 9, width: screenWidth, min: 7, max: 11)
                     )
-                    .cornerRadius(responsiveSize(base: 2, min: 1.5, max: 2.5))
+                    .cornerRadius(responsiveSize(base: 2, width: screenWidth, min: 1.5, max: 2.5))
                 
                 // Bottom rectangle (medium)
                 Rectangle()
                     .fill(.black)
                     .frame(
-                        width: responsiveSize(base: 16, min: 12, max: 20),
-                        height: responsiveSize(base: 8, min: 6, max: 10)
+                        width: responsiveSize(base: 16, width: screenWidth, min: 12, max: 20),
+                        height: responsiveSize(base: 8, width: screenWidth, min: 6, max: 10)
                     )
-                    .cornerRadius(responsiveSize(base: 2, min: 1.5, max: 2.5))
+                    .cornerRadius(responsiveSize(base: 2, width: screenWidth, min: 1.5, max: 2.5))
             }
             .frame(
-                width: responsiveSize(base: 24, min: 18, max: 30),
-                height: responsiveSize(base: 30, min: 23, max: 38)
+                width: responsiveSize(base: 24, width: screenWidth, min: 18, max: 30),
+                height: responsiveSize(base: 30, width: screenWidth, min: 23, max: 38)
             )
             #endif
         } else if icon == "person.crop.circle.fill" {
@@ -233,8 +247,8 @@ struct SidebarButton: View {
                 PlatformImageView(platformImage: profileImage) // Use PlatformImageView
                     .scaledToFill()
                     .frame(
-                        width: responsiveSize(base: 25, min: 20, max: 30),  // Consistent profile image size
-                        height: responsiveSize(base: 25, min: 20, max: 30)
+                        width: responsiveSize(base: 25, width: screenWidth, min: 20, max: 30),  // Consistent profile image size
+                        height: responsiveSize(base: 25, width: screenWidth, min: 20, max: 30)
                     )
                     .clipShape(Circle())
                     .overlay(
@@ -247,11 +261,11 @@ struct SidebarButton: View {
         } else {
                 // Fallback to default icon
                 Image(systemName: icon)
-                    .font(.system(size: responsiveSize(base: 14, min: 12, max: 18), weight: .medium))  // Consistent icon size
+                    .font(.system(size: responsiveSize(base: 14, width: screenWidth, min: 12, max: 18), weight: .medium))  // Consistent icon size
             }
         } else {
             Image(systemName: icon)
-                .font(.system(size: responsiveSize(base: 14, min: 12, max: 18), weight: .medium))  // Consistent icon size
+                .font(.system(size: responsiveSize(base: 14, width: screenWidth, min: 12, max: 18), weight: .medium))  // Consistent icon size
         }
     }
     
@@ -378,6 +392,9 @@ struct SidebarButton: View {
                 .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("DocumentSelectionSheetClosed"))) { _ in
                     isDocumentSelectionActive = false
                 }
+                #if os(iOS)
+                .background(ScreenWidthReader(screenWidth: $observedScreenWidth))
+                #endif
                 #if os(iOS) // iOS uses .popover - attach to Button
                 .popover(
                     isPresented: Binding(
@@ -513,6 +530,20 @@ struct FloatingSidebarButton: View {
     @State private var isDragging = false
     @Environment(\.themeColors) var theme
     
+    // Added state to observe screen width dynamically (for iOS 16+ compliance)
+    #if os(iOS)
+    @State private var observedScreenWidth: CGFloat = 0
+    #endif
+    
+    // Computed property for screen width
+    private var screenWidth: CGFloat {
+        #if os(iOS)
+        return observedScreenWidth > 0 ? observedScreenWidth : UIScreen.main.bounds.width
+        #else
+        return 1194 // Default width for macOS
+        #endif
+    }
+    
     @ViewBuilder
     private func iconView() -> some View {
         if icon == "rectangle.3.group" {
@@ -545,106 +576,106 @@ struct FloatingSidebarButton: View {
             let isPhone = UIDevice.current.userInterfaceIdiom == .phone
             if isPhone {
                 // Smaller dashboard icon for iPhone
-                VStack(spacing: responsiveSize(base: 2, min: 1.5, max: 2.5)) {  // Tighter spacing
+                VStack(spacing: responsiveSize(base: 2, width: screenWidth, min: 1.5, max: 2.5)) {  // Tighter spacing
                     // Top rectangle (small)
                     Rectangle()
                         .fill(.black)
                         .frame(
-                            width: responsiveSize(base: 10, min: 8, max: 12),
-                            height: responsiveSize(base: 6, min: 5, max: 7)
+                            width: responsiveSize(base: 10, width: screenWidth, min: 8, max: 12),
+                            height: responsiveSize(base: 6, width: screenWidth, min: 5, max: 7)
                         )
-                        .cornerRadius(responsiveSize(base: 1.5, min: 1, max: 2))
+                        .cornerRadius(responsiveSize(base: 1.5, width: screenWidth, min: 1, max: 2))
                     
                     // Middle rectangle (largest)
                     Rectangle()
                         .fill(.black)
                         .frame(
-                            width: responsiveSize(base: 16, min: 12, max: 20),
-                            height: responsiveSize(base: 7, min: 6, max: 8)
+                            width: responsiveSize(base: 16, width: screenWidth, min: 12, max: 20),
+                            height: responsiveSize(base: 7, width: screenWidth, min: 6, max: 8)
                         )
-                        .cornerRadius(responsiveSize(base: 1.5, min: 1, max: 2))
+                        .cornerRadius(responsiveSize(base: 1.5, width: screenWidth, min: 1, max: 2))
                     
                     // Bottom rectangle (medium)
                     Rectangle()
                         .fill(.black)
                         .frame(
-                            width: responsiveSize(base: 12, min: 10, max: 14),
-                            height: responsiveSize(base: 6, min: 5, max: 7)
+                            width: responsiveSize(base: 12, width: screenWidth, min: 10, max: 14),
+                            height: responsiveSize(base: 6, width: screenWidth, min: 5, max: 7)
                         )
-                        .cornerRadius(responsiveSize(base: 1.5, min: 1, max: 2))
+                        .cornerRadius(responsiveSize(base: 1.5, width: screenWidth, min: 1, max: 2))
                 }
                 .frame(
-                    width: responsiveSize(base: 18, min: 14, max: 22),
-                    height: responsiveSize(base: 24, min: 18, max: 30)
+                    width: responsiveSize(base: 18, width: screenWidth, min: 14, max: 22),
+                    height: responsiveSize(base: 24, width: screenWidth, min: 18, max: 30)
                 )
             } else {
                 // Existing iPad sizes
-                VStack(spacing: responsiveSize(base: 2.6, min: 2, max: 3)) {  // Consistent spacing
+                VStack(spacing: responsiveSize(base: 2.6, width: screenWidth, min: 2, max: 3)) {  // Consistent spacing
                     // Top rectangle (small)
                     Rectangle()
                         .fill(.black)
                         .frame(
-                            width: responsiveSize(base: 13, min: 10, max: 16),
-                            height: responsiveSize(base: 8, min: 6, max: 10)
+                            width: responsiveSize(base: 13, width: screenWidth, min: 10, max: 16),
+                            height: responsiveSize(base: 8, width: screenWidth, min: 6, max: 10)
                         )
-                        .cornerRadius(responsiveSize(base: 2, min: 1.5, max: 2.5))
+                        .cornerRadius(responsiveSize(base: 2, width: screenWidth, min: 1.5, max: 2.5))
                     
                     // Middle rectangle (largest)
                     Rectangle()
                         .fill(.black)
                         .frame(
-                            width: responsiveSize(base: 21, min: 16, max: 26),
-                            height: responsiveSize(base: 9, min: 7, max: 11)
+                            width: responsiveSize(base: 21, width: screenWidth, min: 16, max: 26),
+                            height: responsiveSize(base: 9, width: screenWidth, min: 7, max: 11)
                         )
-                        .cornerRadius(responsiveSize(base: 2, min: 1.5, max: 2.5))
+                        .cornerRadius(responsiveSize(base: 2, width: screenWidth, min: 1.5, max: 2.5))
                     
                     // Bottom rectangle (medium)
                     Rectangle()
                         .fill(.black)
                         .frame(
-                            width: responsiveSize(base: 16, min: 12, max: 20),
-                            height: responsiveSize(base: 8, min: 6, max: 10)
+                            width: responsiveSize(base: 16, width: screenWidth, min: 12, max: 20),
+                            height: responsiveSize(base: 8, width: screenWidth, min: 6, max: 10)
                         )
-                        .cornerRadius(responsiveSize(base: 2, min: 1.5, max: 2.5))
+                        .cornerRadius(responsiveSize(base: 2, width: screenWidth, min: 1.5, max: 2.5))
                 }
                 .frame(
-                    width: responsiveSize(base: 24, min: 18, max: 30),
-                    height: responsiveSize(base: 30, min: 23, max: 38)
+                    width: responsiveSize(base: 24, width: screenWidth, min: 18, max: 30),
+                    height: responsiveSize(base: 30, width: screenWidth, min: 23, max: 38)
                 )
             }
             #else
             // Existing iPad sizes for macOS
-            VStack(spacing: responsiveSize(base: 2.6, min: 2, max: 3)) {  // Consistent spacing
+            VStack(spacing: responsiveSize(base: 2.6, width: screenWidth, min: 2, max: 3)) {  // Consistent spacing
                 // Top rectangle (small)
                 Rectangle()
                     .fill(theme.primary)
                     .frame(
-                        width: responsiveSize(base: 13, min: 10, max: 16),
-                        height: responsiveSize(base: 8, min: 6, max: 10)
+                        width: responsiveSize(base: 13, width: screenWidth, min: 10, max: 16),
+                        height: responsiveSize(base: 8, width: screenWidth, min: 6, max: 10)
                     )
-                    .cornerRadius(responsiveSize(base: 2, min: 1.5, max: 2.5))
+                    .cornerRadius(responsiveSize(base: 2, width: screenWidth, min: 1.5, max: 2.5))
                 
                 // Middle rectangle (largest)
                 Rectangle()
                     .fill(theme.primary)
                     .frame(
-                        width: responsiveSize(base: 21, min: 16, max: 26),
-                        height: responsiveSize(base: 9, min: 7, max: 11)
+                        width: responsiveSize(base: 21, width: screenWidth, min: 16, max: 26),
+                        height: responsiveSize(base: 9, width: screenWidth, min: 7, max: 11)
                     )
-                    .cornerRadius(responsiveSize(base: 2, min: 1.5, max: 2.5))
+                    .cornerRadius(responsiveSize(base: 2, width: screenWidth, min: 1.5, max: 2.5))
                 
                 // Bottom rectangle (medium)
                 Rectangle()
                     .fill(theme.primary)
                     .frame(
-                        width: responsiveSize(base: 16, min: 12, max: 20),
-                        height: responsiveSize(base: 8, min: 6, max: 10)
+                        width: responsiveSize(base: 16, width: screenWidth, min: 12, max: 20),
+                        height: responsiveSize(base: 8, width: screenWidth, min: 6, max: 10)
                     )
-                    .cornerRadius(responsiveSize(base: 2, min: 1.5, max: 2.5))
+                    .cornerRadius(responsiveSize(base: 2, width: screenWidth, min: 1.5, max: 2.5))
             }
             .frame(
-                width: responsiveSize(base: 24, min: 18, max: 30),
-                height: responsiveSize(base: 30, min: 23, max: 38)
+                width: responsiveSize(base: 24, width: screenWidth, min: 18, max: 30),
+                height: responsiveSize(base: 30, width: screenWidth, min: 23, max: 38)
             )
             #endif
             #endif
@@ -658,24 +689,24 @@ struct FloatingSidebarButton: View {
                             #if os(iOS)
                             let isPhone = UIDevice.current.userInterfaceIdiom == .phone
                             if isPhone {
-                                return responsiveSize(base: 20, min: 18, max: 24)  // Smaller profile image for iPhone
+                                return responsiveSize(base: 20, width: screenWidth, min: 18, max: 24)  // Smaller profile image for iPhone
                             } else {
-                                return responsiveSize(base: 25, min: 20, max: 30)  // Existing size for iPad
+                                return responsiveSize(base: 25, width: screenWidth, min: 20, max: 30)  // Existing size for iPad
                             }
                             #else
-                            return responsiveSize(base: 25, min: 20, max: 30)  // Existing size for macOS
+                            return responsiveSize(base: 25, width: screenWidth, min: 20, max: 30)  // Existing size for macOS
                             #endif
                         }(),
                         height: {
                             #if os(iOS)
                             let isPhone = UIDevice.current.userInterfaceIdiom == .phone
                             if isPhone {
-                                return responsiveSize(base: 20, min: 18, max: 24)  // Smaller profile image for iPhone
+                                return responsiveSize(base: 20, width: screenWidth, min: 18, max: 24)  // Smaller profile image for iPhone
                             } else {
-                                return responsiveSize(base: 25, min: 20, max: 30)  // Existing size for iPad
+                                return responsiveSize(base: 25, width: screenWidth, min: 20, max: 30)  // Existing size for iPad
                             }
                             #else
-                            return responsiveSize(base: 25, min: 20, max: 30)  // Existing size for macOS
+                            return responsiveSize(base: 25, width: screenWidth, min: 20, max: 30)  // Existing size for macOS
                             #endif
                         }()
                     )
@@ -691,12 +722,12 @@ struct FloatingSidebarButton: View {
                         #if os(iOS)
                         let isPhone = UIDevice.current.userInterfaceIdiom == .phone
                         if isPhone {
-                            return responsiveSize(base: 20, min: 18, max: 24)  // Smaller fallback icon for iPhone
+                            return responsiveSize(base: 20, width: screenWidth, min: 18, max: 24)  // Smaller fallback icon for iPhone
                         } else {
-                            return responsiveSize(base: 26, min: 20, max: 32)  // Existing size for iPad
+                            return responsiveSize(base: 26, width: screenWidth, min: 20, max: 32)  // Existing size for iPad
                         }
                         #else
-                        return responsiveSize(base: 26, min: 20, max: 32)  // Existing size for macOS
+                        return responsiveSize(base: 26, width: screenWidth, min: 20, max: 32)  // Existing size for macOS
                         #endif
                     }()))
             }
@@ -706,24 +737,25 @@ struct FloatingSidebarButton: View {
                     #if os(iOS)
                     let isPhone = UIDevice.current.userInterfaceIdiom == .phone
                     if isPhone {
-                        return responsiveSize(base: 18, min: 16, max: 22)  // Smaller icons for iPhone
+                        return responsiveSize(base: 18, width: screenWidth, min: 16, max: 22)  // Smaller icons for iPhone
                     } else {
-                        return responsiveSize(base: 22, min: 18, max: 28)  // Existing size for iPad
+                        return responsiveSize(base: 22, width: screenWidth, min: 18, max: 28)  // Existing size for iPad
                     }
                     #else
-                    return responsiveSize(base: 22, min: 18, max: 28)  // Existing size for macOS
+                    return responsiveSize(base: 22, width: screenWidth, min: 18, max: 28)  // Existing size for macOS
                     #endif
                 }()))
         }
     }
     
     var body: some View {
+        // Calculate button size dynamically based on observed screen width on iOS
         let buttonSize: CGFloat = {
             #if os(macOS)
             return 40  // Keep macOS fixed - window-based, not screen-based
             #else
-            // Responsive button size based on screen width percentage
-            let screenWidth = UIScreen.main.bounds.width
+            // Use observedScreenWidth instead of UIScreen.main.bounds.width for iOS 16+ compliance
+            let screenWidth = observedScreenWidth > 0 ? observedScreenWidth : UIScreen.main.bounds.width
             let isPhone = UIDevice.current.userInterfaceIdiom == .phone
             if isPhone {
                 let calculatedSize = screenWidth * 0.045 // 4.5% of screen width for iPhone (more compact)
@@ -805,8 +837,67 @@ struct FloatingSidebarButton: View {
         }, perform: {
             // Long press action if needed
         })
+        #if os(iOS)
+        // Attach ScreenWidthReader to observe screen width dynamically and update observedScreenWidth state
+        .background(ScreenWidthReader(screenWidth: $observedScreenWidth))
+        #endif
     }
 }
+
+#if os(iOS)
+// UIViewRepresentable to read screen width dynamically from the view's window scene
+struct ScreenWidthReader: UIViewRepresentable {
+    @Binding var screenWidth: CGFloat
+    
+    class Coordinator {
+        var screenWidth: Binding<CGFloat>
+        var observation: NSKeyValueObservation?
+        
+        init(screenWidth: Binding<CGFloat>) {
+            self.screenWidth = screenWidth
+        }
+        
+        deinit {
+            observation?.invalidate()
+        }
+    }
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(screenWidth: $screenWidth)
+    }
+    
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView(frame: .zero)
+        
+        // Observe when the view's window property is set
+        DispatchQueue.main.async {
+            updateScreenWidth(from: view, context: context)
+        }
+        
+        // Observe window property changes to update screen width on window changes
+        context.coordinator.observation = view.observe(\.window, options: [.new, .initial]) { observedView, change in
+            updateScreenWidth(from: observedView, context: context)
+        }
+        
+        return view
+    }
+    
+    func updateUIView(_ uiView: UIView, context: Context) {
+        updateScreenWidth(from: uiView, context: context)
+    }
+    
+    private func updateScreenWidth(from view: UIView, context: Context) {
+        guard let window = view.window else { return }
+        if let screenWidthValue = window.windowScene?.screen.bounds.width {
+            if context.coordinator.screenWidth.wrappedValue != screenWidthValue {
+                DispatchQueue.main.async {
+                    context.coordinator.screenWidth.wrappedValue = screenWidthValue
+                }
+            }
+        }
+    }
+}
+#endif
 
 // MARK: - Geometry Change Modifier
 struct GeometryChangeModifier<T: Equatable>: ViewModifier {
@@ -946,3 +1037,4 @@ struct GlassNavigationMenu<Content: View, Label: View>: View, Animatable {
         }
     }
 }
+

@@ -5593,7 +5593,7 @@ struct CarouselHeaderStyling: ViewModifier {
     
     func body(content: Content) -> some View {
         content
-            .environment(\.carouselHeaderFont, .custom("InterTight-Medium", size: content.responsiveSize(base: 18, min: 18, max: 26)))
+            .environment(\.carouselHeaderFont, .custom("InterTight-Medium", size: 16))
             .environment(\.carouselIconSize, {
                 #if os(iOS)
                 return 12 // Reduced from 14 for a smaller header

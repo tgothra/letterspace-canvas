@@ -49,6 +49,7 @@ struct DocumentElement: Identifiable, Codable, Transferable {
     var options: [String]
     var date: Date?
     var rtfData: Data?
+    var attributedStringData: Data? // iOS 26+ native AttributedString storage
     var isInline: Bool = false  // New property for inline attachments
     var scriptureRanges: [[Int]] = []  // Array of [start, length] pairs for scripture ranges
     
@@ -227,7 +228,7 @@ struct DocumentElement: Identifiable, Codable, Transferable {
     
     // Codable conformance
     enum CodingKeys: String, CodingKey {
-        case id, type, content, placeholder, options, date, rtfData, isInline, scriptureRanges
+        case id, type, content, placeholder, options, date, rtfData, attributedStringData, isInline, scriptureRanges
     }
     
     init(from decoder: Decoder) throws {
@@ -239,7 +240,9 @@ struct DocumentElement: Identifiable, Codable, Transferable {
         options = try container.decode([String].self, forKey: .options)
         date = try container.decodeIfPresent(Date.self, forKey: .date)
         rtfData = try container.decodeIfPresent(Data.self, forKey: .rtfData)
+        attributedStringData = try container.decodeIfPresent(Data.self, forKey: .attributedStringData)
         print("📦 DocumentElement.decode: rtfData is nil: \(rtfData == nil), size: \(rtfData?.count ?? 0) bytes")
+        print("📦 DocumentElement.decode: attributedStringData is nil: \(attributedStringData == nil), size: \(attributedStringData?.count ?? 0) bytes")
         isInline = try container.decodeIfPresent(Bool.self, forKey: .isInline) ?? false
         scriptureRanges = try container.decodeIfPresent([[Int]].self, forKey: .scriptureRanges) ?? []
     }
@@ -253,7 +256,9 @@ struct DocumentElement: Identifiable, Codable, Transferable {
         try container.encode(options, forKey: .options)
         try container.encode(date, forKey: .date)
         print("📦 DocumentElement.encode: rtfData is nil: \(rtfData == nil), size: \(rtfData?.count ?? 0) bytes")
+        print("📦 DocumentElement.encode: attributedStringData is nil: \(attributedStringData == nil), size: \(attributedStringData?.count ?? 0) bytes")
         try container.encodeIfPresent(rtfData, forKey: .rtfData)
+        try container.encodeIfPresent(attributedStringData, forKey: .attributedStringData)
         try container.encode(isInline, forKey: .isInline)
         try container.encode(scriptureRanges, forKey: .scriptureRanges)
     }

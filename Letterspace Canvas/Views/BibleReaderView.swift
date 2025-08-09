@@ -2268,22 +2268,22 @@ struct BibleReaderView: View {
             #if os(macOS)
             content.frame(width: 1000, height: 700)
             #else // For iOS
-            if UIDevice.current.userInterfaceIdiom == .pad {
-                // Check orientation for iPad
-                let screenWidth = UIScreen.main.bounds.width
-                let screenHeight = UIScreen.main.bounds.height
+            GeometryReader { proxy in
+                let screenWidth = proxy.size.width
+                let screenHeight = proxy.size.height
+                let isPad = UIDevice.current.userInterfaceIdiom == .pad
                 let isLandscape = screenWidth > screenHeight
-                
-                if isLandscape {
-                    // iPad Landscape: Wider but shorter, leaving blue background visible
-                    content.frame(idealWidth: 1000, maxWidth: 1100, idealHeight: 700, maxHeight: 800)
-                } else {
-                    // iPad Portrait: Original sizing
-                content.frame(idealWidth: 800, maxWidth: 900, idealHeight: 1000, maxHeight: 1150)
+                Group {
+                    if isPad {
+                        if isLandscape {
+                            content.frame(idealWidth: 1000, maxWidth: 1100, idealHeight: 700, maxHeight: 800)
+                        } else {
+                            content.frame(idealWidth: 800, maxWidth: 900, idealHeight: 1000, maxHeight: 1150)
+                        }
+                    } else { // For iPhone
+                        content.frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
                 }
-            } else { // For iPhone
-                // Fill the sheet/modal
-                content.frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             #endif
         }

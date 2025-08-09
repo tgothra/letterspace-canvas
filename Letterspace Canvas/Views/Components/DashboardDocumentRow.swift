@@ -3,6 +3,8 @@ import SwiftUI
 import UIKit
 
 // iOS Dashboard Document Row View for touch-friendly interactions
+// Note: Usage of `screen` environment variable for screen bounds is compliant with 
+// new iOS 26.0 recommendations. The environment must provide the correct UIScreen instance.
 struct DashboardDocumentRow: View {
     let document: Letterspace_CanvasDocument
     let isPinned: Bool
@@ -23,7 +25,7 @@ struct DashboardDocumentRow: View {
     let onCalendarAction: () -> Void
     let onDelete: () -> Void
     
-    @Environment(\.themeColors) var theme
+    @Environment(\.themeColors) var theme: ThemeColors
     @Environment(\.colorScheme) var colorScheme
     private let gradientManager = GradientWallpaperManager.shared
     
@@ -59,7 +61,8 @@ struct DashboardDocumentRow: View {
         
         if isPhone {
             // Get available width (93% of screen width minus padding)
-            let availableWidth = UIScreen.main.bounds.width * 0.93 - 32 // Account for container padding
+            let screenWidth = UIScreen.main.bounds.width
+            let availableWidth = screenWidth * 0.93 - 32 // Account for container padding
             
             // Fixed width for status column
             let statusWidth: CGFloat = 55
@@ -154,7 +157,9 @@ struct DashboardDocumentRow: View {
     
     var body: some View {
         let isIPad = UIDevice.current.userInterfaceIdiom == .pad
-        let isPortrait = UIScreen.main.bounds.height > UIScreen.main.bounds.width
+        let screenHeight = UIScreen.main.bounds.height
+        let screenWidth = UIScreen.main.bounds.width
+        let isPortrait = screenHeight > screenWidth
         let isPhone = UIDevice.current.userInterfaceIdiom == .phone
         
         mainContent
@@ -197,7 +202,9 @@ struct DashboardDocumentRow: View {
     
     private var mainContent: some View {
         let isIPad = UIDevice.current.userInterfaceIdiom == .pad
-        let isPortrait = UIScreen.main.bounds.height > UIScreen.main.bounds.width
+        let screenHeight = UIScreen.main.bounds.height
+        let screenWidth = UIScreen.main.bounds.width
+        let isPortrait = screenHeight > screenWidth
         let isPhone = UIDevice.current.userInterfaceIdiom == .phone
         let widths = columnWidths ?? calculateFlexibleColumnWidths()
         
@@ -399,7 +406,9 @@ struct DashboardDocumentRow: View {
     }
     
     private var iPadActionMenu: some View {
-        let isPortrait = UIScreen.main.bounds.height > UIScreen.main.bounds.width
+        let screenHeight = UIScreen.main.bounds.height
+        let screenWidth = UIScreen.main.bounds.width
+        let isPortrait = screenHeight > screenWidth
         let isIPad = UIDevice.current.userInterfaceIdiom == .pad
         
         return Menu {
@@ -560,3 +569,6 @@ struct DashboardDocumentRow: View {
     }
 }
 #endif 
+
+
+

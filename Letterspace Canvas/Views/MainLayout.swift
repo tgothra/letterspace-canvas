@@ -12,16 +12,14 @@ import UIKit // Needed for UIImage for profile picture and haptic feedback
 extension View {
     /// Calculate responsive size based on a reference iPad Pro 11" (1194pt width)
     /// This ensures consistent visual appearance across all iPad sizes
-    func responsiveSize(base: CGFloat, min: CGFloat? = nil, max: CGFloat? = nil) -> CGFloat {
+    /// - Parameters:
+    ///   - base: Base size for reference width
+    ///   - width: Actual width to calculate responsive size against
+    ///   - min: Optional minimum size
+    ///   - max: Optional maximum size
+    func responsiveSize(base: CGFloat, width: CGFloat, min: CGFloat? = nil, max: CGFloat? = nil) -> CGFloat {
         let referenceWidth: CGFloat = 1194 // iPad Pro 11" width in points
-        let currentWidth = {
-            #if os(iOS)
-            // iPhone now uses iPad interface, so apply responsive sizing to both
-            return UIScreen.main.bounds.width
-            #else
-            return CGFloat(1194) // macOS uses fixed sizing (no scaling)
-            #endif
-        }()
+        let currentWidth = width
         let scaleFactor = currentWidth / referenceWidth
         
         // Calculate scaled size
@@ -906,8 +904,8 @@ struct MainLayout: View {
     }
     
     // Dynamic corner radius for navigation - consistent across all iPad sizes
-    private var navigationCornerRadius: CGFloat {
-        return responsiveSize(base: shouldUseExpandedNavigation ? 40 : 32, min: 28, max: 44)
+    private func navigationCornerRadius(for width: CGFloat) -> CGFloat {
+        return responsiveSize(base: shouldUseExpandedNavigation ? 40 : 32, width: width, min: 28, max: 44) // Pass width explicitly for iOS 26 compatibility
     }
     
     // Removed floating navigation views - now using native NavigationSplitView on iPad
@@ -923,733 +921,20 @@ struct MainLayout: View {
     
     // Remove the rest of the old floatingSidebarContent function
     /*
-                    FloatingSidebarButton(
-                        icon: "rectangle.3.group",
-                        title: "Dashboard",
-                        action: {
-                            sidebarMode = .allDocuments
-                            isRightSidebarVisible = false
-                            viewMode = .normal
-                            // Removed: // showFloatingSidebar = false - KEEP SIDEBAR OPEN
-                        }
-                    )
-                    
-                    Divider()
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
-                    
-                    FloatingSidebarButton(
-                        icon: "magnifyingglass",
-                        title: "Search Documents",
-                        action: {
-                            #if os(iOS)
-                            if UIDevice.current.userInterfaceIdiom == .pad {
-                                // Use popup system for iPad
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    if activePopup == .search {
-                                        activePopup = .none
-                                    } else {
-                                        activePopup = .search
-                                    }
-                                }
-                            } else {
-                                // Use direct search for iPhone
-                            searchFieldFocused = true
-                            }
-                            #else
-                            // Use direct search for macOS
-                            searchFieldFocused = true
-                            #endif
-                            // Removed: // showFloatingSidebar = false - KEEP SIDEBAR OPEN
-                        }
-                    )
-                    #if os(iOS)
-                    .popover(
-                        isPresented: Binding(
-                            get: { activePopup == .search && UIDevice.current.userInterfaceIdiom == .pad },
-                            set: { if !$0 { activePopup = .none } }
-                        ),
-                        arrowEdge: .leading
-                    ) {
-                        SearchPopupContent(
-                            activePopup: $activePopup,
-                            document: $document,
-                            sidebarMode: $sidebarMode,
-                            isRightSidebarVisible: $isRightSidebarVisible,
-                            onDismiss: {
-                                activePopup = .none
-                            }
-                        )
-                        .frame(width: 400, height: 600)
-                        .background(theme.surface)
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
-                    }
-                    #endif
-                    
-                    FloatingSidebarButton(
-                        icon: "square.and.pencil",
-                        title: "Create New Document",
-                        action: {
-                            #if os(iOS)
-                            if UIDevice.current.userInterfaceIdiom == .pad {
-                                // Use popup system for iPad
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    if activePopup == .newDocument {
-                                        activePopup = .none
-                                    } else {
-                                        activePopup = .newDocument
-                                    }
-                                }
-                            } else {
-                                // Use direct creation for iPhone
-                            let docId = UUID().uuidString
-                            var d = Letterspace_CanvasDocument(
-                                title: "Untitled", 
-                                subtitle: "", 
-                                elements: [DocumentElement(type: .textBlock, content: "", placeholder: "Start typing...")], 
-                                id: docId, 
-                                markers: [], 
-                                series: nil, 
-                                variations: [],
-                                isVariation: false, 
-                                parentVariationId: nil, 
-                                createdAt: Date(), 
-                                modifiedAt: Date(), 
-                                tags: nil, 
-                                isHeaderExpanded: false, 
-                                isSubtitleVisible: true, 
-                                links: []
-                            )
-                            d.save()
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                document = d
-                                sidebarMode = .details
-                                #if os(macOS)
-                                isRightSidebarVisible = true  // Only auto-show on macOS
-                                #endif
-                                activePopup = .none
-                                }
-                            }
-                            #else
-                            // Use direct creation for macOS
-                            let docId = UUID().uuidString
-                            var d = Letterspace_CanvasDocument(
-                                title: "Untitled", 
-                                subtitle: "", 
-                                elements: [DocumentElement(type: .textBlock, content: "", placeholder: "Start typing...")], 
-                                id: docId, 
-                                markers: [], 
-                                series: nil, 
-                                variations: [],
-                                isVariation: false, 
-                                parentVariationId: nil, 
-                                createdAt: Date(), 
-                                modifiedAt: Date(), 
-                                tags: nil, 
-                                isHeaderExpanded: false, 
-                                isSubtitleVisible: true, 
-                                links: []
-                            )
-                            d.save()
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                document = d
-                                sidebarMode = .details
-                                isRightSidebarVisible = true
-                                activePopup = .none
-                            }
-                            #endif
-                                // Removed: // showFloatingSidebar = false - KEEP SIDEBAR OPEN
-                            }
-                    )
-                    #if os(iOS)
-                    .popover(
-                        isPresented: Binding(
-                            get: { activePopup == .newDocument && UIDevice.current.userInterfaceIdiom == .pad },
-                            set: { if !$0 { activePopup = .none } }
-                        ),
-                        arrowEdge: .leading
-                    ) {
-                        NewDocumentPopupContent(
-                            showTemplateBrowser: $showTemplateBrowser,
-                            activePopup: $activePopup,
-                            document: $document,
-                            sidebarMode: $sidebarMode,
-                            isRightSidebarVisible: $isRightSidebarVisible
-                        )
-                        .frame(width: 350, height: 120)
-                        .background(theme.surface)
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
-                    }
-                    #endif
-                    
-                    FloatingSidebarButton(
-                        icon: "folder",
-                        title: "Folders",
-                        action: {
-                            #if os(iOS)
-                            if UIDevice.current.userInterfaceIdiom == .pad {
-                                // Use popup system for iPad
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    if activePopup == .folders {
-                                        activePopup = .none
-                                    } else {
-                                        activePopup = .folders
-                                    }
-                                }
-                            } else {
-                                // Use modal for iPhone
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                showFoldersModal = true
-                            }
-                            }
-                            #else
-                            // Use modal for macOS
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                showFoldersModal = true
-                            }
-                            #endif
-                            // Removed: // showFloatingSidebar = false - KEEP SIDEBAR OPEN
-                        }
-                    )
-                    #if os(iOS)
-                    .popover(
-                        isPresented: Binding(
-                            get: { activePopup == .folders && UIDevice.current.userInterfaceIdiom == .pad },
-                            set: { if !$0 { activePopup = .none } }
-                        ),
-                        arrowEdge: .leading
-                    ) {
-                        FoldersPopupContent(
-                            activePopup: $activePopup,
-                            folders: $folders,
-                            document: $document,
-                            sidebarMode: $sidebarMode,
-                            isRightSidebarVisible: $isRightSidebarVisible,
-                            onAddFolder: addFolder,
-                            showHeader: true // Show header for iPad popover
-                        )
-                        .frame(width: 400, height: 500)
-                        .background(theme.surface)
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
-
-                    }
-                    #endif
-                    
-                    FloatingSidebarButton(
-                        icon: "sparkles",
-                        title: "Smart Study",
-                        action: {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                showSmartStudyModal = true
-                            }
-                            // Removed: // showFloatingSidebar = false - KEEP SIDEBAR OPEN
-                        }
-                    )
-                    
-                    FloatingSidebarButton(
-                        icon: "book.closed",
-                        title: "Bible Reader",
-                        action: {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                showBibleReaderModal = true
-                            }
-                            // Removed: // showFloatingSidebar = false - KEEP SIDEBAR OPEN
-                        }
-                    )
-                }
-                .padding(.horizontal, 8)
-                .padding(.top, {
-                    #if os(iOS)
-                    let screenWidth = UIScreen.main.bounds.width
-                    let screenHeight = UIScreen.main.bounds.height
-                    let isLandscape = screenWidth > screenHeight
-                    if isLandscape && UIDevice.current.userInterfaceIdiom == .pad {
-                        return 8 // Reduced top padding for iPad landscape
-                    } else {
-                        return 16 // Original padding for other cases
-                    }
-                    #else
-                    return 16 // Original padding for macOS
-                    #endif
-                }())  // Dynamic top padding based on device and orientation
-                
-                Divider()
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)  // Match other separators
-                
-                // Bottom buttons section
-                VStack(spacing: shouldUseExpandedNavigation ? 6 : 4) {  // Minimal spacing when expanded
-                    FloatingSidebarButton(
-                        icon: appearanceController.selectedScheme.icon,
-                        title: "Color Scheme: \(appearanceController.selectedScheme.rawValue)",
-                        action: {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                transitionOpacity = 0
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
-                                    // Cycle through the color scheme options
-                                    let allCases = AppColorScheme.allCases
-                                    if let currentIndex = allCases.firstIndex(of: appearanceController.selectedScheme) {
-                                        let nextIndex = (currentIndex + 1) % allCases.count
-                                        appearanceController.selectedScheme = allCases[nextIndex]
-                                    }
-                                    withAnimation(.easeInOut(duration: 0.2)) {
-                                        transitionOpacity = 1
-                                    }
-                                }
-                            }
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                // showFloatingSidebar = false - KEEP SIDEBAR OPEN
-                            }
-                        }
-                    )
-                    
-                    FloatingSidebarButton(
-                        icon: "trash",
-                        title: "Recently Deleted",
-                        action: {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                showRecentlyDeletedModal = true
-                            }
-                            // Removed: // showFloatingSidebar = false - KEEP SIDEBAR OPEN
-                        }
-                    )
-                    
-                    Divider()
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)   // Match other separators
-                    
-                    FloatingSidebarButton(
-                        icon: "person.crop.circle.fill",
-                        title: "User Profile",
-                        action: {
-                            showUserProfileSheet = true
-                            // Removed: // showFloatingSidebar = false - KEEP SIDEBAR OPEN
-                        }
-                    )
-                    
-
-                    
-                    // Back arrow button to close panel
-                    VStack {
-                    FloatingSidebarButton(
-                        icon: "arrow.left",
-                        title: "Hide Navigation",
-                        action: {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                if isNavigationCollapsed {
-                                    // If navigation was collapsed, just hide the floating sidebar and transition to docked on iPad
-                                    showFloatingSidebar = false
-                                    #if os(iOS)
-                                    if UIDevice.current.userInterfaceIdiom == .pad {
-                                        isDocked = true
-                                        UserDefaults.standard.set(isDocked, forKey: "sidebarIsDocked")
-                                    }
-                                    #endif
-                                } else {
-                                    // If navigation wasn't collapsed, collapse it (but keep floating mode on iPhone)
-                                    #if os(iOS)
-                                    if UIDevice.current.userInterfaceIdiom == .pad {
-                                        // On iPad, transition to docked mode and collapse
-                                        isDocked = true
-                                        showFloatingSidebar = false
-                                        isNavigationCollapsed = true
-                                        UserDefaults.standard.set(isDocked, forKey: "sidebarIsDocked")
-                                        UserDefaults.standard.set(isNavigationCollapsed, forKey: "navigationIsCollapsed")
-                                    } else {
-                                        // On iPhone, just collapse navigation
-                                    isNavigationCollapsed = true
-                                    UserDefaults.standard.set(isNavigationCollapsed, forKey: "navigationIsCollapsed")
-                                    }
-                                    #else
-                                    // On macOS, just collapse navigation
-                                    isNavigationCollapsed = true
-                                    UserDefaults.standard.set(isNavigationCollapsed, forKey: "navigationIsCollapsed")
-                                    #endif
-                                }
-                            }
-                        }
-                    )
-                        
-                        // Add spacer to center the back button between separator and bottom
-                        Spacer()
-                            .frame(height: {
-                                #if os(iOS)
-                                let screenWidth = UIScreen.main.bounds.width
-                                let screenHeight = UIScreen.main.bounds.height
-                                let isLandscape = screenWidth > screenHeight
-                                if isLandscape && UIDevice.current.userInterfaceIdiom == .pad {
-                                    return 4 // Reduced spacer for iPad landscape
-                                } else {
-                                    return 12 // Original spacer for other cases
-                                }
-                                #else
-                                return 12 // Original spacer for macOS
-                                #endif
-                            }()) // Dynamic spacer based on device and orientation
-                    }
-                }
-                .padding(.horizontal, 8)
-                .padding(.top, 0)        // Keep top padding removed to eliminate gap
-                .padding(.bottom, {
-                    #if os(iOS)
-                    let screenWidth = UIScreen.main.bounds.width
-                    let screenHeight = UIScreen.main.bounds.height
-                    let isLandscape = screenWidth > screenHeight
-                    if isLandscape && UIDevice.current.userInterfaceIdiom == .pad {
-                        return 0 // No bottom padding for iPad landscape
-                    } else {
-                        return 2 // Original padding for other cases
-                    }
-                    #else
-                    return 2 // Original padding for macOS
-                    #endif
-                }())     // Dynamic bottom padding based on device and orientation
-            }
-        }
-        // Width is now set by compact/expanded navigation wrappers
-        // Dynamic height: moderate height when expanded, content-sized for compact
-        .frame(maxHeight: shouldUseExpandedNavigation ? {
-            #if os(iOS)
-            if UIDevice.current.userInterfaceIdiom == .phone {
-                // iPhone: Slightly shorter navigation container but with room for all icons
-                return responsiveSize(base: 665, min: 515, max: 715)
-            } else {
-                // iPad: Keep original height
-                return responsiveSize(base: 800, min: 600, max: 900)
-            }
-            #else
-            return responsiveSize(base: 800, min: 600, max: 900)
-            #endif
-        }() : .infinity)
-        .fixedSize(horizontal: false, vertical: shouldUseExpandedNavigation ? false : true)
-        .animation(.spring(response: 0.6, dampingFraction: 0.75), value: shouldUseExpandedNavigation)
-        .background(
-            // Glassmorphism effect
-            ZStack {
-                // Base blur
-                Rectangle()
-                    .fill(.ultraThinMaterial)
-                
-                // Gradient overlay
-                LinearGradient(
-                    gradient: Gradient(colors: [
-                        theme.background.opacity(0.3),
-                        theme.background.opacity(0.1)
-                    ]),
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            }
-        )
-        .overlay(
-            // Border
-            RoundedRectangle(cornerRadius: navigationCornerRadius)  // Dynamic corner radius
-                .stroke(
-                    LinearGradient(
-                        gradient: Gradient(colors: [
-                            Color.white.opacity(0.2),
-                            Color.white.opacity(0.05)
-                        ]),
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 1
-                )
-        )
-        .clipShape(RoundedRectangle(cornerRadius: navigationCornerRadius))  // Dynamic corner radius
-        .shadow(color: Color.black.opacity(0.2), radius: 20, x: 5, y: 0)
-        .offset(x: showFloatingSidebar ? 0 : -100)  // Adjusted offset for new width
-        .offset(x: sidebarDragAmount.width)
-        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: showFloatingSidebar)
-        .simultaneousGesture(
-            DragGesture()
-                .onChanged { value in
-                    // Only track movement if swiping right (opening gesture)
-                    if value.translation.width > 0 {
-                        sidebarDragAmount = value.translation
-                    } else if value.translation.width < -30 {
-                        // Immediately dismiss when swiping left past threshold
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                            showFloatingSidebar = false
-                            // Set navigation as collapsed so user can swipe to bring it back
-                            isNavigationCollapsed = true
-                            UserDefaults.standard.set(isNavigationCollapsed, forKey: "navigationIsCollapsed")
-                        }
-                    }
-                }
-                .onEnded { value in
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        sidebarDragAmount = .zero
-                        // Also handle the case where user ends drag with left swipe
-                        if value.translation.width < -50 {
-                            showFloatingSidebar = false
-                            // Set navigation as collapsed so user can swipe to bring it back
-                            isNavigationCollapsed = true
-                            UserDefaults.standard.set(isNavigationCollapsed, forKey: "navigationIsCollapsed")
-                        }
-                    }
-                }
-        )
-    }
-
-    // iPhone Bottom Navigation Bar
-@ViewBuilder
-private var iPhoneBottomNavigation: some View {
-    #if os(iOS)
-    if UIDevice.current.userInterfaceIdiom == .phone {
-        VStack(spacing: 0) {
-            Spacer()
-            
-            // Bottom navigation container
-            ZStack {
-                // Background with glassmorphism
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(.ultraThinMaterial)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 20)
-                            .stroke(
-                                LinearGradient(
-                                    gradient: Gradient(colors: [
-                                        Color.white.opacity(0.3),
-                                        Color.white.opacity(0.1)
-                                    ]),
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 1
-                            )
-                    )
-                    .shadow(
-                        color: colorScheme == .dark ? .black.opacity(0.3) : .black.opacity(0.15),
-                        radius: 12,
-                        x: 0,
-                        y: -2
-                    )
-                
-                // Horizontal scrollable navigation items
-                ScrollViewReader { proxy in
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 12) {
-                            // Navigation items
-                            ForEach(Array(bottomNavigationItems.enumerated()), id: \.offset) { index, item in
-                                BottomNavButton(
-                                    icon: item.icon,
-                                    title: item.title,
-                                    isSelected: currentBottomNavIndex == index,
-                                    action: {
-                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                            currentBottomNavIndex = index
-                                        }
-                                        item.action()
-                                    }
-                                )
-                                .id(index)
-                            }
-                        }
-                        .padding(.horizontal, 20)
-                        .onChange(of: currentBottomNavIndex) { oldIndex, newIndex in
-                            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                                proxy.scrollTo(newIndex, anchor: .center)
-                            }
-                        }
-                    }
-                    .frame(height: 60)
-                }
-                
-                // Scroll indicators (dots)
-                VStack {
-                    Spacer()
-                    HStack(spacing: 6) {
-                        ForEach(0..<max(1, (bottomNavigationItems.count + 4) / 5), id: \.self) { pageIndex in
-                            Circle()
-                                .fill(currentBottomNavIndex / 5 == pageIndex ? theme.accent : theme.accent.opacity(0.3))
-                                .frame(width: 6, height: 6)
-                        }
-                    }
-                    .padding(.bottom, 8)
-                }
-            }
-            .frame(height: 80)
-            .padding(.horizontal, 16)
-            .padding(.bottom, 34) // Safe area bottom padding
-            .offset(y: bottomNavOffset)
-            .gesture(
-                DragGesture()
-                    .onChanged { value in
-                        if value.translation.height > 0 {
-                            bottomNavOffset = min(value.translation.height, 100)
-                        }
-                    }
-                    .onEnded { value in
-                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                            if value.translation.height > 40 {
-                                bottomNavOffset = 100 // Hide
-                            } else {
-                                bottomNavOffset = 0 // Show
-                            }
-                        }
-                    }
-            )
-        }
-        .ignoresSafeArea(.all, edges: .bottom)
-    }
-    #endif
-}
-
-// Bottom navigation items configuration
-private var bottomNavigationItems: [(icon: String, title: String, action: () -> Void)] {
-    [
-        (
-            icon: "rectangle.3.group",
-            title: "Dashboard",
-            action: {
-                sidebarMode = .allDocuments
-                isRightSidebarVisible = false
-                viewMode = .normal
-            }
-        ),
-        (
-            icon: "magnifyingglass", 
-            title: "Document Search",
-            action: {
-                showSearchModal = true
-            }
-        ),
-        (
-            icon: "square.and.pencil",
-            title: "New Doc",
-            action: {
-                let docId = UUID().uuidString
-                var d = Letterspace_CanvasDocument(
-                    title: "Untitled", 
-                    subtitle: "", 
-                    elements: [DocumentElement(type: .textBlock, content: "", placeholder: "Start typing...")], 
-                    id: docId, 
-                    markers: [], 
-                    series: nil, 
-                    variations: [],
-                    isVariation: false, 
-                    parentVariationId: nil, 
-                    createdAt: Date(), 
-                    modifiedAt: Date(), 
-                    tags: nil, 
-                    isHeaderExpanded: false, 
-                    isSubtitleVisible: true, 
-                    links: []
-                )
-                d.save()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    document = d
-                    sidebarMode = .details
-                    isRightSidebarVisible = true
-                }
-            }
-        ),
-                    (
-            icon: "folder",
-            title: "Folders", 
-            action: {
-                showFoldersModal = true
-            }
-        ),
-        (
-            icon: "sparkles",
-            title: "Smart Study",
-            action: {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    showSmartStudyModal = true
-                }
-            }
-        ),
-        (
-            icon: "book.closed",
-            title: "Bible",
-            action: {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    showBibleReaderModal = true
-                }
-            }
-        ),
-        (
-            icon: "square.and.arrow.up",
-            title: "Export",
-            action: {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    showExportModal = true
-                }
-            }
-        ),
-        (
-            icon: "gear",
-            title: "Settings",
-            action: {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    showSettingsModal = true
-                }
-            }
-        )
-    ]
-}
-
-// Bottom navigation button component
-@ViewBuilder
-private func BottomNavButton(icon: String, title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
-    Button(action: action) {
-        VStack(spacing: 4) {
-            ZStack {
-                // Background circle for selected state
-                if isSelected {
-                    Circle()
-                        .fill(theme.accent.opacity(0.2))
-                        .frame(width: 32, height: 32)
-                }
-                
-                // Icon
-                if icon == "rectangle.3.group" {
-                    // Custom dashboard icon
-                    VStack(spacing: 1) {
-                        Rectangle()
-                            .fill(isSelected ? theme.accent : .black)
-                            .frame(width: 8, height: 3)
-                            .cornerRadius(0.5)
-                        Rectangle()
-                            .fill(isSelected ? theme.accent : .black)
-                            .frame(width: 12, height: 4)
-                            .cornerRadius(0.5)
-                        Rectangle()
-                            .fill(isSelected ? theme.accent : .black)
-                            .frame(width: 10, height: 3)
-                            .cornerRadius(0.5)
-                    }
-                } else {
-                    Image(systemName: icon)
-                        .font(.system(size: 16, weight: isSelected ? .semibold : .medium))
-                        .foregroundColor(isSelected ? theme.accent : theme.primary)
-                }
-            }
-            .frame(width: 32, height: 32)
-            
-            // Title
-            Text(title)
-                .font(.system(size: 10, weight: isSelected ? .semibold : .medium))
-                .foregroundColor(isSelected ? theme.accent : theme.secondary)
-                .lineLimit(1)
-        }
-    }
-    .buttonStyle(.plain)
-    .frame(width: 60)
-}
-*/
-
-// Extracted Main Content View (original content)
-@ViewBuilder
-private func mainContentView(availableWidth: CGFloat) -> some View {
-                            if sidebarMode == .allDocuments {
-                                    DashboardView(
+    ...
+    Removed for brevity
+    ...
+    */
+    
+    // Extracted Main Content View (original content)
+    @ViewBuilder
+    private func mainContentView(availableWidth: CGFloat) -> some View {
+        if sidebarMode == .allDocuments {
+            DashboardView(
                 document: $document, // Pass document binding
                 onSelectDocument: { selectedDoc in
-                                            self.loadAndOpenDocument(id: selectedDoc.id)
-                                        },
+                    self.loadAndOpenDocument(id: selectedDoc.id)
+                },
                 onMenuTap: {
                     withAnimation(.bouncy(duration: 0.7, extraBounce: 0.01)) {
                         isCircularMenuOpen = true
@@ -1707,59 +992,57 @@ private func mainContentView(availableWidth: CGFloat) -> some View {
                 },
                 sidebarMode: $sidebarMode, // Pass sidebarMode binding
                 isRightSidebarVisible: $isRightSidebarVisible // Pass isRightSidebarVisible binding
-                                    )
-                                    .transition(.asymmetric(
-                                        insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .center)),
-                                        removal: .opacity.combined(with: .scale(scale: 1.05, anchor: .center))
-                                    ))
-                                    .animation(.spring(response: 0.6, dampingFraction: 0.8), value: sidebarMode)
-            // .frame(maxWidth: .infinity) // Already applied by parent ZStack
-            // .frame(maxHeight: dashboardGeo.size.height) // Use available height
-                            } else {
-                                DocumentArea(
-                                    document: $document,
-                                    isHeaderExpanded: $isHeaderExpanded,
-                                    isSubtitleVisible: Binding(
-                                        get: { document.isSubtitleVisible },
+            )
+            .transition(.asymmetric(
+                insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .center)),
+                removal: .opacity.combined(with: .scale(scale: 1.05, anchor: .center))
+            ))
+            .animation(.spring(response: 0.6, dampingFraction: 0.8), value: sidebarMode)
+        } else {
+            DocumentArea(
+                document: $document,
+                isHeaderExpanded: $isHeaderExpanded,
+                isSubtitleVisible: Binding(
+                    get: { document.isSubtitleVisible },
                     set: { newValue in document.isSubtitleVisible = newValue; document.save() }
-                                    ),
-                                    documentHeight: $documentHeight,
-                                    viewportHeight: $viewportHeight,
-                                    isDistractionFreeMode: viewMode == .distractionFree,
-                                    viewMode: $viewMode,
+                ),
+                documentHeight: $documentHeight,
+                viewportHeight: $viewportHeight,
+                isDistractionFreeMode: viewMode == .distractionFree,
+                viewMode: $viewMode,
                 availableWidth: availableWidth, // Pass dynamic width
                 onHeaderClick: { withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) { scrollOffset = 0 } },
-                                    isSearchActive: $isSearchActive,
-                                    shouldPauseHover: isSearchActive,
-                                    onNavigateBack: {
-                                        // Check if this is a swipe-down dismiss vs regular navigation
-                                        if isSwipeDownDismissing {
-                                            // No animation for swipe-down dismiss
-                                            sidebarMode = .allDocuments
-                                            isRightSidebarVisible = false
-                                            viewMode = .normal
-                                            
-                                            // Reset flag after brief delay
-                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                                isSwipeDownDismissing = false
-                                            }
-                                        } else {
-                                            // Navigate back to dashboard on swipe with smooth slide animation
-                                            withAnimation(.easeOut(duration: 0.3)) {
-                                                sidebarMode = .allDocuments
-                                                isRightSidebarVisible = false
-                                                viewMode = .normal
-                                            }
-                                        }
-                                    }
-                                )
-                                .id(document.id)
-                                .transition(.asymmetric(
-                                    insertion: .opacity,
-                                    removal: .opacity // Use opacity for all removals to prevent layout conflicts
-                                ))
-                                .animation(.easeOut(duration: 0.2), value: sidebarMode) // Faster removal
-                            }
+                isSearchActive: $isSearchActive,
+                shouldPauseHover: isSearchActive,
+                onNavigateBack: {
+                    // Check if this is a swipe-down dismiss vs regular navigation
+                    if isSwipeDownDismissing {
+                        // No animation for swipe-down dismiss
+                        sidebarMode = .allDocuments
+                        isRightSidebarVisible = false
+                        viewMode = .normal
+                        
+                        // Reset flag after brief delay
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            isSwipeDownDismissing = false
+                        }
+                    } else {
+                        // Navigate back to dashboard on swipe with smooth slide animation
+                        withAnimation(.easeOut(duration: 0.3)) {
+                            sidebarMode = .allDocuments
+                            isRightSidebarVisible = false
+                            viewMode = .normal
+                        }
+                    }
+                }
+            )
+            .id(document.id)
+            .transition(.asymmetric(
+                insertion: .opacity,
+                removal: .opacity // Use opacity for all removals to prevent layout conflicts
+            ))
+            .animation(.easeOut(duration: 0.2), value: sidebarMode) // Faster removal
+        }
     }
     
     // Extracted Right Sidebar Content (original content)
@@ -1767,30 +1050,30 @@ private func mainContentView(availableWidth: CGFloat) -> some View {
     private var rightSidebarContent: some View {
         // The original content of the right sidebar area
         Rectangle() // Original was a Rectangle + overlay
-                             .fill(Color.clear)
+            .fill(Color.clear)
             // .frame(minWidth: rightSidebarWidth, maxWidth: rightSidebarWidth) // Frame applied by parent
-                             .overlay {
-                                 VStack(spacing: 0) {
-                                     ScrollView(showsIndicators: true) {
-                                         RightSidebar(
-                                             document: $document,
+            .overlay {
+                VStack(spacing: 0) {
+                    ScrollView(showsIndicators: true) {
+                        RightSidebar(
+                            document: $document,
                             isVisible: .constant(true), // isVisible is managed by parent now
-                                             selectedElement: $selectedElement,
-                                             scrollOffset: $scrollOffset,
-                                             documentHeight: $documentHeight,
-                                             viewportHeight: $viewportHeight,
-                                             viewMode: $viewMode,
-                                             isHeaderExpanded: $isHeaderExpanded,
-                                             isSubtitleVisible: Binding(
-                                                 get: { document.isSubtitleVisible },
+                            selectedElement: $selectedElement,
+                            scrollOffset: $scrollOffset,
+                            documentHeight: $documentHeight,
+                            viewportHeight: $viewportHeight,
+                            viewMode: $viewMode,
+                            isHeaderExpanded: $isHeaderExpanded,
+                            isSubtitleVisible: Binding(
+                                get: { document.isSubtitleVisible },
                                 set: { newValue in document.isSubtitleVisible = newValue; document.save() }
-                                             )
-                                         )
-                                     }
-                                 }
+                            )
+                        )
+                    }
+                }
                 .padding(.trailing, 16) // Original padding
-                             }
-                             .modifier(ConditionalSidebarTransition(sidebarMode: sidebarMode))
+            }
+            .modifier(ConditionalSidebarTransition(sidebarMode: sidebarMode))
             // .padding(.trailing, 15) // This padding was on the Rectangle, apply to content if needed or remove if redundant
     }
 
@@ -1950,7 +1233,7 @@ private func mainContentView(availableWidth: CGFloat) -> some View {
                         animatedFloatingNavigation
                             .padding(.leading, {
                                 // Center between screen edge and All Documents section
-                                let screenWidth = UIScreen.main.bounds.width
+                                let screenWidth = geometry.size.width // Replaced UIScreen.main.bounds.width with geometry.size.width for iOS 26 compatibility
                                 let allDocumentsLeftEdge = screenWidth * 0.065 // Approximate left edge of All Documents (based on padding)
                                 let centerPoint = allDocumentsLeftEdge / 2 // Center between screen edge and All Documents
                                 
@@ -1959,8 +1242,8 @@ private func mainContentView(availableWidth: CGFloat) -> some View {
                             }())
                             .padding(.top, {
                                 // Responsive top padding based on screen height and orientation
-                                let screenHeight = UIScreen.main.bounds.height
-                                let screenWidth = UIScreen.main.bounds.width
+                                let screenHeight = geometry.size.height // Replaced UIScreen.main.bounds.height with geometry.size.height for iOS 26 compatibility
+                                let screenWidth = geometry.size.width // Same as above
                                 let isLandscape = screenWidth > screenHeight
                                 if shouldUseExpandedNavigation {
                                     if isLandscape {
@@ -2451,7 +1734,7 @@ private func mainContentView(availableWidth: CGFloat) -> some View {
                         }
                         .padding(.trailing, 25)
                         .padding(.bottom, sidebarMode == .allDocuments ? 
-                                 (UIScreen.main.bounds.height > 800 ? 10 : 8) : 6) // Brought up by 1 more point
+                                 (geometry.size.height > 800 ? 10 : 8) : 6) // Replaced UIScreen.main.bounds.height with geometry.size.height for iOS 26 compatibility
                     }
                 }
                 .ignoresSafeArea(.keyboard, edges: .bottom) // Keep buttons fixed when keyboard appears
@@ -3416,6 +2699,7 @@ extension MainLayout {
         }
     }
 }
+
 
 
 

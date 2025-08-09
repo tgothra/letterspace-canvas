@@ -102,6 +102,8 @@ struct TagManager: View {
     @State private var showColorPicker: Bool = false
     @State private var hoveredPencil: String? = nil
     @State private var hoveredTrash: String? = nil
+    
+    @State private var calculatedHeight: CGFloat = 250
 
     private let colorPalette: [(name: String, color: Color)] = [
         ("Crimson", Color(hex: "#dc2626")),
@@ -234,18 +236,12 @@ struct TagManager: View {
                 }
                 .padding(.vertical, 6)
             }
-            .frame(height: {
-                #if os(iOS)
-                if UIDevice.current.userInterfaceIdiom == .phone {
-                    // iPhone: Use most of the screen height, accounting for header, divider, and info message
-                    return UIScreen.main.bounds.height * 0.6 // 60% of screen height for scrollable content
-                } else {
-                    return 250 // iPad: Keep fixed height for popover
+            .background(
+                GeometryReader { geometry in
+                    Color.clear.preference(key: TagManagerHeightKey.self, value: geometry.size.height)
                 }
-                #else
-                return 250 // macOS: Keep fixed height for popover
-                #endif
-            }()) // Responsive height for the scrollable list
+            )
+            .frame(height: calculatedHeight)
 
             Divider()
 
@@ -300,6 +296,17 @@ struct TagManager: View {
             }
             .frame(width: 160)
             .background(popoverBackgroundColor)
+        }
+        .onPreferenceChange(TagManagerHeightKey.self) { newHeight in
+            #if os(iOS)
+            if UIDevice.current.userInterfaceIdiom == .phone {
+                calculatedHeight = newHeight * 0.6 // 60% of available height for iPhone
+            } else {
+                calculatedHeight = 250 // iPad
+            }
+            #else
+            calculatedHeight = 250 // macOS
+            #endif
         }
     }
 
@@ -391,4 +398,9 @@ struct TagManager: View {
     }
 }
 
-// DELETE Placeholder JSON helpers and Document struct (lines 283-312) 
+private struct TagManagerHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}

@@ -14,6 +14,9 @@ struct WIPSection: View {
     var isLoadingDocuments: Bool = false // New parameter to track loading state
     @Environment(\.themeColors) var theme
     @Environment(\.colorScheme) var colorScheme
+    #if os(iOS)
+    @Environment(\.screen) private var screen
+    #endif
     @Environment(\.carouselHeaderFont) var carouselHeaderFont
     @Environment(\.carouselIconSize) var carouselIconSize
     @Environment(\.carouselHeaderPadding) var carouselHeaderPadding

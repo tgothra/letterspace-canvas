@@ -24,6 +24,9 @@ struct PinnedSection: View {
     @State private var isHoveringEditButton = false // Hover state for edit button
     @Environment(\.themeColors) var theme
     @Environment(\.colorScheme) var colorScheme
+    #if os(iOS)
+    @Environment(\.screen) private var screen
+    #endif
     @Environment(\.carouselHeaderFont) var carouselHeaderFont
     @Environment(\.carouselIconSize) var carouselIconSize
     @Environment(\.carouselHeaderPadding) var carouselHeaderPadding

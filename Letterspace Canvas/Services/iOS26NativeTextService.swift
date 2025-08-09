@@ -14,73 +14,99 @@ class iOS26NativeTextService {
     
     /// Apply bold formatting to selected text
     func toggleBold(text: inout AttributedString, selection: inout AttributedTextSelection) {
-        print("🔥 iOS26NativeTextService.toggleBold called")
-        print("🔥 AttributedString length: \(text.characters.count)")
-        print("🔥 Selection: \(selection)")
-        
-        let indices = selection.indices(in: text)
-        print("🔥 Selection indices: \(indices)")
-        
-        guard case .ranges(let ranges) = indices, !ranges.isEmpty else { 
-            print("❌ iOS26NativeTextService.toggleBold: guard failed - no ranges or empty ranges")
+        guard case .ranges(let ranges) = selection.indices(in: text), !ranges.isEmpty else { 
             return 
         }
         
-        print("🔥 iOS26NativeTextService.toggleBold: proceeding with ranges: \(ranges)")
+        // Preserve the current selection
+        let originalSelection = selection
         
-        text.transform(updating: &selection) { text in
-            // Check if current text has bold formatting
-            let runs = text[ranges].runs
-            let isBold = runs.contains { run in
-                if let font = run.font {
-                    return font == .system(size: 16, weight: .bold)
-                }
-                return false
+        // Check if current text has bold formatting
+        let runs = text[ranges].runs
+        let isBold = runs.contains { run in
+            if let font = run.font {
+                // Simple check by comparing with known bold font
+                return font == .system(size: 16, weight: .bold) || 
+                       font == .system(size: 17, weight: .bold) ||
+                       font == .system(size: 18, weight: .bold)
             }
-            
-            // Toggle bold
+            return false
+        }
+        
+        // Apply formatting without using transform to avoid layout jumps
+        for range in ranges.ranges {
             if isBold {
-                text[ranges].font = .system(size: 16, weight: .regular)
+                // Remove bold - use regular weight
+                text[range].font = .system(size: 16, weight: .regular)
             } else {
-                text[ranges].font = .system(size: 16, weight: .bold)
+                // Add bold
+                text[range].font = .system(size: 16, weight: .bold)
             }
         }
+        
+        // Restore selection
+        selection = originalSelection
     }
     
     /// Apply italic formatting to selected text
     func toggleItalic(text: inout AttributedString, selection: inout AttributedTextSelection) {
         guard case .ranges(let ranges) = selection.indices(in: text), !ranges.isEmpty else { return }
         
-        text.transform(updating: &selection) { text in
-            // Check if current text has italic formatting
-            let runs = text[ranges].runs
-            let isItalic = runs.contains { run in
-                if let font = run.font {
-                    return font == .system(size: 16).italic()
-                }
-                return false
+        // Preserve the current selection
+        let originalSelection = selection
+        
+        // Check if current text has italic formatting
+        let runs = text[ranges].runs
+        let isItalic = runs.contains { run in
+            if let font = run.font {
+                // Simple check by comparing with known italic fonts
+                let regularFont = Font.system(size: 16, weight: .regular, design: .default)
+                let italicFont = regularFont.italic()
+                return font == italicFont ||
+                       font == Font.system(size: 17, weight: .regular, design: .default).italic() ||
+                       font == Font.system(size: 18, weight: .regular, design: .default).italic()
             }
-            
-            // Toggle italic
+            return false
+        }
+        
+        // Apply formatting without using transform to avoid layout jumps
+        for range in ranges.ranges {
             if isItalic {
-                text[ranges].font = .system(size: 16, design: .default)
+                // Remove italic - use regular font
+                text[range].font = .system(size: 16, weight: .regular, design: .default)
             } else {
-                text[ranges].font = .system(size: 16, design: .default).italic()
+                // Add italic
+                text[range].font = .system(size: 16, weight: .regular, design: .default).italic()
             }
         }
+        
+        // Restore selection
+        selection = originalSelection
     }
     
     /// Apply underline formatting to selected text
     func toggleUnderline(text: inout AttributedString, selection: inout AttributedTextSelection) {
         guard case .ranges(let ranges) = selection.indices(in: text), !ranges.isEmpty else { return }
         
-        text.transform(updating: &selection) { text in
-            if text[ranges].underlineStyle == .single {
-                text[ranges].underlineStyle = .none
+        // Preserve the current selection
+        let originalSelection = selection
+        
+        // Check if current text has underline formatting
+        let isUnderlined = text[ranges].runs.contains { run in
+            run.underlineStyle == .single
+        }
+        
+        // Apply formatting without using transform to avoid layout jumps
+        for range in ranges.ranges {
+            if isUnderlined {
+                text[range].underlineStyle = .none
             } else {
-                text[ranges].underlineStyle = .single
+                text[range].underlineStyle = .single
             }
         }
+        
+        // Restore selection
+        selection = originalSelection
     }
     
     /// Apply text color to selected text

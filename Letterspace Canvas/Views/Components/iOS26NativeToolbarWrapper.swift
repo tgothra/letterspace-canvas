@@ -53,13 +53,7 @@ struct iOS26NativeToolbarWrapper: View {
             .padding(.horizontal, 16)
         }
         .frame(height: 50)
-        .background(Color(UIColor.systemGray6))
-        .overlay(
-            Rectangle()
-                .frame(height: 0.5)
-                .foregroundColor(Color(UIColor.systemGray4)),
-            alignment: .top
-        )
+        .background(Color.clear)
     }
     
     // MARK: - Style Button
@@ -107,19 +101,31 @@ struct iOS26NativeToolbarWrapper: View {
             formatButton(
                 icon: "bold",
                 isActive: currentFormatting.isBold,
-                action: { nativeTextService.toggleBold(text: &text, selection: &selection) }
+                action: { 
+                    withAnimation(.none) {
+                        nativeTextService.toggleBold(text: &text, selection: &selection)
+                    }
+                }
             )
             
             formatButton(
                 icon: "italic",
                 isActive: currentFormatting.isItalic,
-                action: { nativeTextService.toggleItalic(text: &text, selection: &selection) }
+                action: { 
+                    withAnimation(.none) {
+                        nativeTextService.toggleItalic(text: &text, selection: &selection)
+                    }
+                }
             )
             
             formatButton(
                 icon: "underline",
                 isActive: currentFormatting.isUnderlined,
-                action: { nativeTextService.toggleUnderline(text: &text, selection: &selection) }
+                action: { 
+                    withAnimation(.none) {
+                        nativeTextService.toggleUnderline(text: &text, selection: &selection)
+                    }
+                }
             )
         }
     }

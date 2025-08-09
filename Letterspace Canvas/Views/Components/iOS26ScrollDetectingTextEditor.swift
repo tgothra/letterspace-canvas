@@ -1694,7 +1694,7 @@ struct iOS26ScrollDetectingTextEditor: UIViewRepresentable {
                   let keyboardFrameEnd = userInfo[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect,
                   let animationDuration = userInfo[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double,
                   let animationCurveRawValue = userInfo[UIResponder.keyboardAnimationCurveUserInfoKey] as? Int,
-                  let textView = textView
+                  textView != nil
             else {
                 return
             }
@@ -1702,10 +1702,10 @@ struct iOS26ScrollDetectingTextEditor: UIViewRepresentable {
             let animationCurve = UIView.AnimationOptions(rawValue: UInt(animationCurveRawValue << 16))
 
             // The keyboard frame is in screen coordinates. We need to know where it is in relation to our text view.
-            let keyboardFrameInView = textView.convert(keyboardFrameEnd, from: nil)
+            let keyboardFrameInView = textView!.convert(keyboardFrameEnd, from: nil)
             
             // Calculate the height of the keyboard that is actually obscuring the text view.
-            let obscuredHeight = textView.bounds.intersection(keyboardFrameInView).height
+            let obscuredHeight = textView!.bounds.intersection(keyboardFrameInView).height
             
             // Update our stored keyboard height.
             self.currentKeyboardHeight = max(0, obscuredHeight)
@@ -1721,7 +1721,7 @@ struct iOS26ScrollDetectingTextEditor: UIViewRepresentable {
             if obscuredHeight > 0 {
                 // Using a small delay ensures that the layout has settled before we scroll.
                 DispatchQueue.main.async {
-                    self.ensureCursorIsVisible(textView)
+                    self.ensureCursorIsVisible(self.textView!)
                 }
             } else if obscuredHeight < 50 {
                 // SAFETY NET: If keyboard is moving off screen (height is very small or zero)
@@ -1741,7 +1741,7 @@ struct iOS26ScrollDetectingTextEditor: UIViewRepresentable {
                 // PATIENT APPROACH: Give iOS time to complete its swipe dismissal process
                 // then check if cleanup is needed
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    if textView.isFirstResponder {
+                    if self.textView?.isFirstResponder == true {
                         print("🎹 DELAYED SAFETY NET: Text view still first responder after swipe dismissal - cleaning up")
                         // Use the same method as the close button for consistency
                         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
@@ -1761,7 +1761,7 @@ struct iOS26ScrollDetectingTextEditor: UIViewRepresentable {
         
         // This handler specifically deals with keyboard dismissal to ensure the toolbar doesn't get stuck
         @objc private func keyboardWillHide(_ notification: Notification) {
-            guard let textView = textView,
+            guard textView != nil,
                   let animationDuration = notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double else {
                 return
             }
@@ -1780,8 +1780,8 @@ struct iOS26ScrollDetectingTextEditor: UIViewRepresentable {
                     
                     // Force the text view to resign first responder
                     // This ensures iOS properly cleans up the input accessory view
-                    if textView.isFirstResponder {
-                        textView.resignFirstResponder()
+                    if textView!.isFirstResponder {
+                        textView!.resignFirstResponder()
                     }
                     
                     // Reset alpha for next appearance after a short delay
@@ -1802,8 +1802,8 @@ struct iOS26ScrollDetectingTextEditor: UIViewRepresentable {
                     
                     // CRITICAL: Always resign first responder to ensure document gestures work
                     // This must happen for ALL keyboard dismissals, not just swipe-to-dismiss
-                    if textView.isFirstResponder {
-                        textView.resignFirstResponder()
+                    if textView!.isFirstResponder {
+                        textView!.resignFirstResponder()
                     }
                 }
             }
@@ -1815,9 +1815,9 @@ struct iOS26ScrollDetectingTextEditor: UIViewRepresentable {
             // EXTRA SAFETY: Double-check that text view really resigned first responder
             // This catches rare edge cases where the resign might not have worked
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                if textView.isFirstResponder {
+                if self.textView?.isFirstResponder == true {
                     print("🎹 EXTRA SAFETY: Text view still first responder after keyboard hide - forcing resign")
-                    textView.resignFirstResponder()
+                    self.textView?.resignFirstResponder()
                 }
             }
         }
@@ -1967,7 +1967,6 @@ struct iOS26ScrollDetectingTextEditor: UIViewRepresentable {
             // Capture current state
             let originalContentOffset = textView.contentOffset
             let originalSelectedRange = textView.selectedRange
-            let originalText = textView.text
             
             print("🛡️ Applying \(formattingType) with scroll protection")
             print("🛡️ Original offset: \(originalContentOffset), range: \(originalSelectedRange)")
@@ -2260,5 +2259,6 @@ struct iOS26ScrollDetectingTextEditor: UIViewRepresentable {
     }
 }
 #endif 
+
 
 

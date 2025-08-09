@@ -201,6 +201,9 @@ struct DocumentArea: View {
     @Binding var document: Letterspace_CanvasDocument
     @Environment(\.themeColors) var theme
     @Environment(\.colorScheme) var colorScheme
+    #if os(iOS)
+    @Environment(\.screen) private var screen
+    #endif
     @State private var isFocused: Bool = false
     @State private var isEditorFocused: Bool = false
     @Binding var isHeaderExpanded: Bool
@@ -253,6 +256,50 @@ struct DocumentArea: View {
     @State private var floatingTitleText: String = ""
     @State private var floatingSubtitleText: String = ""
     
+    #if os(iOS)
+    // Buffer used by native iOS 26 TextEditor so rich-text attributes persist during edits
+    @State private var attributedTextBuffer: AttributedString = AttributedString("")
+    
+    private func loadDocumentContent() {
+        guard let textElement = document.elements.first(where: { $0.type == .textBlock }) else {
+            print("📖 No text element found, creating empty content")
+            attributedTextBuffer = AttributedString("")
+            return
+        }
+        
+        // Try iOS 26 native AttributedString data first
+        if #available(iOS 26.0, *), let nativeData = textElement.attributedStringData {
+            do {
+                let attributedString = try JSONDecoder().decode(AttributedString.self, from: nativeData)
+                print("📖 Loaded native iOS 26 AttributedString with \(attributedString.runs.count) runs")
+                attributedTextBuffer = attributedString
+                return
+            } catch {
+                print("❌ Error loading native AttributedString: \(error)")
+            }
+        }
+        
+        // Fallback to RTF data
+        if let nsAttributed = textElement.attributedContent {
+            print("📖 Loading rich text content from RTF with \(nsAttributed.length) characters")
+            do {
+                let attributedString = try AttributedString(nsAttributed, including: \.uiKit)
+                print("📖 Successfully converted RTF to AttributedString with \(attributedString.runs.count) runs")
+                attributedTextBuffer = attributedString
+            } catch {
+                print("❌ Error converting NSAttributedString to AttributedString: \(error)")
+                let plain = String(nsAttributed.string)
+                attributedTextBuffer = AttributedString(plain)
+            }
+        } else {
+            // Final fallback to plain text
+            let plain = textElement.content
+            print("📖 Loading plain text content: '\(plain)'")
+            attributedTextBuffer = AttributedString(plain)
+        }
+    }
+    #endif
+    
     // Computed binding for document text content
     private var documentTextBinding: Binding<String> {
         Binding(
@@ -272,6 +319,28 @@ struct DocumentArea: View {
             }
         )
     }
+
+    // Computed binding for AttributedString text content (bridges to plain String storage)
+    #if os(iOS)
+    private var attributedDocumentTextBinding: Binding<AttributedString> {
+        Binding<AttributedString>(
+            get: {
+                let plain = document.elements.first(where: { $0.type == .textBlock })?.content ?? ""
+                return AttributedString(plain)
+            },
+            set: { newValue in
+                let plain = String(newValue.characters)
+                if let index = document.elements.firstIndex(where: { $0.type == .textBlock }) {
+                    document.elements[index].content = plain
+                } else {
+                    var newElement = DocumentElement(type: .textBlock)
+                    newElement.content = plain
+                    document.elements.append(newElement)
+                }
+            }
+        )
+    }
+    #endif
     @FocusState private var isFloatingTitleFocused: Bool
     @FocusState private var isFloatingSubtitleFocused: Bool
     @State private var showFloatingImageActionSheet: Bool = false
@@ -311,7 +380,11 @@ struct DocumentArea: View {
         let isPhone = UIDevice.current.userInterfaceIdiom == .phone
         if isPhone {
             // iPhone: Use 93% of screen width to match the dashboard layout
-            return UIScreen.main.bounds.width * 0.93
+            if #available(iOS 26.0, *) {
+                return screen.bounds.width * 0.93
+            } else {
+                return UIScreen.main.bounds.width * 0.93
+            }
         } else {
             // iPad: Keep original wider width
             return 800
@@ -373,7 +446,12 @@ struct DocumentArea: View {
                         }
                     } else if !isInHeaderArea && translation.width > 0 && abs(translation.width) > abs(translation.height) * 1.2 && swipeDownProgress == 0 {
                         // Horizontal swipe outside header area - handle right swipe navigation
-                        let maxDrag = UIScreen.main.bounds.width * 0.9
+                        let maxDrag: CGFloat
+                        if #available(iOS 26.0, *) {
+                            maxDrag = screen.bounds.width * 0.9
+                        } else {
+                            maxDrag = UIScreen.main.bounds.width * 0.9
+                        }
                         let rawOffset = translation.width
                         dragOffset = min(rawOffset, maxDrag)
                     }
@@ -396,7 +474,13 @@ struct DocumentArea: View {
                         
                         // Animate document sliding down off screen
                         withAnimation(.easeInOut(duration: 0.4)) {
-                            slideDownOffset = UIScreen.main.bounds.height // Slide down off screen
+                            let screenHeight: CGFloat
+                            if #available(iOS 26.0, *) {
+                                screenHeight = screen.bounds.height
+                            } else {
+                                screenHeight = UIScreen.main.bounds.height
+                            }
+                            slideDownOffset = screenHeight // Slide down off screen
                         }
                         
                         // Navigate back to dashboard after slide-down completes
@@ -415,7 +499,13 @@ struct DocumentArea: View {
                         HapticFeedback.impact(.medium)
                         
                         withAnimation(.easeOut(duration: 0.3)) {
-                            dragOffset = UIScreen.main.bounds.width
+                            let screenWidth: CGFloat
+                            if #available(iOS 26.0, *) {
+                                screenWidth = screen.bounds.width
+                            } else {
+                                screenWidth = UIScreen.main.bounds.width
+                            }
+                            dragOffset = screenWidth
                         }
                         
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
@@ -660,10 +750,21 @@ struct DocumentArea: View {
             VStack(spacing: 0) {
                 // Header section with dynamic spacer for smooth transition
                 if viewMode != .focus && !isDistractionFreeMode {
-                    // Header that continues collapsing even when invisible
+                    // When using the new AttributedCollapsingEditorView on iOS 26+, it renders
+                    // its own expanded/collapsed headers. Avoid duplicating a stickied header here.
+                    #if os(iOS)
+                    if #available(iOS 26.0, *) {
+                        EmptyView()
+                    } else {
+                        headerView
+                            .opacity(headerCollapseProgress < 0.85 ? 1.0 : 0.0)
+                            .transition(createHeaderTransition())
+                    }
+                    #else
                     headerView
-                        .opacity(headerCollapseProgress < 0.85 ? 1.0 : 0.0) // Fade out header content but keep collapsing
+                        .opacity(headerCollapseProgress < 0.85 ? 1.0 : 0.0)
                         .transition(createHeaderTransition())
+                    #endif
                 }
                 
                 // Document content - always has the same layout
@@ -676,25 +777,42 @@ struct DocumentArea: View {
             
             // Floating header overlay - never affects layout
             if viewMode != .focus && !isDistractionFreeMode && headerCollapseProgress >= 0.85 {
+                #if os(iOS)
+                if #available(iOS 26.0, *) {
+                    // Handled by AttributedCollapsingEditorView; skip duplicate overlay
+                } else {
+                    VStack {
+                        floatingCollapsedHeader
+                            .padding(.horizontal, 8)
+                            .padding(.top, {
+                                let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+                                return isPhone ? 20 : 8
+                            }())
+                            .opacity(max(0, min(1, (headerCollapseProgress - 0.85) / 0.15)))
+                        Spacer()
+                    }
+                    .allowsHitTesting(headerCollapseProgress >= 0.9)
+                    .onTapGesture {
+                        if isEditingFloatingTitle || isEditingFloatingSubtitle {
+                            isEditingFloatingTitle = false
+                            isEditingFloatingSubtitle = false
+                            isFloatingTitleFocused = false
+                            isFloatingSubtitleFocused = false
+                        }
+                    }
+                }
+                #else
                 VStack {
                     floatingCollapsedHeader
-                        .padding(.horizontal, 8) // Reduced from 16 to 8 for wider appearance
+                        .padding(.horizontal, 8)
                         .padding(.top, {
-                            #if os(iOS)
-                            let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-                            return isPhone ? 20 : 8 // Reduced from 40/16 to 20/8 to move higher
-                            #else
-                            return 8 // Reduced from 16 to 8
-                            #endif
+                            return 8
                         }())
-                        // Smooth opacity transition
                         .opacity(max(0, min(1, (headerCollapseProgress - 0.85) / 0.15)))
-                    
                     Spacer()
                 }
                 .allowsHitTesting(headerCollapseProgress >= 0.9)
                 .onTapGesture {
-                    // Cancel editing when tapping outside text fields
                     if isEditingFloatingTitle || isEditingFloatingSubtitle {
                         isEditingFloatingTitle = false
                         isEditingFloatingSubtitle = false
@@ -702,6 +820,7 @@ struct DocumentArea: View {
                         isFloatingSubtitleFocused = false
                     }
                 }
+                #endif
             }
         }
                         .frame(width: paperWidth)
@@ -2011,7 +2130,13 @@ struct DocumentArea: View {
                             
                             // Animate document sliding down off screen
                             withAnimation(.easeInOut(duration: 0.4)) {
-                                slideDownOffset = UIScreen.main.bounds.height // Slide down off screen
+                                let screenHeight: CGFloat
+                                if #available(iOS 26.0, *) {
+                                    screenHeight = screen.bounds.height
+                                } else {
+                                    screenHeight = UIScreen.main.bounds.height
+                                }
+                                slideDownOffset = screenHeight // Slide down off screen
                             }
                             
                             // Navigate back to dashboard after slide-down completes
@@ -2081,31 +2206,84 @@ struct DocumentArea: View {
                     )
 
                 #elseif os(iOS)
-                // iOS 26 Text Editor with Scroll Detection for Header Collapse
+                // iOS 26 Attributed editor with built-in collapsing headers
                 if #available(iOS 26.0, *) {
-                    iOS26ScrollDetectingTextEditor(
-                        document: $document,
-                        headerCollapseProgress: $headerCollapseProgress,
-                        text: documentTextBinding,
-                        maxScrollForCollapse: calculateDynamicMaxScrollForCollapse()
-                    )
-                    .allowsHitTesting(!isAnimatingHeaderCollapse)
-                    .onChange(of: headerCollapseProgress) { _, newProgress in
-                        // Trigger smoothing when headerCollapseProgress changes
-                        applySmoothingToHeaderProgress()
-                        print("🔄 Header progress changed to: \(newProgress)")
-                    }
-                    .overlay(
-                        GeometryReader { geometry in
-                            Color.clear // Use Color.clear for geometry reading
-                                .onAppear {
-                                    viewportHeight = geometry.size.height
-                                }
-                                .onChange(of: geometry.size.height) { _, newHeight in
-                                    viewportHeight = newHeight
-                                }
+                    AttributedCollapsingEditorView(
+                        text: $attributedTextBuffer,
+                        expandedHeader: {
+                            headerView
+                        },
+                        collapsedHeader: {
+                            collapsedTextOnlyHeaderView
                         }
                     )
+                    .onAppear {
+                        loadDocumentContent()
+                    }
+                    .onChange(of: document.id) { _, _ in
+                        loadDocumentContent()
+                    }
+                    .onChange(of: attributedTextBuffer) { updated in
+                        // Save both plain content and rich text data
+                        let plain = String(updated.characters)
+                        
+                        if let index = document.elements.firstIndex(where: { $0.type == .textBlock }) {
+                            document.elements[index].content = plain
+                            
+                            // Save native iOS 26 AttributedString data
+                            if #available(iOS 26.0, *) {
+                                do {
+                                    let nativeData = try JSONEncoder().encode(updated)
+                                    document.elements[index].attributedStringData = nativeData
+                                    print("💾 Saved native iOS 26 AttributedString with \(updated.runs.count) runs, \(nativeData.count) bytes")
+                                } catch {
+                                    print("❌ Error saving native AttributedString: \(error)")
+                                    document.elements[index].attributedStringData = nil
+                                }
+                            }
+                            
+                            // Also save as RTF for backwards compatibility
+                            do {
+                                let nsAttributed = try NSAttributedString(updated, including: \.uiKit)
+                                document.elements[index].attributedContent = nsAttributed
+                                print("💾 Also saved RTF backup with \(nsAttributed.length) characters")
+                            } catch {
+                                print("❌ Error saving RTF backup: \(error)")
+                                document.elements[index].attributedContent = nil
+                            }
+                        } else {
+                            var newElement = DocumentElement(type: .textBlock)
+                            newElement.content = plain
+                            
+                            // Save native iOS 26 AttributedString data
+                            if #available(iOS 26.0, *) {
+                                do {
+                                    let nativeData = try JSONEncoder().encode(updated)
+                                    newElement.attributedStringData = nativeData
+                                    print("💾 Saved native iOS 26 AttributedString (new element) with \(updated.runs.count) runs, \(nativeData.count) bytes")
+                                } catch {
+                                    print("❌ Error saving native AttributedString (new element): \(error)")
+                                }
+                            }
+                            
+                            // Also save as RTF for backwards compatibility
+                            do {
+                                let nsAttributed = try NSAttributedString(updated, including: \.uiKit)
+                                newElement.attributedContent = nsAttributed
+                            } catch {
+                                print("❌ Error saving RTF backup (new element): \(error)")
+                            }
+                            
+                            document.elements.append(newElement)
+                        }
+                        
+                        // Trigger document save
+                        document.modifiedAt = Date()
+                        DispatchQueue.global(qos: .userInitiated).async {
+                            document.save()
+                        }
+                    }
+                    // Native editor manages its own scroll; no extra hit-testing or viewport measurements needed
                 } else {
                     // Fallback for older iOS versions
                     IOSDocumentEditor(

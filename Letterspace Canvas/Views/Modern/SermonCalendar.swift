@@ -29,6 +29,9 @@ internal struct SermonCalendar: View {
     var allDocumentsPosition: DashboardView.AllDocumentsPosition = .default // For iPhone dynamic heights
     @Environment(\.themeColors) var theme
     @Environment(\.colorScheme) var colorScheme
+    #if os(iOS)
+    @Environment(\.screen) private var screen
+    #endif
     @Environment(\.carouselHeaderFont) var carouselHeaderFont
     @Environment(\.carouselIconSize) var carouselIconSize
     @Environment(\.carouselHeaderPadding) var carouselHeaderPadding
