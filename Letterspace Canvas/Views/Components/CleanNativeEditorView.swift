@@ -358,6 +358,17 @@ private struct FloatingHeaderCard: View {
         #endif
     }
 
+    // Compute intrinsic aspect ratio (width/height) for sizing the expanded image
+    private func imageAspectRatio(_ image: PlatformImage) -> CGFloat {
+        #if os(iOS)
+        let height = image.size.height
+        return height > 0 ? (image.size.width / height) : (16.0/9.0)
+        #else
+        let height = image.size.height
+        return height > 0 ? (image.size.width / height) : (16.0/9.0)
+        #endif
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             if isExpanded {
