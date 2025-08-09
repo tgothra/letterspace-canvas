@@ -329,16 +329,18 @@ private struct FloatingHeaderCard: View {
                 // Expanded state: Only show the image
                 if let image {
                     ZStack(alignment: .topTrailing) {
-                        #if os(iOS)
-                        Image(uiImage: image)
-                        #else
-                        Image(nsImage: image)
-                        #endif
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(maxWidth: .infinity, maxHeight: 140)
-                            .clipShape(RoundedRectangle(cornerRadius: 14))
-                            .matchedGeometryEffect(id: "headerImage", in: imageNamespace)
+                        Group {
+                            #if os(iOS)
+                            Image(uiImage: image)
+                            #else
+                            Image(nsImage: image)
+                            #endif
+                        }
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(maxWidth: .infinity, maxHeight: 140)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                        .matchedGeometryEffect(id: "headerImage", in: imageNamespace)
                         
                         // Subtle action buttons overlay
                         HStack(spacing: 8) {
@@ -422,19 +424,21 @@ private struct FloatingHeaderCard: View {
                                 }
                             }
                         } label: {
-                            #if os(iOS)
-                            Image(uiImage: image)
-                            #else
-                            Image(nsImage: image)
-                            #endif
-                                .resizable()
-                                .aspectRatio(16/9, contentMode: .fill)
-                                .frame(width: 120, height: 68) // Larger 16:9 ratio (120x68)
-                                .clipShape(RoundedRectangle(cornerRadius: 14))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 14)
-                                        .stroke(.quaternary, lineWidth: 0.5)
-                                )
+                            Group {
+                                #if os(iOS)
+                                Image(uiImage: image)
+                                #else
+                                Image(nsImage: image)
+                                #endif
+                            }
+                            .resizable()
+                            .aspectRatio(16/9, contentMode: .fill)
+                            .frame(width: 120, height: 68) // Larger 16:9 ratio (120x68)
+                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .stroke(.quaternary, lineWidth: 0.5)
+                            )
                                 .matchedGeometryEffect(id: "headerImage", in: imageNamespace)
                         }
                         .buttonStyle(.plain)
