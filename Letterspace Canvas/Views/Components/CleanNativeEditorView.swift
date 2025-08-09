@@ -331,6 +331,23 @@ private struct FloatingHeaderCard: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var isExpanded = false
     @Namespace private var imageNamespace
+    
+    @ViewBuilder
+    private func platformImage(_ image: PlatformImage) -> some View {
+        #if os(iOS)
+        Image(uiImage: image)
+        #else
+        Image(nsImage: image)
+        #endif
+    }
+    
+    private func decodeImage(from data: Data) -> PlatformImage? {
+        #if os(iOS)
+        return UIImage(data: data)
+        #else
+        return NSImage(data: data)
+        #endif
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -362,7 +379,7 @@ private struct FloatingHeaderCard: View {
                             let panel = NSOpenPanel()
                             panel.allowedContentTypes = [.image]
                             panel.allowsMultipleSelection = false
-                            if panel.runModal() == .OK, let url = panel.url, let data = try? Data(contentsOf: url), let img = Self.decodeImage(from: data) {
+                            if panel.runModal() == .OK, let url = panel.url, let data = try? Data(contentsOf: url), let img = decodeImage(from: data) {
                                 image = img
                                 onImagePicked(img, data)
                             }
