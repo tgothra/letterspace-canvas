@@ -190,14 +190,26 @@ struct ModernDocumentRow: View {
             onTap()
         }
         .contextMenu {
-            Button("View Details") { onShowDetails() }
+            Button(action: onShowDetails) {
+                Text("View Details")
+            }
             Divider()
-            Button(documentStatus.isPinned ? "Unpin" : "Pin") { onPin() }
-            Button(documentStatus.isWIP ? "Remove from WIP" : "Add to WIP") { onWIP() }
-            Button(documentStatus.isScheduled ? "Remove from Calendar" : "Add to Calendar") { onCalendar() }
-            Button("Schedule Presentation") { onCalendarAction() }
+            Button(action: onPin) {
+                Text(documentStatus.isPinned ? "Unpin" : "Pin")
+            }
+            Button(action: onWIP) {
+                Text(documentStatus.isWIP ? "Remove from WIP" : "Add to WIP")
+            }
+            Button(action: onCalendar) {
+                Text(documentStatus.isScheduled ? "Remove from Calendar" : "Add to Calendar")
+            }
+            Button(action: onCalendarAction) {
+                Text("Schedule Presentation")
+            }
             Divider()
-            Button("Delete", role: .destructive) { onDelete() }
+            Button(role: .destructive, action: onDelete) {
+                Text("Delete")
+            }
         }
     }
     
