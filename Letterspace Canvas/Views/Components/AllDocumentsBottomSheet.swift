@@ -539,12 +539,6 @@ struct AllDocumentsBottomSheet: View {
                     selectedFilterColumn = selectedFilterColumn == "Location" ? nil : "Location"
                 }
             )
-            
-            FilterPill(
-                title: "Last Modified",
-                isSelected: dateFilterType == .modified,
-                onTap: { /* This would trigger date filter change */ }
-            )
         }
     }
     

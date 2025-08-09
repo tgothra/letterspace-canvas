@@ -1582,14 +1582,30 @@ loadDocuments()
                         }
                         
                         Button(action: {
-                            selectedSortColumn = "date"
+                            selectedSortColumn = "dateModified"
                             updateDocumentSort()
                             HapticFeedback.impact(.light)
                         }) {
                             HStack {
-                                Image(systemName: "calendar")
-                                Text("Date")
-                                if selectedSortColumn == "date" {
+                                Image(systemName: "calendar.badge.clock")
+                                Text("Date Modified")
+                                if selectedSortColumn == "dateModified" {
+                                    Spacer()
+                                    Image(systemName: "checkmark")
+                                        .foregroundStyle(theme.accent)
+                                }
+                            }
+                        }
+
+                        Button(action: {
+                            selectedSortColumn = "dateCreated"
+                            updateDocumentSort()
+                            HapticFeedback.impact(.light)
+                        }) {
+                            HStack {
+                                Image(systemName: "calendar.badge.plus")
+                                Text("Date Created")
+                                if selectedSortColumn == "dateCreated" {
                                     Spacer()
                                     Image(systemName: "checkmark")
                                         .foregroundStyle(theme.accent)
@@ -2840,10 +2856,14 @@ loadDocuments()
                     title1.localizedCompare(title2) == .orderedAscending :
                     title1.localizedCompare(title2) == .orderedDescending
                 
-            case "date":
-                return isAscendingSortOrder ? 
+            case "dateModified":
+                return isAscendingSortOrder ?
                     doc1.modifiedAt < doc2.modifiedAt :
                     doc1.modifiedAt > doc2.modifiedAt
+            case "dateCreated":
+                return isAscendingSortOrder ?
+                    doc1.createdAt < doc2.createdAt :
+                    doc1.createdAt > doc2.createdAt
                 
             case "name":
                 let title1 = doc1.title.isEmpty ? "Untitled" : doc1.title
