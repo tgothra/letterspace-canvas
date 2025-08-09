@@ -329,7 +329,11 @@ private struct FloatingHeaderCard: View {
                 // Expanded state: Only show the image
                 if let image {
                     ZStack(alignment: .topTrailing) {
-                        Image(platformImage: image)
+                        #if os(iOS)
+                        Image(uiImage: image)
+                        #else
+                        Image(nsImage: image)
+                        #endif
                             .resizable()
                             .aspectRatio(contentMode: .fill)
                             .frame(maxWidth: .infinity, maxHeight: 140)
@@ -418,7 +422,11 @@ private struct FloatingHeaderCard: View {
                                 }
                             }
                         } label: {
-                            Image(platformImage: image)
+                            #if os(iOS)
+                            Image(uiImage: image)
+                            #else
+                            Image(nsImage: image)
+                            #endif
                                 .resizable()
                                 .aspectRatio(16/9, contentMode: .fill)
                                 .frame(width: 120, height: 68) // Larger 16:9 ratio (120x68)
