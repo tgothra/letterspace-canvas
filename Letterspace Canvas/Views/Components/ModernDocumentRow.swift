@@ -19,6 +19,64 @@ struct ModernDocumentRow: View {
     
     @State private var isHovered = false
     
+    // Platform-aware sizing to make macOS rows a bit larger for readability
+    private var iconDimension: CGFloat {
+        #if os(macOS)
+        return 24
+        #else
+        return 20
+        #endif
+    }
+    private var documentIconFontSize: CGFloat {
+        #if os(macOS)
+        return 20
+        #else
+        return 16
+        #endif
+    }
+    private var titleFontSize: CGFloat {
+        #if os(macOS)
+        return 16
+        #else
+        return 14
+        #endif
+    }
+    private var subtitleFontSize: CGFloat {
+        #if os(macOS)
+        return 13
+        #else
+        return 12
+        #endif
+    }
+    private var bulletFontSize: CGFloat {
+        #if os(macOS)
+        return 13
+        #else
+        return 12
+        #endif
+    }
+    private var metaFontSize: CGFloat {
+        #if os(macOS)
+        return 12
+        #else
+        return 11
+        #endif
+    }
+    private var statusIconFontSize: CGFloat {
+        #if os(macOS)
+        return 11
+        #else
+        return 10
+        #endif
+    }
+    private var rowVerticalPadding: CGFloat {
+        #if os(macOS)
+        return 14
+        #else
+        return 12
+        #endif
+    }
+
     private var formattedDate: String {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
@@ -70,38 +128,38 @@ struct ModernDocumentRow: View {
                     Image(nsImage: headerImage)
                         .resizable()
                         .aspectRatio(contentMode: .fill)
-                        .frame(width: 20, height: 20)
+                        .frame(width: iconDimension, height: iconDimension)
                         .clipShape(RoundedRectangle(cornerRadius: 4))
                     #else
                     Image(uiImage: headerImage)
                         .resizable()
                         .aspectRatio(contentMode: .fill)
-                        .frame(width: 20, height: 20)
+                        .frame(width: iconDimension, height: iconDimension)
                         .clipShape(RoundedRectangle(cornerRadius: 4))
                     #endif
                 } else {
                     // Default document icon
                     Image(systemName: "doc.text")
-                        .font(.system(size: 16, weight: .medium))
+                        .font(.system(size: documentIconFontSize, weight: .medium))
                         .foregroundColor(.secondary)
-                        .frame(width: 20, height: 20)
+                        .frame(width: iconDimension, height: iconDimension)
                 }
                 
                 // Name
                 Text(document.title.isEmpty ? "Untitled" : document.title)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.system(size: titleFontSize, weight: .medium))
                     .foregroundColor(colorScheme == .dark ? .white : .black)
                     .lineLimit(1)
                 
                 if !document.subtitle.isEmpty {
                     // Bullet separator
                     Text("•")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.system(size: bulletFontSize, weight: .medium))
                         .foregroundColor(.secondary)
                     
                     // Subtitle
                     Text(document.subtitle)
-                        .font(.system(size: 12))
+                        .font(.system(size: subtitleFontSize))
                         .foregroundColor(.secondary)
                         .lineLimit(1)
                 }
@@ -129,7 +187,7 @@ struct ModernDocumentRow: View {
                 
                 // Date (modified or created based on dateFilterType)
                 Text(formattedDate)
-                    .font(.system(size: 11))
+                    .font(.system(size: metaFontSize))
                     .foregroundColor(.secondary)
                 
                 // Primary filter/tag (only show if there's an active filter)
@@ -140,7 +198,7 @@ struct ModernDocumentRow: View {
                         .foregroundColor(.secondary)
                     
                     Text(filter)
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.system(size: metaFontSize, weight: .medium))
                         .foregroundColor(theme.primary)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
@@ -156,26 +214,26 @@ struct ModernDocumentRow: View {
                 HStack(spacing: 4) {
                     if documentStatus.isPinned {
                         Image(systemName: "pin.fill")
-                            .font(.system(size: 10, weight: .medium))
+                            .font(.system(size: statusIconFontSize, weight: .medium))
                             .foregroundColor(.orange)
                     }
                     
                     if documentStatus.isWIP {
                         Image(systemName: "pencil.circle.fill")
-                            .font(.system(size: 10, weight: .medium))
+                            .font(.system(size: statusIconFontSize, weight: .medium))
                             .foregroundColor(.blue)
                     }
                     
                     if documentStatus.isScheduled {
                         Image(systemName: "calendar.circle.fill")
-                            .font(.system(size: 10, weight: .medium))
+                            .font(.system(size: statusIconFontSize, weight: .medium))
                             .foregroundColor(.green)
                     }
                 }
             }
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.vertical, rowVerticalPadding)
         .background(
             RoundedRectangle(cornerRadius: 8)
                 .fill(isHovered ? Color.gray.opacity(0.1) : Color.clear)
