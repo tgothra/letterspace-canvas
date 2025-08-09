@@ -1470,7 +1470,8 @@ loadDocuments()
                             .background(Color.black, in: Circle())
                     }
                     
-                    // Filter Dropdown
+                    // Filter Dropdown (iOS only)
+                    #if os(iOS)
                     Menu {
                         // Title and divider
                         Text("Filter Documents")
@@ -1496,7 +1497,7 @@ loadDocuments()
                                         Image(systemName: column.icon)
                                     }
                                 }
-                                .disabled({
+                        .disabled({
                                     // Gray out (disable) the active filter to show it's selected
                                     let isActive = (column.id == "series" && selectedFilterColumn == "series") ||
                                                   (column.id == "location" && selectedFilterColumn == "location") ||
@@ -1534,6 +1535,7 @@ loadDocuments()
                             .frame(width: 30, height: 30)
                             .background(selectedFilterColumn != nil ? theme.accent : Color.orange, in: Circle())
                     }
+                    #endif
                     
                     // Sort Dropdown  
                     Menu {
@@ -1608,6 +1610,37 @@ loadDocuments()
                             }
                         }
                         
+                        #if os(macOS)
+                        Button(action: {
+                            selectedSortColumn = "series"
+                            updateDocumentSort()
+                        }) {
+                            HStack {
+                                Image(systemName: "square.stack")
+                                Text("Series")
+                                if selectedSortColumn == "series" {
+                                    Spacer()
+                                    Image(systemName: "checkmark")
+                                        .foregroundStyle(theme.accent)
+                                }
+                            }
+                        }
+                        Button(action: {
+                            selectedSortColumn = "location"
+                            updateDocumentSort()
+                        }) {
+                            HStack {
+                                Image(systemName: "mappin.and.ellipse")
+                                Text("Location")
+                                if selectedSortColumn == "location" {
+                                    Spacer()
+                                    Image(systemName: "checkmark")
+                                        .foregroundStyle(theme.accent)
+                                }
+                            }
+                        }
+                        #endif
+
                         Divider()
                         
                         Button(action: {
@@ -2852,7 +2885,19 @@ loadDocuments()
                     title1.localizedCompare(title2) == .orderedDescending
                 
             default:
-                // Default to name sorting
+                #if os(macOS)
+                if selectedSortColumn == "series" {
+                    let s1 = doc1.series?.name ?? ""
+                    let s2 = doc2.series?.name ?? ""
+                    return isAscendingSortOrder ? (s1.localizedCompare(s2) == .orderedAscending) : (s1.localizedCompare(s2) == .orderedDescending)
+                }
+                if selectedSortColumn == "location" {
+                    let l1 = doc1.variations.first?.location ?? ""
+                    let l2 = doc2.variations.first?.location ?? ""
+                    return isAscendingSortOrder ? (l1.localizedCompare(l2) == .orderedAscending) : (l1.localizedCompare(l2) == .orderedDescending)
+                }
+                #endif
+                // Fallback to name sorting
                 let title1 = doc1.title.isEmpty ? "Untitled" : doc1.title
                 let title2 = doc2.title.isEmpty ? "Untitled" : doc2.title
                 return isAscendingSortOrder ? 
