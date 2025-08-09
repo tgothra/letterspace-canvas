@@ -1617,7 +1617,6 @@ loadDocuments()
                             }
                         }
                         
-                        #if os(macOS)
                         Button(action: {
                             selectedSortColumn = "series"
                             updateDocumentSort()
@@ -1646,7 +1645,6 @@ loadDocuments()
                                 }
                             }
                         }
-                        #endif
 
                         Divider()
                         
@@ -2892,7 +2890,6 @@ loadDocuments()
                     title1.localizedCompare(title2) == .orderedDescending
                 
             default:
-                #if os(macOS)
                 if selectedSortColumn == "series" {
                     let s1 = doc1.series?.name ?? ""
                     let s2 = doc2.series?.name ?? ""
@@ -2903,7 +2900,6 @@ loadDocuments()
                     let l2 = doc2.variations.first?.location ?? ""
                     return isAscendingSortOrder ? (l1.localizedCompare(l2) == .orderedAscending) : (l1.localizedCompare(l2) == .orderedDescending)
                 }
-                #endif
                 // Fallback to name sorting
                 let title1 = doc1.title.isEmpty ? "Untitled" : doc1.title
                 let title2 = doc2.title.isEmpty ? "Untitled" : doc2.title
