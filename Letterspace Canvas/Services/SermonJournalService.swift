@@ -432,12 +432,20 @@ struct FollowUpSuggestionsView: View {
                 .padding(.vertical, 16)
             }
             .navigationTitle("Follow-Up Actions")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Done", action: onDismiss)
                 }
             }
+            #else
+            .toolbar {
+                ToolbarItem(placement: .automatic) {
+                    Button("Done", action: onDismiss)
+                }
+            }
+            #endif
         }
     }
     
