@@ -1480,34 +1480,15 @@ loadDocuments()
                         Divider()
                         
                         ForEach(ListColumn.allColumns) { column in
-                            if column.id != "name" {
+                            if column.id != "name" && column.id != "date" && column.id != "createdDate" {
                                 Button(action: {
-                                    // Handle date columns differently - they change dateFilterType instead of being filters
-                                    if column.id == "date" {
-                                        dateFilterType = .modified
-                                        isDateFilterExplicitlySelected = true
-                                        selectedFilterColumn = nil // Clear column filters
-                                        selectedTags.removeAll()
-                                        updateVisibleColumns()
-                                        tableRefreshID = UUID()
-                                        HapticFeedback.impact(.light)
-                                    } else if column.id == "createdDate" {
-                                        dateFilterType = .created
-                                        isDateFilterExplicitlySelected = true
-                                        selectedFilterColumn = nil // Clear column filters
-                                        selectedTags.removeAll()
-                                        updateVisibleColumns()
-                                        tableRefreshID = UUID()
-                                        HapticFeedback.impact(.light)
-                                    } else {
-                                        // Regular filter columns
-                                        selectedFilterColumn = selectedFilterColumn == column.id ? nil : column.id
-                                        isDateFilterExplicitlySelected = false // Clear date filter flag
-                                        selectedTags.removeAll()
-                                        updateVisibleColumns()
-                                        tableRefreshID = UUID()
-                                        HapticFeedback.impact(.light)
-                                    }
+                                    // Regular filter columns (dates are handled in Sort)
+                                    selectedFilterColumn = selectedFilterColumn == column.id ? nil : column.id
+                                    isDateFilterExplicitlySelected = false
+                                    selectedTags.removeAll()
+                                    updateVisibleColumns()
+                                    tableRefreshID = UUID()
+                                    HapticFeedback.impact(.light)
                                 }) {
                                     Label {
                                         Text(column.title)
@@ -1517,9 +1498,7 @@ loadDocuments()
                                 }
                                 .disabled({
                                     // Gray out (disable) the active filter to show it's selected
-                                    let isActive = (column.id == "date" && dateFilterType == .modified && isDateFilterExplicitlySelected) ||
-                                                  (column.id == "createdDate" && dateFilterType == .created && isDateFilterExplicitlySelected) ||
-                                                  (column.id == "series" && selectedFilterColumn == "series") ||
+                                    let isActive = (column.id == "series" && selectedFilterColumn == "series") ||
                                                   (column.id == "location" && selectedFilterColumn == "location") ||
                                                   (column.id == "presentedDate" && selectedFilterColumn == "presentedDate")
                                     return isActive
