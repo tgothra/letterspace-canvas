@@ -1,8 +1,8 @@
 import SwiftUI
-import UIKit
 import Combine
 
 #if os(iOS)
+import UIKit
 /// A pure-SwiftUI scrolling container that hosts:
 /// - An expanded header at the top
 /// - A growing, non-scrollable AttributedString editor
