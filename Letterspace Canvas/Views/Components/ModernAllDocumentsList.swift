@@ -244,6 +244,38 @@ struct FilterPill: View {
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.themeColors) var theme
     
+    private var backgroundFillColor: Color {
+        if colorScheme == .dark {
+            #if os(iOS)
+            return Color(.systemGray5)
+            #else
+            return Color(NSColor.controlBackgroundColor)
+            #endif
+        } else {
+            #if os(iOS)
+            return Color(.systemGray6)
+            #else
+            return Color(NSColor.controlColor)
+            #endif
+        }
+    }
+    
+    private var strokeColor: Color {
+        if colorScheme == .dark {
+            #if os(iOS)
+            return Color(.systemGray4)
+            #else
+            return Color(NSColor.separatorColor)
+            #endif
+        } else {
+            #if os(iOS)
+            return Color(.systemGray5)
+            #else
+            return Color(NSColor.controlBackgroundColor)
+            #endif
+        }
+    }
+    
     var body: some View {
         Button(action: onTap) {
             Text(title)
@@ -253,33 +285,9 @@ struct FilterPill: View {
                 .padding(.vertical, 8)
                 .background(
                     RoundedRectangle(cornerRadius: 20)
-                        .fill(isSelected ? theme.primary : (colorScheme == .dark ? 
-                            #if os(iOS)
-                            Color(.systemGray5)
-                            #else
-                            Color(NSColor.controlBackgroundColor)
-                            #endif
-                            : 
-                            #if os(iOS)
-                            Color(.systemGray6)
-                            #else
-                            Color(NSColor.controlColor)
-                            #endif
-                        ))
+                        .fill(isSelected ? theme.primary : backgroundFillColor)
                         .stroke(
-                            isSelected ? Color.clear : (colorScheme == .dark ? 
-                            #if os(iOS)
-                            Color(.systemGray4)
-                            #else
-                            Color(NSColor.separatorColor)
-                            #endif
-                            : 
-                            #if os(iOS)
-                            Color(.systemGray5)
-                            #else
-                            Color(NSColor.controlBackgroundColor)
-                            #endif
-                            ),
+                            isSelected ? Color.clear : strokeColor,
                             lineWidth: 1
                         )
                 )
