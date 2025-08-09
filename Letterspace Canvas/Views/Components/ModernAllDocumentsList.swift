@@ -120,6 +120,7 @@ struct ModernAllDocumentsList: View {
                 selectedTags.removeAll()
                 selectedFilterColumn = nil
                 selectedFilterCategory = "Filter"
+                dateFilterType = .modified // Reset to default sort
             }) {
                 Text("Clear")
             }
@@ -131,35 +132,50 @@ struct ModernAllDocumentsList: View {
     }
     
     private var filterSection: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
-                // Filter category toggle
+        VStack(spacing: 12) {
+            // Filter row
+            ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
-                    FilterPill(
-                        title: "Filter",
-                        isSelected: selectedFilterCategory == "Filter",
-                        onTap: { selectedFilterCategory = "Filter" }
-                    )
+                    // Filter category toggle
+                    HStack(spacing: 12) {
+                        FilterPill(
+                            title: "Filter",
+                            isSelected: selectedFilterCategory == "Filter",
+                            onTap: { selectedFilterCategory = "Filter" }
+                        )
+                        
+                        FilterPill(
+                            title: "Tags",
+                            isSelected: selectedFilterCategory == "Tags",
+                            onTap: { selectedFilterCategory = "Tags" }
+                        )
+                    }
                     
-                    FilterPill(
-                        title: "Tags",
-                        isSelected: selectedFilterCategory == "Tags",
-                        onTap: { selectedFilterCategory = "Tags" }
-                    )
+                    Rectangle()
+                        .fill(Color.secondary.opacity(0.3))
+                        .frame(width: 1, height: 24)
+                    
+                    // Filter options based on category
+                    if selectedFilterCategory == "Filter" {
+                        filterOptions
+                    } else {
+                        tagOptions
+                    }
                 }
-                
-                Rectangle()
-                    .fill(Color.secondary.opacity(0.3))
-                    .frame(width: 1, height: 24)
-                
-                // Filter options based on category
-                if selectedFilterCategory == "Filter" {
-                    filterOptions
-                } else {
-                    tagOptions
-                }
+                .padding(.horizontal, 4)
             }
-            .padding(.horizontal, 4)
+            
+            // Sort row
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    Text("Sort by:")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.secondary)
+                    
+                    sortOptions
+                }
+                .padding(.horizontal, 4)
+            }
         }
     }
     
@@ -180,11 +196,25 @@ struct ModernAllDocumentsList: View {
                     selectedFilterColumn = selectedFilterColumn == "Location" ? nil : "Location"
                 }
             )
+        }
+    }
+    
+    private var sortOptions: some View {
+        HStack(spacing: 12) {
+            FilterPill(
+                title: "Date Modified",
+                isSelected: dateFilterType == .modified,
+                onTap: {
+                    dateFilterType = .modified
+                }
+            )
             
             FilterPill(
-                title: "Last Modified",
-                isSelected: dateFilterType == .modified,
-                onTap: { /* This would trigger date filter change */ }
+                title: "Date Created",
+                isSelected: dateFilterType == .created,
+                onTap: {
+                    dateFilterType = .created
+                }
             )
         }
     }
