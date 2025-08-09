@@ -253,9 +253,33 @@ struct FilterPill: View {
                 .padding(.vertical, 8)
                 .background(
                     RoundedRectangle(cornerRadius: 20)
-                        .fill(isSelected ? theme.primary : (colorScheme == .dark ? Color(.systemGray5) : Color(.systemGray6)))
+                        .fill(isSelected ? theme.primary : (colorScheme == .dark ? 
+                            #if os(iOS)
+                            Color(.systemGray5)
+                            #else
+                            Color(NSColor.controlBackgroundColor)
+                            #endif
+                            : 
+                            #if os(iOS)
+                            Color(.systemGray6)
+                            #else
+                            Color(NSColor.controlColor)
+                            #endif
+                        ))
                         .stroke(
-                            isSelected ? Color.clear : (colorScheme == .dark ? Color(.systemGray4) : Color(.systemGray5)),
+                            isSelected ? Color.clear : (colorScheme == .dark ? 
+                            #if os(iOS)
+                            Color(.systemGray4)
+                            #else
+                            Color(NSColor.separatorColor)
+                            #endif
+                            : 
+                            #if os(iOS)
+                            Color(.systemGray5)
+                            #else
+                            Color(NSColor.controlBackgroundColor)
+                            #endif
+                            ),
                             lineWidth: 1
                         )
                 )
