@@ -117,6 +117,18 @@ struct ModernDocumentRow: View {
         return nil
     }
     
+    // macOS: Always-visible badges next to date
+    #if os(macOS)
+    private var seriesName: String? {
+        if let name = document.series?.name, !name.isEmpty { return name }
+        return nil
+    }
+    private var locationName: String? {
+        if let loc = document.variations.first?.location, !loc.isEmpty { return loc }
+        return nil
+    }
+    #endif
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             // First line: Name • Subtitle
@@ -189,6 +201,38 @@ struct ModernDocumentRow: View {
                 Text(formattedDate)
                     .font(.system(size: metaFontSize))
                     .foregroundColor(.secondary)
+                
+                // macOS: Show Series and Location badges next to the date
+                #if os(macOS)
+                if let series = seriesName {
+                    Text("•")
+                        .font(.system(size: metaFontSize))
+                        .foregroundColor(.secondary)
+                    Text(series)
+                        .font(.system(size: metaFontSize, weight: .medium))
+                        .foregroundColor(theme.primary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(theme.primary.opacity(0.1))
+                        )
+                }
+                if let loc = locationName {
+                    Text("•")
+                        .font(.system(size: metaFontSize))
+                        .foregroundColor(.secondary)
+                    Text(loc)
+                        .font(.system(size: metaFontSize, weight: .medium))
+                        .foregroundColor(theme.primary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(theme.primary.opacity(0.1))
+                        )
+                }
+                #endif
                 
                 // Primary filter/tag (only show if there's an active filter)
                 if let filter = primaryFilter {
