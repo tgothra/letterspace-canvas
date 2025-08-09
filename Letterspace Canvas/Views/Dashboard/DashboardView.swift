@@ -728,19 +728,19 @@ private func deleteSelectedDocuments() {
                             let screenWidth = UIScreen.main.bounds.width
                             let isPhone = UIDevice.current.userInterfaceIdiom == .phone
                             if isPhone {
-                                return min(120, screenWidth * 0.25) // 25% of screen width for iPhone, max 120 (reduced from 30% and 150)
+                                return min(160, screenWidth * 0.3) // bigger on iPhone
                             } else {
-                                return min(200, screenWidth * 0.25) // 25% of screen width for iPad, max 200
+                                return min(260, screenWidth * 0.28) // bigger on iPad
                             }
                             #else
-                            return 150 // macOS fixed size (reduced from 200)
+                            return 220 // macOS: quite a bit bigger
                             #endif
                         }(), maxHeight: {
                             #if os(iOS)
                             let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-                            return isPhone ? 45 : 80 // iPhone: smaller (reduced from 60), iPad: larger
+                            return isPhone ? 56 : 96 // increase heights
                             #else
-                            return 60 // macOS fixed size (reduced from 80)
+                            return 88 // macOS taller
                             #endif
                         }())
                 }
@@ -763,7 +763,7 @@ private func deleteSelectedDocuments() {
                     Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
                         .resizable()
                         .aspectRatio(contentMode: .fit)
-                        .frame(maxWidth: min(140, UIScreen.main.bounds.width * 0.18), maxHeight: 55)
+                        .frame(maxWidth: min(180, UIScreen.main.bounds.width * 0.22), maxHeight: 68)
                         .onTapGesture {
                             activeSheet = .tallyLabel
                         }
@@ -786,10 +786,10 @@ private func deleteSelectedDocuments() {
                     if UIDevice.current.userInterfaceIdiom == .phone {
                         HStack {
                             Spacer()
-                            Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
+                    Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
                                 .resizable()
                                 .aspectRatio(contentMode: .fit)
-                                .frame(maxWidth: min(80, UIScreen.main.bounds.width * 0.2), maxHeight: 30)
+                        .frame(maxWidth: min(110, UIScreen.main.bounds.width * 0.22), maxHeight: 40)
                                 .onTapGesture {
                                     activeSheet = .tallyLabel
                                 }
@@ -855,7 +855,7 @@ private func deleteSelectedDocuments() {
                 Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
-                    .frame(maxWidth: 150, maxHeight: 60)
+                    .frame(maxWidth: 220, maxHeight: 88)
             }
             .buttonStyle(PlainButtonStyle())
             .help("About Tallē")
@@ -876,10 +876,10 @@ private func deleteSelectedDocuments() {
             if UIDevice.current.userInterfaceIdiom == .pad {
                 HStack {
                     Spacer()
-                    Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
+                Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
                         .resizable()
                         .aspectRatio(contentMode: .fit)
-                        .frame(maxWidth: min(140, UIScreen.main.bounds.width * 0.18), maxHeight: 55)
+                    .frame(maxWidth: min(180, UIScreen.main.bounds.width * 0.22), maxHeight: 68)
                         .onTapGesture {
                             activeSheet = .tallyLabel
                         }
@@ -915,7 +915,7 @@ private func deleteSelectedDocuments() {
                 Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
-                    .frame(maxWidth: 150, maxHeight: 60)
+                    .frame(maxWidth: 220, maxHeight: 88)
             }
             .buttonStyle(PlainButtonStyle())
             .help("About Tallē")
@@ -1362,7 +1362,7 @@ loadDocuments()
                             Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
                                 .resizable()
                                 .scaledToFit()
-                                .frame(height: 20)
+                                .frame(height: 26)
                         }
                         .buttonStyle(.plain)
                         .help("Click to see Tallē label")
@@ -1373,7 +1373,7 @@ loadDocuments()
                             Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
                                 .resizable()
                                 .scaledToFit()
-                                .frame(height: 20)
+                                .frame(height: 26)
                         }
                         .buttonStyle(.plain)
         #endif
