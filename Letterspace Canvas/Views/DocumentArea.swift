@@ -2194,21 +2194,32 @@ struct DocumentArea: View {
                 if #available(macOS 15.0, *) {
                     // Use unified SwiftUI editor on macOS 15+
                     CleanNativeEditorView(document: $document, isDistractionFreeMode: viewMode.isDistractionFreeMode)
+                        .overlay(
+                            GeometryReader { geometry in
+                                Color.clear // Use Color.clear for geometry reading
+                                    .onAppear {
+                                        viewportHeight = geometry.size.height
+                                    }
+                                    .onChange(of: geometry.size.height) { _, newHeight in
+                                        viewportHeight = newHeight
+                                    }
+                            }
+                        )
                 } else {
                     // Fallback to existing AppKit-based editor on older macOS
                     DocumentEditorView(document: $document, selectedBlock: .constant(nil))
+                        .overlay(
+                            GeometryReader { geometry in
+                                Color.clear // Use Color.clear for geometry reading
+                                    .onAppear {
+                                        viewportHeight = geometry.size.height
+                                    }
+                                    .onChange(of: geometry.size.height) { _, newHeight in
+                                        viewportHeight = newHeight
+                                    }
+                            }
+                        )
                 }
-                    .overlay(
-                        GeometryReader { geometry in
-                            Color.clear // Use Color.clear for geometry reading
-                                .onAppear {
-                                    viewportHeight = geometry.size.height
-                                }
-                                .onChange(of: geometry.size.height) { _, newHeight in
-                                    viewportHeight = newHeight
-                                }
-                        }
-                    )
 
                 #elseif os(iOS)
                 // iOS 26 Attributed editor with built-in collapsing headers
