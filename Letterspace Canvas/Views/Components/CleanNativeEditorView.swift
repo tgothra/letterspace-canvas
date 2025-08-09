@@ -378,7 +378,7 @@ private struct FloatingHeaderCard: View {
                             panel.allowedContentTypes = [.image]
                             panel.allowsMultipleSelection = false
                             if panel.runModal() == .OK, let url = panel.url, let data = try? Data(contentsOf: url), let img = decodeImage(from: data) {
-                                image.wrappedValue = img
+                                image = img
                                 onImagePicked(img, data)
                             }
                         } label: {
