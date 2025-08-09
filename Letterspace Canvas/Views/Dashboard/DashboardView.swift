@@ -982,7 +982,10 @@ var body: some View {
             if let calendarArray = UserDefaults.standard.array(forKey: "CalendarDocuments") as? [String] {
                 calendarDocuments = Set(calendarArray)
             }
-            loadDocuments()
+            // Only load documents if we don't already have them (smooth navigation)
+            if documents.isEmpty {
+                loadDocuments()
+            }
         }
                 .onChange(of: refreshTrigger) {
 loadDocuments()
@@ -1305,8 +1308,8 @@ loadDocuments()
     // NEW: Extracted computed property for the main dashboard layout
     @ViewBuilder
     private var dashboardContent: some View {
-        if isLoadingDocuments {
-            // Show skeleton loading when documents are loading
+        if isLoadingDocuments && documents.isEmpty {
+            // Only show skeleton loading when documents are actually loading AND we have no documents
             DashboardSkeleton()
         } else {
                 // NEW: Simple dashboard layout with proper iOS 26 safe area handling
