@@ -106,6 +106,13 @@ struct DashboardView: View {
     @State private var selectedJournalDocument: Letterspace_CanvasDocument?
     @State private var cachedFilteredDocuments: [Letterspace_CanvasDocument] = []
     @State private var cachedSortedFilteredDocuments: [Letterspace_CanvasDocument] = []
+    @State private var aiCuratedSermons: [CuratedSermon] = []
+    @State private var isGeneratingInsights: Bool = false
+    @State private var selectedCurationType: CurationType = .insights
+    @State private var showCurationTypeDropdown = false
+    @State private var showAllJournalEntriesSheet: Bool = false
+    @State private var selectedJournalEntry: SermonJournalEntry? = nil
+    @State private var showJournalFeedSheet: Bool = false
     @State private var showReflectionSelectionSheet = false
     @State private var showPreachItAgainDetailsSheet = false
     @State private var selectedPreachItAgainDocument: Letterspace_CanvasDocument?
@@ -4720,12 +4727,6 @@ loadDocuments()
     
     // REMOVED: Duplicate function - using the enhanced version below
     
-    // Add state for AI-powered curation
-    @State private var aiCuratedSermons: [CuratedSermon] = []
-    @State private var isGeneratingInsights: Bool = false
-    @State private var selectedCurationType: CurationType = .insights
-    @State private var showCurationTypeDropdown = false
-    
     // Generate AI insight for a sermon
     private func generateAIInsight(for document: Letterspace_CanvasDocument) -> String {
         // Use the existing AI service to generate insights
@@ -4960,9 +4961,6 @@ loadDocuments()
     }
     
     // MARK: - Journal Entries Sheet State
-    @State private var showAllJournalEntriesSheet: Bool = false
-    @State private var selectedJournalEntry: SermonJournalEntry? = nil
-    @State private var showJournalFeedSheet: Bool = false
     
     // Invisible anchor to attach sheets for journal entries
     private var journalEntriesSheets: some View {
