@@ -96,12 +96,11 @@ struct CleanNativeEditorView: View {
         #endif
     }
     
-    @ViewBuilder
-    private func platformImage(_ image: PlatformImage) -> some View {
+    private func platformImage(_ image: PlatformImage) -> Image {
         #if os(iOS)
-        Image(uiImage: image)
+        return Image(uiImage: image)
         #else
-        Image(nsImage: image)
+        return Image(nsImage: image)
         #endif
     }
 
@@ -332,12 +331,11 @@ private struct FloatingHeaderCard: View {
     @State private var isExpanded = false
     @Namespace private var imageNamespace
     
-    @ViewBuilder
-    private func platformImage(_ image: PlatformImage) -> some View {
+    private func platformImage(_ image: PlatformImage) -> Image {
         #if os(iOS)
-        Image(uiImage: image)
+        return Image(uiImage: image)
         #else
-        Image(nsImage: image)
+        return Image(nsImage: image)
         #endif
     }
     
