@@ -104,15 +104,6 @@ struct DashboardView: View {
     @State private var showTagManager = false
     @State private var showSermonJournalSheet = false
     @State private var selectedJournalDocument: Letterspace_CanvasDocument?
-    @State private var cachedFilteredDocuments: [Letterspace_CanvasDocument] = []
-    @State private var cachedSortedFilteredDocuments: [Letterspace_CanvasDocument] = []
-    @State private var aiCuratedSermons: [CuratedSermon] = []
-    @State private var isGeneratingInsights: Bool = false
-    @State private var selectedCurationType: CurationType = .insights
-    @State private var showCurationTypeDropdown = false
-    @State private var showAllJournalEntriesSheet: Bool = false
-    @State private var selectedJournalEntry: SermonJournalEntry? = nil
-    @State private var showJournalFeedSheet: Bool = false
     @State private var showReflectionSelectionSheet = false
     @State private var showPreachItAgainDetailsSheet = false
     @State private var selectedPreachItAgainDocument: Letterspace_CanvasDocument?
@@ -1314,23 +1305,12 @@ loadDocuments()
     // NEW: Extracted computed property for the main dashboard layout
     @ViewBuilder
     private var dashboardContent: some View {
-        #if os(iOS)
         if isLoadingDocuments {
-            // Show skeleton loading when documents are loading (iOS only)
+            // Show skeleton loading when documents are loading
             DashboardSkeleton()
         } else {
-            dashboardContentBody
-        }
-        #else
-        // macOS: Always show content immediately to avoid unnecessary skeleton flashes
-        dashboardContentBody
-        #endif
-    }
-    
-    @ViewBuilder
-    private var dashboardContentBody: some View {
-        // NEW: Simple dashboard layout with proper iOS 26 safe area handling
-        ZStack {
+                // NEW: Simple dashboard layout with proper iOS 26 safe area handling
+                ZStack {
                     // No background needed - let the gradient from MainLayout show through
                     Color.clear
                         .ignoresSafeArea(.all)
@@ -2025,7 +2005,8 @@ loadDocuments()
     
     private func loadDocuments() {
         // Only set loading state if this isn't a swipe-down navigation
-        if !isSwipeDownNavigation {
+        // and if we don't already have documents loaded (avoid unnecessary skeleton on macOS)
+        if !isSwipeDownNavigation && documents.isEmpty {
             isLoadingDocuments = true
         }
         
@@ -4090,6 +4071,9 @@ loadDocuments()
         .animation(.spring(response: 0.6, dampingFraction: 0.75), value: showFloatingSidebar)
     }
 
+    @State private var cachedFilteredDocuments: [Letterspace_CanvasDocument] = []
+    @State private var cachedSortedFilteredDocuments: [Letterspace_CanvasDocument] = []
+
     // MARK: - Notification Setup
     
     private func setupNotificationObservers() {
@@ -4727,6 +4711,12 @@ loadDocuments()
     
     // REMOVED: Duplicate function - using the enhanced version below
     
+    // Add state for AI-powered curation
+    @State private var aiCuratedSermons: [CuratedSermon] = []
+    @State private var isGeneratingInsights: Bool = false
+    @State private var selectedCurationType: CurationType = .insights
+    @State private var showCurationTypeDropdown = false
+    
     // Generate AI insight for a sermon
     private func generateAIInsight(for document: Letterspace_CanvasDocument) -> String {
         // Use the existing AI service to generate insights
@@ -4961,6 +4951,9 @@ loadDocuments()
     }
     
     // MARK: - Journal Entries Sheet State
+    @State private var showAllJournalEntriesSheet: Bool = false
+    @State private var selectedJournalEntry: SermonJournalEntry? = nil
+    @State private var showJournalFeedSheet: Bool = false
     
     // Invisible anchor to attach sheets for journal entries
     private var journalEntriesSheets: some View {
@@ -5202,6 +5195,7 @@ loadDocuments()
         formatter.unitsStyle = .abbreviated
         return formatter.localizedString(for: date, relativeTo: Date())
     }
+}
 
 // MARK: - Custom Card Components
 
