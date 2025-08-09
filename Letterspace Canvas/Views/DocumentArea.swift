@@ -2191,8 +2191,13 @@ struct DocumentArea: View {
             // Document editor wrapped in a container for proper padding and constraints
             VStack(alignment: .leading, spacing: 0) {
                 #if os(macOS)
-                // Using DocumentEditorView for the main content area on macOS
-                DocumentEditorView(document: $document, selectedBlock: .constant(nil))
+                if #available(macOS 15.0, *) {
+                    // Use unified SwiftUI editor on macOS 15+
+                    CleanNativeEditorView(document: $document, isDistractionFreeMode: viewMode.isDistractionFreeMode)
+                } else {
+                    // Fallback to existing AppKit-based editor on older macOS
+                    DocumentEditorView(document: $document, selectedBlock: .constant(nil))
+                }
                     .overlay(
                         GeometryReader { geometry in
                             Color.clear // Use Color.clear for geometry reading

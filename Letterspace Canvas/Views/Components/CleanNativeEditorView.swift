@@ -1,9 +1,14 @@
-#if os(iOS)
 import SwiftUI
 import PhotosUI
+#if os(iOS)
 import UIKit
+typealias PlatformImage = UIImage
+#else
+import AppKit
+typealias PlatformImage = NSImage
+#endif
 
-@available(iOS 26.0, *)
+@available(iOS 26.0, macOS 15.0, *)
 struct CleanNativeEditorView: View {
     @Binding var document: Letterspace_CanvasDocument
     let isDistractionFreeMode: Bool
@@ -11,7 +16,7 @@ struct CleanNativeEditorView: View {
     @State private var attributedText: AttributedString = AttributedString()
     @State private var selection: AttributedTextSelection = AttributedTextSelection()
     // Floating header state
-    @State private var headerImage: UIImage? = nil
+    @State private var headerImage: PlatformImage? = nil
     @State private var photosPickerItem: PhotosPickerItem? = nil
     @FocusState private var isTitleFocused: Bool
     @FocusState private var isSubtitleFocused: Bool
@@ -30,6 +35,7 @@ struct CleanNativeEditorView: View {
                 .onChange(of: attributedText) { _, newValue in
                     save(newValue)
                 }
+                #if os(iOS)
                 .toolbar {
                     ToolbarItemGroup(placement: .keyboard) {
                         iOS26NativeToolbarWrapper(
@@ -38,6 +44,7 @@ struct CleanNativeEditorView: View {
                         )
                     }
                 }
+                #endif
 
             // Floating header card (liquid glass)
             if !isDistractionFreeMode {
@@ -58,12 +65,32 @@ struct CleanNativeEditorView: View {
             guard let newItem else { return }
             Task {
                 if let data = try? await newItem.loadTransferable(type: Data.self),
-                   let img = UIImage(data: data) {
+                   let img = Self.decodeImage(from: data) {
                     headerImage = img
-                    await saveHeaderImageToDocument(img, data: data)
+                     await saveHeaderImageToDocument(img, data: data)
                 }
             }
         }
+    }
+
+    // MARK: - Cross-platform image helpers
+    private static func decodeImage(from data: Data) -> PlatformImage? {
+        #if os(iOS)
+        return UIImage(data: data)
+        #else
+        return NSImage(data: data)
+        #endif
+    }
+
+    private static func pngData(from image: PlatformImage) -> Data? {
+        #if os(iOS)
+        return image.pngData()
+        #else
+        guard let tiff = image.tiffRepresentation,
+              let rep = NSBitmapImageRep(data: tiff),
+              let png = rep.representation(using: .png, properties: [:]) else { return nil }
+        return png
+        #endif
     }
 
     private var headerHeight: CGFloat {
@@ -106,7 +133,7 @@ struct CleanNativeEditorView: View {
             // Load image asynchronously
             Task {
                 if let imageData = try? Data(contentsOf: imageUrl),
-                   let image = UIImage(data: imageData) {
+                   let image = Self.decodeImage(from: imageData) {
                     await MainActor.run {
                         headerImage = image
                         print("✅ Loaded existing header image: \(headerElement.content)")
@@ -116,7 +143,7 @@ struct CleanNativeEditorView: View {
         }
     }
     
-    private func saveHeaderImageToDocument(_ image: UIImage, data: Data) async {
+    private func saveHeaderImageToDocument(_ image: PlatformImage, data: Data) async {
         guard let appDirectory = Letterspace_CanvasDocument.getAppDocumentsDirectory() else {
             print("❌ Could not access documents directory for header image")
             return
@@ -146,7 +173,7 @@ struct CleanNativeEditorView: View {
             }
             
             // Save new image as PNG
-            if let pngData = image.pngData() {
+            if let pngData = Self.pngData(from: image) {
                 try pngData.write(to: fileURL)
                 print("✅ Saved header image to: \(fileURL.path)")
                 
@@ -281,11 +308,11 @@ struct CleanNativeEditorView: View {
 }
 
 // MARK: - Floating Header Card
-@available(iOS 26.0, *)
+@available(iOS 26.0, macOS 15.0, *)
 private struct FloatingHeaderCard: View {
     @Binding var title: String
     @Binding var subtitle: String
-    @Binding var image: UIImage?
+    @Binding var image: PlatformImage?
     let onRemoveImage: () -> Void
     @Binding var photosPickerItem: PhotosPickerItem?
     @Environment(\.colorScheme) private var colorScheme
@@ -298,7 +325,7 @@ private struct FloatingHeaderCard: View {
                 // Expanded state: Only show the image
                 if let image {
                     ZStack(alignment: .topTrailing) {
-                        Image(uiImage: image)
+                        Image(platformImage: image)
                             .resizable()
                             .aspectRatio(contentMode: .fill)
                             .frame(maxWidth: .infinity, maxHeight: 140)
@@ -307,7 +334,8 @@ private struct FloatingHeaderCard: View {
                         
                         // Subtle action buttons overlay
                         HStack(spacing: 8) {
-                            PhotosPicker(selection: $photosPickerItem, matching: .images) {
+                        #if os(iOS)
+                        PhotosPicker(selection: $photosPickerItem, matching: .images) {
                                 Image(systemName: "photo")
                                     .font(.system(size: 14, weight: .medium))
                                     .foregroundColor(.white)
@@ -315,6 +343,25 @@ private struct FloatingHeaderCard: View {
                                     .background(.black.opacity(0.6), in: Circle())
                             }
                             .buttonStyle(.plain)
+                        #else
+                        Button {
+                            // macOS: open panel fallback for change
+                            let panel = NSOpenPanel()
+                            panel.allowedContentTypes = [.image]
+                            panel.allowsMultipleSelection = false
+                            if panel.runModal() == .OK, let url = panel.url, let data = try? Data(contentsOf: url), let img = Self.decodeImage(from: data) {
+                                headerImage = img
+                                Task { await saveHeaderImageToDocument(img, data: data) }
+                            }
+                        } label: {
+                            Image(systemName: "photo")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(.white)
+                                .padding(8)
+                                .background(.black.opacity(0.6), in: Circle())
+                        }
+                        .buttonStyle(.plain)
+                        #endif
                             
                             Button {
                                 onRemoveImage()
@@ -367,7 +414,7 @@ private struct FloatingHeaderCard: View {
                                 }
                             }
                         } label: {
-                            Image(uiImage: image)
+                            Image(platformImage: image)
                                 .resizable()
                                 .aspectRatio(16/9, contentMode: .fill)
                                 .frame(width: 120, height: 68) // Larger 16:9 ratio (120x68)
@@ -380,6 +427,7 @@ private struct FloatingHeaderCard: View {
                         }
                         .buttonStyle(.plain)
                     } else {
+                        #if os(iOS)
                         PhotosPicker(selection: $photosPickerItem, matching: .images) {
                             Image(systemName: "photo.badge.plus")
                                 .font(.title)
@@ -388,6 +436,24 @@ private struct FloatingHeaderCard: View {
                                 .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
                         }
                         .buttonStyle(.plain)
+                        #else
+                        Button {
+                            let panel = NSOpenPanel()
+                            panel.allowedContentTypes = [.image]
+                            panel.allowsMultipleSelection = false
+                            if panel.runModal() == .OK, let url = panel.url, let data = try? Data(contentsOf: url), let img = Self.decodeImage(from: data) {
+                                headerImage = img
+                                Task { await saveHeaderImageToDocument(img, data: data) }
+                            }
+                        } label: {
+                            Image(systemName: "photo.badge.plus")
+                                .font(.title)
+                                .foregroundStyle(.primary)
+                                .frame(width: 120, height: 68)
+                                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+                        }
+                        .buttonStyle(.plain)
+                        #endif
                     }
                 }
                 .padding(.leading, 13) // Added 1 more pt: 12px → 13px
