@@ -87,12 +87,20 @@ struct PreachItAgainDetailsView: View {
                 .padding(.vertical, 16)
             }
             .navigationTitle("Preach It Again")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Done", action: onDismiss)
                 }
             }
+            #else
+            .toolbar {
+                ToolbarItem(placement: .automatic) {
+                    Button("Done", action: onDismiss)
+                }
+            }
+            #endif
         }
         .sheet(isPresented: $showingDocumentDetails) {
             // This would show the document details card
