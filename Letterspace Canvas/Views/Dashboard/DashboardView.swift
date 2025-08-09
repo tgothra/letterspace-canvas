@@ -1398,7 +1398,10 @@ loadDocuments()
                     }
                     .allowsHitTesting(true)
                 }
+            }
+#if os(iOS)
         }
+#endif
     }
 
     // NEW: Greeting section that scrolls off naturally
