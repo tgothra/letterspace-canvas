@@ -116,10 +116,12 @@ struct ModernAllDocumentsList: View {
             
             Spacer()
             
-            Button("Clear") {
+            Button(action: {
                 selectedTags.removeAll()
                 selectedFilterColumn = nil
                 selectedFilterCategory = "Filter"
+            }) {
+                Text("Clear")
             }
             .font(.system(size: 14, weight: .medium))
             .foregroundColor(theme.primary)
