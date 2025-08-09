@@ -104,6 +104,17 @@ struct CleanNativeEditorView: View {
         #endif
     }
 
+    // Returns width/height for the provided platform image. Falls back to 16:9 if size is unavailable.
+    private func imageAspectRatio(_ image: PlatformImage) -> CGFloat {
+        #if os(iOS)
+        let height = image.size.height
+        return height > 0 ? (image.size.width / height) : (16.0/9.0)
+        #else
+        let height = image.size.height
+        return height > 0 ? (image.size.width / height) : (16.0/9.0)
+        #endif
+    }
+
     private var headerHeight: CGFloat {
         let base: CGFloat = 120
         let internalTextTopPadding: CGFloat = 12 // ensures text starts slightly lower
@@ -355,8 +366,9 @@ private struct FloatingHeaderCard: View {
                     ZStack(alignment: .topTrailing) {
                         platformImage(image)
                             .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .frame(maxWidth: .infinity, maxHeight: 140)
+                            // Fit the image using its intrinsic aspect ratio so the container sizes
+                            .aspectRatio(imageAspectRatio(image), contentMode: .fit)
+                            .frame(maxWidth: .infinity)
                             .clipShape(RoundedRectangle(cornerRadius: 14))
                             .matchedGeometryEffect(id: "headerImage", in: imageNamespace)
                         
