@@ -50,6 +50,7 @@ struct SermonJournalView: View {
                 .padding(.vertical, 16)
             }
             .navigationTitle("Sermon Journal")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -66,6 +67,23 @@ struct SermonJournalView: View {
                     .fontWeight(.semibold)
                 }
             }
+            #else
+            .toolbar {
+                ToolbarItem(placement: .automatic) {
+                    Button("Cancel") {
+                        onDismiss()
+                    }
+                }
+                
+                ToolbarItem(placement: .automatic) {
+                    Button("Save") {
+                        saveJournalEntry()
+                        onDismiss()
+                    }
+                    .fontWeight(.semibold)
+                }
+            }
+            #endif
         }
         .sheet(isPresented: $showingHealthMeter) {
             SermonHealthMeterView(onDismiss: { showingHealthMeter = false })
@@ -552,6 +570,7 @@ struct SermonHealthMeterView: View {
                 .padding(.vertical, 16)
             }
             .navigationTitle("Sermon Health Meter")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -560,6 +579,15 @@ struct SermonHealthMeterView: View {
                     }
                 }
             }
+            #else
+            .toolbar {
+                ToolbarItem(placement: .automatic) {
+                    Button("Done") {
+                        onDismiss()
+                    }
+                }
+            }
+            #endif
         }
     }
     
