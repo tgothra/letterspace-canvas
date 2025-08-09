@@ -39,14 +39,14 @@ struct AllDocumentsBottomSheet: View {
     
     enum TabMode: String, CaseIterable {
         case all = "All Docs"
-        case pinned = "Pinned"
+        case pinned = "Starred"
         case wip = "Work in Progress"
         case schedule = "Schedule"
         
         var displayName: String {
             switch self {
             case .all: return "Docs"
-            case .pinned: return "Pinned"
+            case .pinned: return "Starred"
             case .wip: return "WIP"
             case .schedule: return "Calendar"
             }
@@ -55,7 +55,7 @@ struct AllDocumentsBottomSheet: View {
         var icon: String {
             switch self {
             case .all: return "doc.on.doc"
-            case .pinned: return "pin.fill"
+            case .pinned: return "star.fill"
             case .wip: return "clock.badge.checkmark"
             case .schedule: return "calendar"
             }
@@ -339,7 +339,7 @@ struct AllDocumentsBottomSheet: View {
                         .fill(Color.primary.opacity(0.1))
                         .frame(width: 1, height: 20)
                     
-                    // Pinned button with badge
+                    // Starred button with badge
                     Button(action: {
                         withAnimation(.easeInOut(duration: 0.2)) {
                             selectedTabMode = .pinned
@@ -350,7 +350,7 @@ struct AllDocumentsBottomSheet: View {
                                 .fill(selectedTabMode == .pinned ? Color.green : Color.clear)
                                 .frame(width: 40, height: 40)
                             
-                            Image(systemName: "pin.fill")
+                            Image(systemName: "star.fill")
                                 .font(.system(size: 16, weight: .semibold))
                                 .foregroundColor(selectedTabMode == .pinned ? .white : .green)
                             

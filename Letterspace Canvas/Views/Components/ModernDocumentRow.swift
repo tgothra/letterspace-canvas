@@ -257,7 +257,7 @@ struct ModernDocumentRow: View {
                 // Status icons at end of second row
                 HStack(spacing: 4) {
                     if documentStatus.isPinned {
-                        Image(systemName: "pin.fill")
+                        Image(systemName: "star.fill")
                             .font(.system(size: statusIconFontSize, weight: .medium))
                             .foregroundColor(.orange)
                     }
@@ -297,7 +297,7 @@ struct ModernDocumentRow: View {
             }
             Divider()
             Button(action: onPin) {
-                Text(documentStatus.isPinned ? "Unpin" : "Pin")
+                Text(documentStatus.isPinned ? "Unstar" : "Star")
             }
             Button(action: onWIP) {
                 Text(documentStatus.isWIP ? "Remove from WIP" : "Add to WIP")

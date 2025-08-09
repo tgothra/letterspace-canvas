@@ -45,16 +45,16 @@ struct PinnedSection: View {
             // Conditionally show header
             if !hideHeader {
                 HStack(spacing: 8) {
-                    Image(systemName: "pin.fill")
+                    Image(systemName: "star.fill")
                         .font(.system(size: isCarouselMode ? carouselIconSize : 14))
                         .foregroundStyle(theme.primary)
-                    Text("Pinned")
+                    Text("Starred")
                         .font(isCarouselMode ? carouselHeaderFont : .custom("InterTight-Medium", size: 16))
                         .foregroundStyle(theme.primary)
                     Spacer() // Push button to the right
                     if showExpandButtons {
                         Button {
-                            print("🔄 Pinned expand button tapped")
+                            print("🔄 Starred expand button tapped")
                             if isCarouselMode && isIPad {
                                 onShowModal?()
                             } else {
@@ -113,7 +113,7 @@ struct PinnedSection: View {
                             #endif
                         }()
                         
-                        Text("No pinned documents")
+                        Text("No starred documents")
                             .font(.system(size: isIPadLocal ? 18 : 13))
                             .foregroundColor(theme.secondary)
                             .padding(.horizontal, 4)

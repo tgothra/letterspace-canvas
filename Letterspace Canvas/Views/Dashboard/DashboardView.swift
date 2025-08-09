@@ -468,7 +468,7 @@ struct DashboardView: View {
     // Add these functions before the body
     private func initializeCarouselSections() {
         let defaultSections = [
-            ("Pinned", AnyView(carouselPinnedSectionView)),
+            ("Starred", AnyView(carouselPinnedSectionView)),
             ("Work in Progress", AnyView(carouselWipSectionView)),
             ("Document Schedule", AnyView(carouselSermonCalendarView))
         ]
@@ -728,19 +728,19 @@ private func deleteSelectedDocuments() {
                             let screenWidth = UIScreen.main.bounds.width
                             let isPhone = UIDevice.current.userInterfaceIdiom == .phone
                             if isPhone {
-                                return min(190, screenWidth * 0.34) // even bigger on iPhone
+                                return min(180, screenWidth * 0.36) // 36% of screen width for iPhone, max 180 (increased again)
                             } else {
-                                return min(280, screenWidth * 0.30) // slightly bigger on iPad
+                                return min(240, screenWidth * 0.28) // 28% of screen width for iPad, max 240
                             }
                             #else
-                            return 220 // macOS: quite a bit bigger
+                            return 300 // macOS fixed size (quite a bit bigger - increased from 220)
                             #endif
                         }(), maxHeight: {
                             #if os(iOS)
                             let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-                            return isPhone ? 64 : 108 // increase heights further
+                            return isPhone ? 75 : 95 // iPhone: increased again from 65, iPad: same
                             #else
-                            return 110 // macOS taller
+                            return 115 // macOS fixed size (quite a bit bigger - increased from 85)
                             #endif
                         }())
                 }
@@ -763,7 +763,7 @@ private func deleteSelectedDocuments() {
                     Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
                         .resizable()
                         .aspectRatio(contentMode: .fit)
-                        .frame(maxWidth: min(210, UIScreen.main.bounds.width * 0.26), maxHeight: 80)
+                        .frame(maxWidth: min(140, UIScreen.main.bounds.width * 0.18), maxHeight: 55)
                         .onTapGesture {
                             activeSheet = .tallyLabel
                         }
@@ -786,10 +786,10 @@ private func deleteSelectedDocuments() {
                     if UIDevice.current.userInterfaceIdiom == .phone {
                         HStack {
                             Spacer()
-                    Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
+                            Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
                                 .resizable()
                                 .aspectRatio(contentMode: .fit)
-                                .frame(maxWidth: min(140, UIScreen.main.bounds.width * 0.26), maxHeight: 50)
+                                .frame(maxWidth: min(135, UIScreen.main.bounds.width * 0.34), maxHeight: 52)
                                 .onTapGesture {
                                     activeSheet = .tallyLabel
                                 }
@@ -855,7 +855,7 @@ private func deleteSelectedDocuments() {
                 Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
-                    .frame(maxWidth: 300, maxHeight: 110)
+                    .frame(maxWidth: 150, maxHeight: 60)
             }
             .buttonStyle(PlainButtonStyle())
             .help("About Tallē")
@@ -876,10 +876,10 @@ private func deleteSelectedDocuments() {
             if UIDevice.current.userInterfaceIdiom == .pad {
                 HStack {
                     Spacer()
-                Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
+                    Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
                         .resizable()
                         .aspectRatio(contentMode: .fit)
-                    .frame(maxWidth: min(210, UIScreen.main.bounds.width * 0.26), maxHeight: 80)
+                        .frame(maxWidth: min(140, UIScreen.main.bounds.width * 0.18), maxHeight: 55)
                         .onTapGesture {
                             activeSheet = .tallyLabel
                         }
@@ -915,7 +915,7 @@ private func deleteSelectedDocuments() {
                 Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
-                    .frame(maxWidth: 300, maxHeight: 110)
+                    .frame(maxWidth: 300, maxHeight: 115)
             }
             .buttonStyle(PlainButtonStyle())
             .help("About Tallē")
@@ -1059,11 +1059,17 @@ loadDocuments()
             case .tallyLabel:
                 TallyLabelModal()
                     .presentationBackground(.thinMaterial)
+                    #if os(macOS)
+                    .frame(width: 600, height: 500)
+                    #endif
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
                     
             case .tagManager:
                 TagManager(allTags: allTags)
+                    #if os(macOS)
+                    .frame(width: 700, height: 600)
+                    #endif
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
                     .presentationBackground(.ultraThinMaterial)
@@ -1072,6 +1078,9 @@ loadDocuments()
                 SermonJournalView(document: document, allDocuments: documents) {
                     activeSheet = nil
                 }
+                #if os(macOS)
+                .frame(width: 850, height: 700)
+                #endif
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationBackground(.ultraThinMaterial)
@@ -1086,6 +1095,9 @@ loadDocuments()
                         activeSheet = nil
                     }
                 )
+                #if os(macOS)
+                .frame(width: 650, height: 500)
+                #endif
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
                 .presentationBackground(.ultraThinMaterial)
@@ -1101,6 +1113,9 @@ loadDocuments()
                         onSelectDocument(doc)
                     }
                 )
+                #if os(macOS)
+                .frame(width: 750, height: 650)
+                #endif
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationBackground(.ultraThinMaterial)
@@ -1122,45 +1137,28 @@ loadDocuments()
                 )
                 .environment(\.themeColors, theme)
                 .environment(\.colorScheme, colorScheme)
+                #if os(macOS)
+                .frame(width: 680, height: 580)
+                #endif
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
                 .presentationBackground(.ultraThinMaterial)
             
             case .curatedCategory(let type):
-                NavigationView {
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 16) {
-                            Text(type.rawValue)
-                                .font(.custom("InterTight-Bold", size: 20))
-                                .padding(.horizontal, 16)
-                            curatedContentViewFor(type)
-                                .padding(.horizontal, 16)
-                        }
-                        .padding(.top, 12)
-                    }
-                    .navigationTitle(type.rawValue)
-                    #if os(iOS)
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .topBarTrailing) {
-                            Button("Done") { activeSheet = nil }
-                        }
+                Group {
+                    #if os(macOS)
+                    NavigationStack {
+                        curatedCategoryContent(type)
                     }
                     #else
-                    .toolbar {
-                        ToolbarItem(placement: .automatic) {
-                            Button("Done") { activeSheet = nil }
-                        }
+                    NavigationView {
+                        curatedCategoryContent(type)
                     }
                     #endif
-                    .onAppear {
-                        selectedCurationType = type
-                        updateContentForNewCurationType()
-                        if aiCuratedSermons.isEmpty && !isGeneratingInsights {
-                            generateAICuratedSermons()
-                        }
-                    }
                 }
+                #if os(macOS)
+                .frame(width: 800, height: 600)
+                #endif
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationBackground(.ultraThinMaterial)
@@ -1362,7 +1360,7 @@ loadDocuments()
                             Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
                                 .resizable()
                                 .scaledToFit()
-                                .frame(height: 26)
+                                .frame(height: 36)
                         }
                         .buttonStyle(.plain)
                         .help("Click to see Tallē label")
@@ -1373,18 +1371,29 @@ loadDocuments()
                             Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
                                 .resizable()
                                 .scaledToFit()
-                                .frame(height: 26)
+                                .frame(height: 28)
                         }
                         .buttonStyle(.plain)
         #endif
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
-                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
-                    .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+                    .background {
+                        if #available(iOS 26, *) {
+                            // No background for iOS 26 - glass effect applied directly
+                            Color.clear
+                        } else {
+                            // Fallback for older iOS
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(.ultraThinMaterial)
+                                .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: 4)
+                        }
+                    }
+                    .modifier(InteractiveGlassEffectModifier(cornerRadius: 12))
+
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 8)
+                .padding(.horizontal, 35)
+                .padding(.top, 35)
                 
                 Spacer()
             }
@@ -1462,9 +1471,10 @@ loadDocuments()
 
                             Spacer()
                             
-                // Circular icon controls
+                // Control buttons
                 HStack(spacing: 8) {
-                    // Search Button
+                    // Search Button (iOS only - macOS has it in sidebar)
+                    #if os(iOS)
                     Button(action: {
                         // Trigger search sheet
                         onSearch?()
@@ -1476,6 +1486,7 @@ loadDocuments()
                             .frame(width: 30, height: 30)
                             .background(Color.black, in: Circle())
                     }
+                    #endif
                     
                     // Filter Dropdown (iOS only)
                     #if os(iOS)
@@ -1662,11 +1673,24 @@ loadDocuments()
                             }
                         }
                     } label: {
+                        #if os(macOS)
+                        HStack(spacing: 6) {
+                            Image(systemName: "arrow.up.arrow.down")
+                                .font(.system(size: 14, weight: .medium))
+                            Text("Sort By")
+                                .font(.system(size: 14, weight: .medium))
+                        }
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(Color.blue, in: RoundedRectangle(cornerRadius: 8))
+                        #else
                         Image(systemName: "arrow.up.arrow.down")
                             .font(.system(size: 16))
                             .foregroundStyle(.white)
                             .frame(width: 30, height: 30)
                             .background(Color.green, in: Circle())
+                        #endif
                     }
                     
                     // Tags Dropdown
@@ -1731,6 +1755,27 @@ loadDocuments()
                             }
                         }
                     } label: {
+                        #if os(macOS)
+                        HStack(spacing: 6) {
+                            Image(systemName: "tag")
+                                .font(.system(size: 14, weight: .medium))
+                            Text("Tags")
+                                .font(.system(size: 14, weight: .medium))
+                            
+                            // Badge for selected tags count
+                            if !selectedTags.isEmpty {
+                                Text("\(selectedTags.count)")
+                                    .font(.system(size: 11, weight: .bold))
+                                    .foregroundStyle(.white)
+                                    .frame(width: 18, height: 18)
+                                    .background(Color.red, in: Circle())
+                            }
+                        }
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(!selectedTags.isEmpty ? theme.accent : Color.blue, in: RoundedRectangle(cornerRadius: 8))
+                        #else
                         ZStack {
                             Image(systemName: "tag")
                                 .font(.system(size: 16))
@@ -1748,6 +1793,7 @@ loadDocuments()
                                     .offset(x: 12, y: -12)
                             }
                         }
+                        #endif
                     }
                 }
             }
@@ -1805,7 +1851,7 @@ loadDocuments()
                             Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
                                 .resizable()
                                 .aspectRatio(contentMode: .fit)
-                                .frame(maxWidth: min(80, UIScreen.main.bounds.width * 0.2), maxHeight: 30)
+                                .frame(maxWidth: min(135, UIScreen.main.bounds.width * 0.34), maxHeight: 52)
                                     .onTapGesture {
                                     activeSheet = .tallyLabel
                                 }
@@ -1870,7 +1916,7 @@ loadDocuments()
                     Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
                         .resizable()
                         .aspectRatio(contentMode: .fit)
-                        .frame(maxWidth: 150, maxHeight: 60)
+                        .frame(maxWidth: 300, maxHeight: 115)
                 }
                 .buttonStyle(PlainButtonStyle())
                 .help("About Tallē")
@@ -3198,7 +3244,7 @@ loadDocuments()
                         gradientManager.selectedDarkGradientIndex != 0 :
                         gradientManager.selectedLightGradientIndex != 0
                     let isIPad = UIDevice.current.userInterfaceIdiom == .pad
-                    Image(systemName: "pin.fill")
+                    Image(systemName: "star.fill")
                         .font(.system(size: isIPad ? 10 : 9))
                         .foregroundColor(useThemeColors ? theme.accent : .orange)
                     Image(systemName: "clock.badge.checkmark")
@@ -3400,7 +3446,7 @@ loadDocuments()
     // iPad Landscape Sections - horizontal layout like macOS but with iPad carousel styling
     private var iPadLandscapeSections: some View {
         HStack(alignment: .top, spacing: 16) { // Reduced spacing from 24 to 16 for landscape
-            // Pinned Section - simplified for landscape
+            // Starred Section - simplified for landscape
                 carouselPinnedSectionView
             .frame(maxWidth: .infinity)
             .frame(height: 260) // Fixed height for landscape cards
@@ -4016,7 +4062,7 @@ loadDocuments()
             }
     }
 
-    // Extracted computed property for PinnedSection (for non-iPad layout)
+    // Extracted computed property for StarredSection (for non-iPad layout)
     private var pinnedSectionView: some View {
         PinnedSection(
             documents: documents,
@@ -4084,7 +4130,7 @@ loadDocuments()
                         // Icon for each section
                         Image(systemName: {
                             switch index {
-                            case 0: return "pin.fill"
+                            case 0: return "star.fill"
                             case 1: return "clock.badge.checkmark"
                             case 2: return "calendar"
                             default: return "doc.text"
@@ -4095,7 +4141,7 @@ loadDocuments()
                         // Title for each section
                         Text({
                             switch index {
-                            case 0: return "Pinned"
+                            case 0: return "Starred"
                             case 1: return "WIP"
                             case 2: return "Schedule"
                             default: return "Section"
@@ -4273,6 +4319,42 @@ loadDocuments()
             statisticsView
         case .recent, .trending:
             curatedSermonsCarousel
+        }
+    }
+
+    @ViewBuilder
+    private func curatedCategoryContent(_ type: CurationType) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text(type.rawValue)
+                    .font(.custom("InterTight-Bold", size: 20))
+                    .padding(.horizontal, 16)
+                curatedContentViewFor(type)
+                    .padding(.horizontal, 16)
+            }
+            .padding(.top, 12)
+        }
+        .navigationTitle(type.rawValue)
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("Done") { activeSheet = nil }
+            }
+        }
+        #else
+        .toolbar {
+            ToolbarItem(placement: .automatic) {
+                Button("Done") { activeSheet = nil }
+            }
+        }
+        #endif
+        .onAppear {
+            selectedCurationType = type
+            updateContentForNewCurationType()
+            if aiCuratedSermons.isEmpty && !isGeneratingInsights {
+                generateAICuratedSermons()
+            }
         }
     }
 
@@ -5017,6 +5099,9 @@ loadDocuments()
                 }, onDismiss: {
                     showAllJournalEntriesSheet = false
                 })
+                #if os(macOS)
+                .frame(width: 800, height: 700)
+                #endif
                 .presentationDetents([.large])
             }
             .sheet(isPresented: $showJournalFeedSheet) {
@@ -5045,12 +5130,18 @@ loadDocuments()
                             activeSheet = .reflectionSelection
                         }
                     }
+                    #if os(macOS)
+                    .frame(width: 850, height: 750)
+                    #endif
                     .presentationDetents([.large])
             }
             .sheet(item: $selectedJournalEntry) { entry in
                 SermonJournalEntryDetail(entry: entry) {
                     selectedJournalEntry = nil
                 }
+                #if os(macOS)
+                .frame(width: 750, height: 650)
+                #endif
                 .presentationDetents([.large])
             }
     }
@@ -5899,8 +5990,22 @@ struct JournalFeedView: View {
     }
     
     var body: some View {
-        NavigationView {
-            Group {
+        Group {
+            #if os(macOS)
+            NavigationStack {
+                journalContent
+            }
+            #else
+            NavigationView {
+                journalContent
+            }
+            #endif
+        }
+    }
+    
+    @ViewBuilder
+    private var journalContent: some View {
+        Group {
                 if service.entries().isEmpty {
                     // Clean empty state – no stray timeline dot
                     VStack(spacing: 16) {
@@ -6002,7 +6107,6 @@ struct JournalFeedView: View {
                 }
                 #endif
             }
-        }
         .sheet(isPresented: $showPicker) {
             // Allow custom (no sermon) or pick from all documents
             ReflectionSelectionView(
@@ -6023,6 +6127,9 @@ struct JournalFeedView: View {
             SermonJournalEntryDetail(entry: entry) {
                 selectedEntryForDetail = nil
             }
+            #if os(macOS)
+            .frame(width: 750, height: 650)
+            #endif
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
             .presentationBackground(.ultraThinMaterial)

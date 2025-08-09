@@ -9,14 +9,14 @@ enum SheetDetent {
 
 /// Dashboard Tab Enum for Bottom Bar
 enum DashboardTab: String, CaseIterable {
-    case pinned = "Pinned"
+    case pinned = "Starred"
     case wip = "WIP"
     case schedule = "Schedule"
     
     var symbolImage: String {
         switch self {
         case .pinned:
-            return "pin.fill"
+            return "star.fill"
         case .wip:
             return "clock.badge.checkmark.fill"
         case .schedule:
@@ -189,6 +189,9 @@ struct FloatingDashboardBottomBar: View {
                     onRecentlyDeleted: onRecentlyDeleted,
                     onSettings: onSettings
                 )
+                #if os(macOS)
+                .frame(width: 700, height: 550)
+                #endif
                 .presentationDetents([.medium, .large])
                 .presentationBackground(.clear)
                 .presentationBackgroundInteraction(.enabled)
@@ -333,7 +336,21 @@ struct DashboardSheetContent: View {
     let onSettings: (() -> Void)?
     
     var body: some View {
-        NavigationView {
+        Group {
+            #if os(macOS)
+            NavigationStack {
+                content
+            }
+            #else
+            NavigationView {
+                content
+            }
+            #endif
+        }
+    }
+    
+    @ViewBuilder
+    private var content: some View {
             VStack(spacing: 0) {
                 // Header
                 HStack {
@@ -370,7 +387,7 @@ struct DashboardSheetContent: View {
                     VStack(spacing: 0) {
                         switch tab {
                         case .pinned:
-                            PinnedSheetContent()
+                            StarredSheetContent()
                         case .wip:
                             WIPSheetContent()
                         case .schedule:
@@ -380,6 +397,7 @@ struct DashboardSheetContent: View {
                     .padding(.horizontal, 20)
                     .padding(.bottom, 100)
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .background {
                 if #available(iOS 26, *) {
@@ -393,7 +411,6 @@ struct DashboardSheetContent: View {
 #if !os(macOS)
             .navigationBarHidden(true)
 #endif
-        }
     }
     
     private func getTabSubtitle() -> String {
@@ -422,14 +439,14 @@ struct DashboardSheetContent: View {
     // MARK: - Sheet Content Views
     
     @ViewBuilder
-    func PinnedSheetContent() -> some View {
+    func StarredSheetContent() -> some View {
         let pinnedDocs = documents.filter { pinnedDocuments.contains($0.id) }
         
         if pinnedDocs.isEmpty {
             EmptyStateView(
-                icon: "pin.fill",
-                title: "No Pinned Documents",
-                subtitle: "Pin important documents to access them quickly",
+                icon: "star.fill",
+                title: "No Starred Documents",
+                subtitle: "Star important documents to access them quickly",
                 color: .green
             )
         } else {

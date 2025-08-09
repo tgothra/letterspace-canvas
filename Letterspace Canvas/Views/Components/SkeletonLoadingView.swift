@@ -226,8 +226,8 @@ struct AppLaunchSkeleton: View {
                 logoScale = 1.05
             }
             
-            // Pinned section skeleton
-            SectionCardSkeleton(title: "Pinned", itemCount: 2)
+            // Starred section skeleton
+            SectionCardSkeleton(title: "Starred", itemCount: 2)
             
             // Enhanced filter buttons skeleton
             HStack(spacing: 16) {
@@ -286,7 +286,7 @@ struct DashboardSkeleton: View {
                     headerAnimation = true
                 }
                 
-                // Pinned section skeleton
+                // Starred section skeleton
                 SectionCardSkeleton(title: "Pinned", itemCount: 1)
                     .padding(.horizontal, 24)
                 
