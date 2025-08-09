@@ -982,6 +982,13 @@ var body: some View {
             if let calendarArray = UserDefaults.standard.array(forKey: "CalendarDocuments") as? [String] {
                 calendarDocuments = Set(calendarArray)
             }
+            #if os(macOS)
+            // Ensure Series and Location columns are always visible by default on macOS
+            visibleColumns.insert("series")
+            visibleColumns.insert("location")
+            // Persist the preference so it sticks across launches
+            UserDefaults.standard.set(Array(visibleColumns), forKey: "VisibleColumns")
+            #endif
             loadDocuments()
         }
                 .onChange(of: refreshTrigger) {
