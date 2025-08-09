@@ -982,10 +982,7 @@ var body: some View {
             if let calendarArray = UserDefaults.standard.array(forKey: "CalendarDocuments") as? [String] {
                 calendarDocuments = Set(calendarArray)
             }
-            // Only load documents if we don't already have them (smooth navigation)
-            if documents.isEmpty {
-                loadDocuments()
-            }
+            loadDocuments()
         }
                 .onChange(of: refreshTrigger) {
 loadDocuments()
@@ -1305,97 +1302,100 @@ loadDocuments()
         }
     }
     
-    // NEW: Extracted computed property for the main dashboard layout
+    // NEW: Extracted computed property for the main dashboard layout content
+    @ViewBuilder
+    private var mainDashboardContent: some View {
+        // NEW: Simple dashboard layout with proper iOS 26 safe area handling
+        ZStack {
+            // No background needed - let the gradient from MainLayout show through
+            Color.clear
+                .ignoresSafeArea(.all)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            ScrollView(.vertical) {
+                VStack(spacing: 0) {
+                    // Greeting section that scrolls off naturally
+                    greetingSection
+                        .padding(.horizontal, 20)
+                        .padding(.top, 20)
+                    
+                    // Curated sermons section (Spotify/Dwell-like)
+                    curatedSermonsSection
+                        .padding(.horizontal, 20)
+                        .padding(.top, 40)
+                    
+                    // Documents section that scrolls naturally
+                    VStack(spacing: 0) {
+                        // Docs header that scrolls with content
+                        docsHeader
+                            .padding(.horizontal, 20)
+                            .padding(.top, 30)
+                        
+                        documentsSection
+                            .padding(.horizontal, 20)
+                            .padding(.top, 20)
+                            .padding(.bottom, 100) // Space for bottom bar
+                    }
+                }
+            }
+            .scrollEdgeEffectStyle(.soft, for: .all)
+            .safeAreaPadding(.top, 5)
+            .contentMargins(.top, 10, for: .scrollContent)
+            
+            // Liquid Glass Logo Header with proper glassmorphism
+            VStack {
+                HStack {
+                    Spacer()
+                    
+                    // Liquid Glass Logo Container
+                    Group {
+        #if os(macOS)
+                        Button(action: {
+                            activeSheet = .tallyLabel
+                        }) {
+                            Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(height: 20)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Click to see Tallē label")
+        #else
+                        Button(action: {
+                            activeSheet = .tallyLabel
+                        }) {
+                            Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(height: 20)
+                        }
+                        .buttonStyle(.plain)
+        #endif
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+                    .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
+                
+                Spacer()
+            }
+        }
+    }
+    
     @ViewBuilder
     private var dashboardContent: some View {
-        if isLoadingDocuments && documents.isEmpty {
-            // Only show skeleton loading when documents are actually loading AND we have no documents
+        if isLoadingDocuments {
+            // Show skeleton loading when documents are loading (iOS only)
+            #if os(iOS)
             DashboardSkeleton()
-        } else {
-                // NEW: Simple dashboard layout with proper iOS 26 safe area handling
-                ZStack {
-                    // No background needed - let the gradient from MainLayout show through
-                    Color.clear
-                        .ignoresSafeArea(.all)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    ScrollView(.vertical) {
-                        VStack(spacing: 0) {
-                            // Greeting section that scrolls off naturally
-                            greetingSection
-                                .padding(.horizontal, 20)
-                                .padding(.top, 20)
-                            
-                            // Curated sermons section (Spotify/Dwell-like)
-                            curatedSermonsSection
-                                .padding(.horizontal, 20)
-                                .padding(.top, 40)
-                            
-                            // Documents section that scrolls naturally
-                            VStack(spacing: 0) {
-                                // Docs header that scrolls with content
-                                docsHeader
-                                    .padding(.horizontal, 20)
-                                    .padding(.top, 30)
-                                
-                                documentsSection
-                                    .padding(.horizontal, 20)
-                                    .padding(.top, 20)
-                                    .padding(.bottom, 100) // Space for bottom bar
-                            }
-                        }
-                    }
-                    .scrollEdgeEffectStyle(.soft, for: .all)
-                    .safeAreaPadding(.top, 5)
-                    .contentMargins(.top, 10, for: .scrollContent)
-                    
-                    // Liquid Glass Logo Header with proper glassmorphism
-                    VStack {
-                        HStack {
-                            Spacer()
-                            
-                            // Liquid Glass Logo Container
-                            Group {
-            #if os(macOS)
-                                Button(action: {
-                                    activeSheet = .tallyLabel
-                                }) {
-                                    Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
-                                        .resizable()
-                                        .aspectRatio(contentMode: .fit)
-                                        .frame(height: 44) // Standard logo height
-                                }
-                                .buttonStyle(PlainButtonStyle())
-                                .help("About Tallē")
             #else
-                                Image(colorScheme == .dark ? "Talle - Dark" : "Talle - Light")
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fit)
-                                    .frame(height: {
-                                        #if os(iOS)
-                                        let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-                                        return isPhone ? 32 : 44 // iPhone: smaller, iPad: standard
-                                        #else
-                                        return 44
-                                        #endif
-                                    }())
-                                    .onTapGesture {
-                                        activeSheet = .tallyLabel
-                                    }
+            // On macOS, show content immediately without skeleton
+            mainDashboardContent
             #endif
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 12)
-                            .background(.ultraThinMaterial)
-                            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                            .shadow(color: Color.black.opacity(0.08), radius: 16, x: 0, y: 6)
-            }
-                    .padding(.horizontal, 20)
-                        .safeAreaPadding(.top, 10)
-                        
-                        Spacer()
-                    }
-                    .allowsHitTesting(true)
-                }
+        } else {
+            mainDashboardContent
         }
     }
 
@@ -2008,8 +2008,7 @@ loadDocuments()
     
     private func loadDocuments() {
         // Only set loading state if this isn't a swipe-down navigation
-        // and if we don't already have documents loaded (avoid unnecessary skeleton on macOS)
-        if !isSwipeDownNavigation && documents.isEmpty {
+        if !isSwipeDownNavigation {
             isLoadingDocuments = true
         }
         
