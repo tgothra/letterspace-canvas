@@ -1305,12 +1305,17 @@ loadDocuments()
     // NEW: Extracted computed property for the main dashboard layout
     @ViewBuilder
     private var dashboardContent: some View {
+        #if os(iOS)
         if isLoadingDocuments {
-            // Show skeleton loading when documents are loading
+            // Show skeleton loading when documents are loading (iOS only)
             DashboardSkeleton()
         } else {
-                // NEW: Simple dashboard layout with proper iOS 26 safe area handling
-                ZStack {
+            // NEW: Simple dashboard layout with proper iOS 26 safe area handling
+            ZStack {
+        #else
+        // macOS: Always show content immediately to avoid unnecessary skeleton flashes
+        ZStack {
+        #endif
                     // No background needed - let the gradient from MainLayout show through
                     Color.clear
                         .ignoresSafeArea(.all)
