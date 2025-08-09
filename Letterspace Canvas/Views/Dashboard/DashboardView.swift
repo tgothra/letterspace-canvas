@@ -5205,6 +5205,7 @@ loadDocuments()
         formatter.unitsStyle = .abbreviated
         return formatter.localizedString(for: date, relativeTo: Date())
     }
+}
 
 // MARK: - Custom Card Components
 
