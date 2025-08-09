@@ -1310,12 +1310,18 @@ loadDocuments()
             // Show skeleton loading when documents are loading (iOS only)
             DashboardSkeleton()
         } else {
-            // NEW: Simple dashboard layout with proper iOS 26 safe area handling
-            ZStack {
+            dashboardContentBody
+        }
         #else
         // macOS: Always show content immediately to avoid unnecessary skeleton flashes
-        ZStack {
+        dashboardContentBody
         #endif
+    }
+    
+    @ViewBuilder
+    private var dashboardContentBody: some View {
+        // NEW: Simple dashboard layout with proper iOS 26 safe area handling
+        ZStack {
                     // No background needed - let the gradient from MainLayout show through
                     Color.clear
                         .ignoresSafeArea(.all)
@@ -1398,10 +1404,7 @@ loadDocuments()
                     }
                     .allowsHitTesting(true)
                 }
-            }
-#if os(iOS)
         }
-#endif
     }
 
     // NEW: Greeting section that scrolls off naturally
