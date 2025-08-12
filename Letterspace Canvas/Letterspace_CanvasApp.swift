@@ -106,6 +106,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 struct Letterspace_CanvasApp: App {
     @State private var document = Letterspace_CanvasDocument()
     private let appearanceController = AppearanceController.shared
+    @StateObject private var colorThemeManager = ColorThemeManager()
     
     #if os(macOS)
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
@@ -150,6 +151,7 @@ struct Letterspace_CanvasApp: App {
                 .ignoresSafeArea() // macOS can ignore safe area
                 #endif
                 .withTheme()
+                .environmentObject(colorThemeManager)
                 // FIXED: iOS respects safe areas, only macOS ignores them
                 // Apply the color scheme preference
                 .preferredColorScheme(appearanceController.colorScheme)

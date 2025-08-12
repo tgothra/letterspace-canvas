@@ -75,6 +75,9 @@ struct DashboardView: View {
     private var showFloatingSidebar: Bool { false }
     @Environment(\.themeColors) var theme
     @Environment(\.colorScheme) var colorScheme
+    @EnvironmentObject var colorTheme: ColorThemeManager
+    
+
     private let gradientManager = GradientWallpaperManager.shared
     @State private var selectedColumn: ListColumn = .name
     @State private var sortAscending = true
@@ -1321,7 +1324,7 @@ loadDocuments()
                     // Greeting section that scrolls off naturally
                     greetingSection
                         .padding(.horizontal, 20)
-                        .padding(.top, 20)
+                        .padding(.top, 40)
                     
                     // Curated sermons section (Spotify/Dwell-like)
                     curatedSermonsSection
@@ -1333,7 +1336,7 @@ loadDocuments()
                         // Docs header that scrolls with content
                         docsHeader
                             .padding(.horizontal, 20)
-                            .padding(.top, 30)
+                            .padding(.top, 8)
                         
                         documentsSection
                             .padding(.horizontal, 20)
@@ -1549,9 +1552,22 @@ loadDocuments()
                     } label: {
                         Image(systemName: "line.3.horizontal.decrease")
                             .font(.system(size: 16))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.black)
                             .frame(width: 30, height: 30)
-                            .background(selectedFilterColumn != nil ? theme.accent : Color.orange, in: Circle())
+                            .background(
+                                Group {
+                                    if selectedFilterColumn != nil {
+                                        Circle().fill(theme.accent)
+                                    } else {
+                                        Circle()
+                                            .fill(Color.white)
+                                            .overlay(
+                                                Circle()
+                                                    .fill(Color.orange.opacity(0.3))
+                                            )
+                                    }
+                                }
+                            )
                     }
                     #endif
                     
@@ -1687,9 +1703,16 @@ loadDocuments()
                         #else
                         Image(systemName: "arrow.up.arrow.down")
                             .font(.system(size: 16))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.black)
                             .frame(width: 30, height: 30)
-                            .background(Color.green, in: Circle())
+                            .background(
+                                Circle()
+                                    .fill(Color.white)
+                                    .overlay(
+                                        Circle()
+                                            .fill(Color.green.opacity(0.2))
+                                    )
+                            )
                         #endif
                     }
                     
@@ -1779,9 +1802,22 @@ loadDocuments()
                         ZStack {
                             Image(systemName: "tag")
                                 .font(.system(size: 16))
-                                .foregroundStyle(.white)
+                                .foregroundStyle(.black)
                                 .frame(width: 30, height: 30)
-                                .background(!selectedTags.isEmpty ? theme.accent : Color.blue, in: Circle())
+                                .background(
+                                    Group {
+                                        if !selectedTags.isEmpty {
+                                            Circle().fill(theme.accent)
+                                        } else {
+                                            Circle()
+                                                .fill(Color.white)
+                                                .overlay(
+                                                    Circle()
+                                                        .fill(Color.blue.opacity(0.3))
+                                                )
+                                        }
+                                    }
+                                )
                             
                             // Badge for selected tags count
                             if !selectedTags.isEmpty {
@@ -1804,7 +1840,7 @@ loadDocuments()
                     .font(.system(size: 12))
                     .foregroundStyle(theme.secondary.opacity(0.7))
                 
-                Text("Long press on document to assign Pin, WIP, Schedule or view Document Details")
+                Text("Long press on a document for details")
                     .font(.system(size: 12))
                     .foregroundStyle(theme.secondary.opacity(0.7))
                 
@@ -4273,10 +4309,10 @@ loadDocuments()
     private var curatedSermonsSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             // Section header with dropdown
-            HStack {
+            HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Curated for You")
-                        .font(.custom("InterTight-Bold", size: 20))
+                        .font(.custom("InterTight-Bold", size: 19))
                         .foregroundStyle(theme.primary)
                     
                     Text("Handpicked sermon tools and insights")
@@ -4287,17 +4323,30 @@ loadDocuments()
                 Spacer()
             }
 
-            // Unified “Spotify-like” cards grid (each card opens its sheet)
+            // Unified "Spotify-like" cards grid (each card opens its sheet)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 20) {
                     ForEach(CurationType.allCases.filter { $0 != .trending }, id: \.self) { type in
                         curatedCategoryCard(type)
                     }
                 }
-                .padding(.horizontal, 12)
+                .padding(.horizontal, 20)
+                .frame(height: 280)
             }
         }
         .padding(.vertical, 20)
+        .overlay(
+            // Floating theme dropdown picker
+            VStack {
+                HStack {
+                    Spacer()
+                    ThemeDropdownPicker()
+                        .padding(.top, 22) // Align with the "Curated for You" title
+                        .padding(.trailing, 0)
+                }
+                Spacer()
+            }
+        )
         .onAppear {
             if aiCuratedSermons.isEmpty && !isGeneratingInsights {
                 generateAICuratedSermons()
@@ -4309,8 +4358,8 @@ loadDocuments()
     @ViewBuilder
     private var curatedContentView: some View {
         switch selectedCurationType {
-        case .insights:
-            curatedSermonsCarousel
+        case .todaysDocuments:
+            todaysDocumentsSection
         case .sermonJournal:
             sermonJournalSection
         case .preachItAgain:
@@ -4321,14 +4370,121 @@ loadDocuments()
             curatedSermonsCarousel
         }
     }
+    
+    // Row used in Today's Documents list, showing proper document icons/headers
+    private struct TodayListRow: View {
+        let document: Letterspace_CanvasDocument
+        @Environment(\.themeColors) private var theme
+        @Environment(\.colorScheme) private var colorScheme
+        private let iconSize: CGFloat = 24
+
+        var body: some View {
+            HStack(spacing: 10) {
+                if let headerImage = loadHeaderImage(for: document) {
+                    let isIcon = document.elements.first(where: { $0.type == .headerImage })?.content.contains("header_icon_") ?? false
+                    #if os(macOS)
+                    Image(nsImage: headerImage)
+                        .resizable()
+                        .aspectRatio(contentMode: isIcon ? .fit : .fill)
+                        .frame(width: iconSize, height: iconSize)
+                        .clipShape(isIcon ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: 4)))
+                    #else
+                    Image(uiImage: headerImage)
+                        .resizable()
+                        .aspectRatio(contentMode: isIcon ? .fit : .fill)
+                        .frame(width: iconSize, height: iconSize)
+                        .clipShape(isIcon ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: 4)))
+                    #endif
+                } else {
+                    Image(systemName: "doc.text")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .frame(width: iconSize, height: iconSize)
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(document.title.isEmpty ? "Untitled" : document.title)
+                        .font(.custom("InterTight-SemiBold", size: 14))
+                        .foregroundStyle(colorScheme == .dark ? .white : .black)
+                        .lineLimit(1)
+                    if !document.subtitle.isEmpty {
+                        Text(document.subtitle)
+                            .font(.custom("InterTight-Regular", size: 12))
+                            .foregroundStyle(theme.primary.opacity(0.65))
+                            .lineLimit(1)
+                    }
+                }
+                Spacer()
+            }
+        }
+
+        #if os(macOS)
+        private func loadHeaderImage(for document: Letterspace_CanvasDocument) -> NSImage? {
+            guard let headerElement = document.elements.first(where: { $0.type == .headerImage }), !headerElement.content.isEmpty, let appDirectory = Letterspace_CanvasDocument.getAppDocumentsDirectory() else { return nil }
+            let documentPath = appDirectory.appendingPathComponent("\(document.id)")
+            let imagesPath = documentPath.appendingPathComponent("Images")
+            let imageUrl = imagesPath.appendingPathComponent(headerElement.content)
+            return NSImage(contentsOf: imageUrl)
+        }
+        #else
+        private func loadHeaderImage(for document: Letterspace_CanvasDocument) -> UIImage? {
+            guard let headerElement = document.elements.first(where: { $0.type == .headerImage }), !headerElement.content.isEmpty, let appDirectory = Letterspace_CanvasDocument.getAppDocumentsDirectory() else { return nil }
+            let documentPath = appDirectory.appendingPathComponent("\(document.id)")
+            let imagesPath = documentPath.appendingPathComponent("Images")
+            let imageUrl = imagesPath.appendingPathComponent(headerElement.content)
+            return UIImage(contentsOfFile: imageUrl.path)
+        }
+        #endif
+    }
+    
+    // Handle document selection in Today's Documents
+    private func onSelectDocument(_ document: Letterspace_CanvasDocument) {
+        self.document = document
+        self.sidebarMode = .details
+        self.isRightSidebarVisible = true
+    }
+
+    // MARK: - Today's Documents Section (list style)
+    @ViewBuilder
+    private var todaysDocumentsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+
+            if todayDocumentIds.isEmpty {
+                VStack(spacing: 8) {
+                    Image(systemName: "calendar.badge.checkmark")
+                        .font(.system(size: 28))
+                        .foregroundStyle(theme.primary.opacity(0.4))
+                    Text("No documents added for today")
+                        .font(.custom("InterTight-Medium", size: 14))
+                        .foregroundStyle(theme.primary.opacity(0.6))
+                    Button(action: { showTodayPicker = true }) {
+                        Text("Add Documents")
+                            .font(.custom("InterTight-SemiBold", size: 13))
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 24)
+            } else {
+                // List style with proper icons
+                VStack(spacing: 0) {
+                    ForEach(documents.filter { todayDocumentIds.contains($0.id) }) { doc in
+                        Button(action: { onSelectDocument(doc) }) {
+                            TodayListRow(document: doc)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 10)
+                        }
+                        .buttonStyle(.plain)
+                        Divider().padding(.leading, 16)
+                    }
+                }
+            }
+        }
+    }
 
     @ViewBuilder
     private func curatedCategoryContent(_ type: CurationType) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                Text(type.rawValue)
-                    .font(.custom("InterTight-Bold", size: 20))
-                    .padding(.horizontal, 16)
                 curatedContentViewFor(type)
                     .padding(.horizontal, 16)
             }
@@ -4336,16 +4492,32 @@ loadDocuments()
         }
         .navigationTitle(type.rawValue)
         #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button("Done") { activeSheet = nil }
+            ToolbarItem(placement: .navigationBarTrailing) {
+                HStack(spacing: 16) {
+                    if type == .todaysDocuments {
+                        Button {
+                            showTodayPicker = true
+                        } label: {
+                            Image(systemName: "plus.circle.fill")
+                        }
+                        .accessibilityLabel("Add Documents")
+                    }
+                    Button("Done") { activeSheet = nil }
+                }
             }
         }
         #else
         .toolbar {
             ToolbarItem(placement: .automatic) {
                 Button("Done") { activeSheet = nil }
+            }
+            ToolbarItem(placement: .automatic) {
+                if type == .todaysDocuments {
+                    Button {
+                        showTodayPicker = true
+                    } label: { Image(systemName: "plus.circle.fill") }
+                }
             }
         }
         #endif
@@ -4356,14 +4528,29 @@ loadDocuments()
                 generateAICuratedSermons()
             }
         }
+        .sheet(isPresented: $showTodayPicker) {
+            TodayDocumentsPicker(
+                allDocuments: documents,
+                initiallySelected: todayDocumentIds,
+                onDone: { selection in
+                    todayDocumentIds = selection
+                    updateContentForNewCurationType()
+                    showTodayPicker = false
+                },
+                onCancel: { showTodayPicker = false }
+            )
+            #if os(macOS)
+            .frame(width: 500, height: 650)
+            #endif
+        }
     }
 
     // Explicit variant to render for a provided type (avoids stale selected type on first open)
     @ViewBuilder
     private func curatedContentViewFor(_ type: CurationType) -> some View {
         switch type {
-        case .insights:
-            curatedSermonsCarousel
+        case .todaysDocuments:
+            todaysDocumentsSection
         case .sermonJournal:
             sermonJournalSection
         case .preachItAgain:
@@ -4410,12 +4597,17 @@ loadDocuments()
                 Image(systemName: selectedCurationType.icon)
                     .font(.system(size: 32))
                     .foregroundStyle(theme.primary.opacity(0.3))
-                Text("No \(selectedCurationType.rawValue.lowercased()) available")
+                Text(selectedCurationType == .todaysDocuments ? "No documents added for today" : "No \(selectedCurationType.rawValue.lowercased()) available")
                     .font(.custom("InterTight-Medium", size: 16))
                     .foregroundStyle(theme.primary.opacity(0.6))
-                Text("Content will appear when you have sermons")
-                    .font(.custom("InterTight-Regular", size: 12))
-                    .foregroundStyle(theme.primary.opacity(0.5))
+                if selectedCurationType == .todaysDocuments {
+                    Button("Add Documents") { showTodayPicker = true }
+                        .font(.custom("InterTight-SemiBold", size: 13))
+                } else {
+                    Text("Content will appear when you have sermons")
+                        .font(.custom("InterTight-Regular", size: 12))
+                        .foregroundStyle(theme.primary.opacity(0.5))
+                }
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 40)
@@ -4451,173 +4643,372 @@ loadDocuments()
         switch type {
         case .sermonJournal:
             journalEntriesCard
-                .frame(width: 280, height: 160)
+                .frame(width: 250, height: 260)
         default:
             Button(action: {
                 activeSheet = .curatedCategory(type)
             }) {
                 switch type {
-                case .insights:
-                    ZStack {
-                        LinearGradient(colors: [Color.teal.opacity(0.85), Color.indigo.opacity(0.7)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                            .clipShape(RoundedRectangle(cornerRadius: 16))
-                            .shadow(color: .black.opacity(0.12), radius: 12, x: 0, y: 8)
-                        VStack(alignment: .leading, spacing: 10) {
-                            HStack {
-                                Image(systemName: "lightbulb.fill")
-                                    .foregroundStyle(.white)
+                case .todaysDocuments:
+                    VStack(alignment: .leading, spacing: 12) {
+                        // Colored section
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "doc.text")
+                                    .foregroundStyle(.black)
                                     .font(.system(size: 18, weight: .semibold))
+                                Text("Today's Docs")
+                                    .font(.custom("InterTight-Bold", size: 17))
+                                    .foregroundStyle(.black)
                                 Spacer()
                             }
-                            Text("Insights")
-                                .font(.custom("InterTight-SemiBold", size: 18))
-                                .foregroundStyle(.white)
-                            Text("AI-powered sermon insights")
-                                .font(.custom("InterTight-Regular", size: 12))
-                                .foregroundStyle(.white.opacity(0.9))
+                            
+                            Text("Curate what you'll use today")
+                                .font(.custom("InterTight-Regular", size: 14))
+                                .foregroundStyle(.black.opacity(0.7))
                                 .lineLimit(2)
+                            
                             Spacer()
+                            
+                            // Pills showing current status
                             HStack(spacing: 6) {
-                                Image(systemName: "sparkles")
-                                Text("Open")
+                                let count = documents.filter { todayDocumentIds.contains($0.id) }.count
+                                if count > 0 {
+                                    Text("\(count) Selected")
+                                        .font(.custom("InterTight-Medium", size: 11))
+                                        .foregroundStyle(.black)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 3)
+                                        .background(.black.opacity(0.1), in: Capsule())
+                                } else {
+                                    Text("Empty")
+                                        .font(.custom("InterTight-Medium", size: 11))
+                                        .foregroundStyle(.black)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 3)
+                                        .background(.black.opacity(0.1), in: Capsule())
+                                }
+                                Spacer()
                             }
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(.white)
                         }
                         .padding(16)
+                        .frame(height: 190)
+                        .frame(maxWidth: .infinity)
+                        .background(
+                            ZStack {
+                                Color.white
+                                colorTheme.currentTheme.curatedCards.todaysDocs
+                            }
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        
+                        // Explore button below colored section
+                        HStack {
+                            Text("Explore")
+                                .font(.custom("InterTight-Medium", size: 14))
+                                .foregroundStyle(.primary)
+                            Spacer()
+                            Image(systemName: "arrow.right")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.horizontal, 4)
                     }
-                    .frame(width: 280, height: 160)
+                    .padding(16)
+                    .background(colorScheme == .dark ? Color(.systemGray6) : Color(.systemBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(Color(.separator), lineWidth: 0.5)
+                    )
+                    .shadow(color: .black.opacity(colorScheme == .dark ? 0.3 : 0.04), radius: 8, x: 0, y: 2)
+                    .frame(width: 250, height: 260)
 
                 case .preachItAgain:
-                    ZStack {
-                        LinearGradient(colors: [Color.orange.opacity(0.85), Color.red.opacity(0.7)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                            .clipShape(RoundedRectangle(cornerRadius: 16))
-                            .shadow(color: .black.opacity(0.12), radius: 12, x: 0, y: 8)
+                    VStack(alignment: .leading, spacing: 12) {
+                        // Colored section
                         VStack(alignment: .leading, spacing: 8) {
-                            HStack {
-                                Image(systemName: "arrow.clockwise.circle.fill")
-                                    .foregroundStyle(.white)
+                            HStack(spacing: 8) {
+                                Image(systemName: "arrow.clockwise.circle")
+                                    .foregroundStyle(.black)
                                     .font(.system(size: 18, weight: .semibold))
+                                Text("Preach it Again")
+                                    .font(.custom("InterTight-Bold", size: 17))
+                                    .foregroundStyle(.black)
                                 Spacer()
                             }
-                            Text("Preach it Again")
-                                .font(.custom("InterTight-SemiBold", size: 18))
-                                .foregroundStyle(.white)
-                            Text("Ready to re-preach candidates")
-                                .font(.custom("InterTight-Regular", size: 12))
-                                .foregroundStyle(.white.opacity(0.9))
+                            
+                            Text("Sermons ready for another delivery")
+                                .font(.custom("InterTight-Regular", size: 14))
+                                .foregroundStyle(.black.opacity(0.7))
                                 .lineLimit(2)
+                            
                             Spacer()
+                            
+                            // Pills showing current status
                             HStack(spacing: 6) {
                                 let count = documents.filter { doc in
                                     let sixMonthsAgo = Calendar.current.date(byAdding: .month, value: -6, to: Date()) ?? Date()
                                     return doc.variations.contains { v in (v.datePresented ?? .distantFuture) <= sixMonthsAgo }
                                 }.count
-                                Image(systemName: "number")
-                                Text("\(count) ready")
+                                if count > 0 {
+                                    Text("\(count) Ready")
+                                        .font(.custom("InterTight-Medium", size: 11))
+                                        .foregroundStyle(.black)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 3)
+                                        .background(.black.opacity(0.1), in: Capsule())
+                                } else {
+                                    Text("None Ready")
+                                        .font(.custom("InterTight-Medium", size: 11))
+                                        .foregroundStyle(.black)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 3)
+                                        .background(.black.opacity(0.1), in: Capsule())
+                                }
+                                Spacer()
                             }
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(.white)
                         }
                         .padding(16)
+                        .frame(height: 190)
+                        .frame(maxWidth: .infinity)
+                        .background(
+                            ZStack {
+                                Color.white
+                                Color.orange.opacity(0.3)
+                            }
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        
+                        // Explore button below colored section
+                        HStack {
+                            Text("Explore")
+                                .font(.custom("InterTight-Medium", size: 14))
+                                .foregroundStyle(.primary)
+                            Spacer()
+                            Image(systemName: "arrow.right")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.horizontal, 4)
                     }
-                    .frame(width: 280, height: 160)
+                    .padding(16)
+                    .background(colorScheme == .dark ? Color(.systemGray6) : Color(.systemBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(Color(.separator), lineWidth: 0.5)
+                    )
+                    .shadow(color: .black.opacity(colorScheme == .dark ? 0.3 : 0.04), radius: 8, x: 0, y: 2)
+                    .frame(width: 250, height: 260)
 
                 case .statistics:
-                    ZStack {
-                        LinearGradient(colors: [Color.blue.opacity(0.85), Color.purple.opacity(0.65)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                            .clipShape(RoundedRectangle(cornerRadius: 16))
-                            .shadow(color: .black.opacity(0.12), radius: 12, x: 0, y: 8)
-                        VStack(alignment: .leading, spacing: 10) {
-                            HStack {
-                                Image(systemName: "chart.bar.fill")
-                                    .foregroundStyle(.white)
+                    VStack(alignment: .leading, spacing: 12) {
+                        // Colored section
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "chart.bar")
+                                    .foregroundStyle(.black)
                                     .font(.system(size: 18, weight: .semibold))
+                                Text("Statistics")
+                                    .font(.custom("InterTight-Bold", size: 17))
+                                    .foregroundStyle(.black)
                                 Spacer()
                             }
-                            Text("Statistics")
-                                .font(.custom("InterTight-SemiBold", size: 18))
-                                .foregroundStyle(.white)
-                            Text("Signals, trends, coverage")
-                                .font(.custom("InterTight-Regular", size: 12))
-                                .foregroundStyle(.white.opacity(0.9))
+                            
+                            Text("Analytics and sermon insights")
+                                .font(.custom("InterTight-Regular", size: 14))
+                                .foregroundStyle(.black.opacity(0.7))
+                                .lineLimit(2)
+                            
                             Spacer()
-                            // Mini bar motif
-                            HStack(alignment: .bottom, spacing: 4) {
-                                RoundedRectangle(cornerRadius: 2).fill(Color.white.opacity(0.8)).frame(width: 10, height: 12)
-                                RoundedRectangle(cornerRadius: 2).fill(Color.white.opacity(0.9)).frame(width: 10, height: 20)
-                                RoundedRectangle(cornerRadius: 2).fill(Color.white.opacity(0.7)).frame(width: 10, height: 8)
-                                RoundedRectangle(cornerRadius: 2).fill(Color.white).frame(width: 10, height: 24)
+                            
+                            // Pills showing analytics info
+                            HStack(spacing: 6) {
+                                Text("Analytics")
+                                    .font(.custom("InterTight-Medium", size: 11))
+                                    .foregroundStyle(.black)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 3)
+                                    .background(.black.opacity(0.1), in: Capsule())
+                                
+                                Text("Trends")
+                                    .font(.custom("InterTight-Medium", size: 11))
+                                    .foregroundStyle(.black)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 3)
+                                    .background(.black.opacity(0.1), in: Capsule())
+                                Spacer()
                             }
                         }
                         .padding(16)
+                        .frame(height: 190)
+                        .frame(maxWidth: .infinity)
+                        .background(
+                            ZStack {
+                                Color.white
+                                colorTheme.currentTheme.curatedCards.statistics
+                            }
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        
+                        // Explore button below colored section
+                        HStack {
+                            Text("Explore")
+                                .font(.custom("InterTight-Medium", size: 14))
+                                .foregroundStyle(.primary)
+                            Spacer()
+                            Image(systemName: "arrow.right")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.horizontal, 4)
                     }
-                    .frame(width: 280, height: 160)
+                    .padding(16)
+                    .background(colorScheme == .dark ? Color(.systemGray6) : Color(.systemBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(Color(.separator), lineWidth: 0.5)
+                    )
+                    .shadow(color: .black.opacity(colorScheme == .dark ? 0.3 : 0.04), radius: 8, x: 0, y: 2)
+                    .frame(width: 250, height: 260)
 
                 case .recent:
-                    ZStack {
-                        LinearGradient(colors: [Color.gray.opacity(0.6), Color.blue.opacity(0.6)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                            .clipShape(RoundedRectangle(cornerRadius: 16))
-                            .shadow(color: .black.opacity(0.12), radius: 12, x: 0, y: 8)
+                    VStack(alignment: .leading, spacing: 12) {
+                        // Colored section
                         VStack(alignment: .leading, spacing: 8) {
-                            HStack {
-                                Image(systemName: "clock.fill")
-                                    .foregroundStyle(.white)
+                            HStack(spacing: 8) {
+                                Image(systemName: "clock")
+                                    .foregroundStyle(.black)
                                     .font(.system(size: 18, weight: .semibold))
+                                Text("Recently Opened")
+                                    .font(.custom("InterTight-Bold", size: 17))
+                                    .foregroundStyle(.black)
                                 Spacer()
                             }
-                            Text("Recently Opened")
-                                .font(.custom("InterTight-SemiBold", size: 18))
-                                .foregroundStyle(.white)
-                            if let first = documents.first {
-                                Text(first.title.isEmpty ? "Untitled" : first.title)
-                                    .font(.custom("InterTight-Regular", size: 12))
-                                    .foregroundStyle(.white.opacity(0.9))
-                                    .lineLimit(1)
-                            }
+                            
+                            Text("Your latest document activity")
+                                .font(.custom("InterTight-Regular", size: 14))
+                                .foregroundStyle(.black.opacity(0.7))
+                                .lineLimit(2)
+                            
                             Spacer()
+                            
+                            // Pills showing recent activity
                             HStack(spacing: 6) {
-                                Image(systemName: "list.bullet")
-                                Text("View list")
+                                let recentCount = min(documents.count, 5)
+                                if recentCount > 0 {
+                                    Text("\(recentCount) Recent")
+                                        .font(.custom("InterTight-Medium", size: 11))
+                                        .foregroundStyle(.black)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 3)
+                                        .background(.black.opacity(0.1), in: Capsule())
+                                } else {
+                                    Text("No Activity")
+                                        .font(.custom("InterTight-Medium", size: 11))
+                                        .foregroundStyle(.black)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 3)
+                                        .background(.black.opacity(0.1), in: Capsule())
+                                }
+                                Spacer()
                             }
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(.white)
                         }
                         .padding(16)
+                        .frame(height: 190)
+                        .frame(maxWidth: .infinity)
+                        .background(
+                            ZStack {
+                                Color.white
+                                Color.blue.opacity(0.3)
+                            }
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        
+                        // Explore button below colored section
+                        HStack {
+                            Text("Explore")
+                                .font(.custom("InterTight-Medium", size: 14))
+                                .foregroundStyle(.primary)
+                            Spacer()
+                            Image(systemName: "arrow.right")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.horizontal, 4)
                     }
-                    .frame(width: 280, height: 160)
+                    .padding(16)
+                    .background(colorScheme == .dark ? Color(.systemGray6) : Color(.systemBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(Color(.separator), lineWidth: 0.5)
+                    )
+                    .shadow(color: .black.opacity(colorScheme == .dark ? 0.3 : 0.04), radius: 8, x: 0, y: 2)
+                    .frame(width: 250, height: 260)
 
                 case .trending:
-                    ZStack {
-                        LinearGradient(colors: [Color.green.opacity(0.75), Color.blue.opacity(0.65)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                            .clipShape(RoundedRectangle(cornerRadius: 16))
-                            .shadow(color: .black.opacity(0.12), radius: 12, x: 0, y: 8)
-                        VStack(alignment: .leading, spacing: 10) {
-                            HStack {
-                                Image(systemName: "chart.line.uptrend.xyaxis")
-                                    .foregroundStyle(.white)
-                                    .font(.system(size: 18, weight: .semibold))
-                                Spacer()
-                            }
+                    VStack(alignment: .leading, spacing: 12) {
+                        // Colored section
+                        VStack(alignment: .leading, spacing: 8) {
                             Text("Trending")
-                                .font(.custom("InterTight-SemiBold", size: 18))
-                                .foregroundStyle(.white)
-                            Text("Most accessed this month")
-                                .font(.custom("InterTight-Regular", size: 12))
-                                .foregroundStyle(.white.opacity(0.9))
+                                .font(.custom("InterTight-Bold", size: 18))
+                                .foregroundStyle(.black)
+                            
+                            Text("Most accessed sermons this month")
+                                .font(.custom("InterTight-Regular", size: 14))
+                                .foregroundStyle(.black.opacity(0.7))
+                                .lineLimit(2)
+                            
                             Spacer()
-                            // Tiny sparkline motif
-                            HStack(spacing: 2) {
-                                Circle().fill(Color.white.opacity(0.8)).frame(width: 3, height: 3)
-                                Circle().fill(Color.white.opacity(0.6)).frame(width: 3, height: 3)
-                                Circle().fill(Color.white).frame(width: 3, height: 3)
-                                Circle().fill(Color.white.opacity(0.7)).frame(width: 3, height: 3)
-                                Circle().fill(Color.white.opacity(0.9)).frame(width: 3, height: 3)
+                            
+                            // Pills showing trending info
+                            HStack(spacing: 6) {
+                                Text("Popular")
+                                    .font(.custom("InterTight-Medium", size: 11))
+                                    .foregroundStyle(.black)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 3)
+                                    .background(.black.opacity(0.1), in: Capsule())
+                                
+                                Text("This Month")
+                                    .font(.custom("InterTight-Medium", size: 11))
+                                    .foregroundStyle(.black)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 3)
+                                    .background(.black.opacity(0.1), in: Capsule())
+                                Spacer()
                             }
                         }
                         .padding(16)
+                        .frame(height: 190)
+                        .frame(maxWidth: .infinity)
+                        .background(.green.opacity(0.3))
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        
+                        // Explore button below colored section
+                        HStack {
+                            Text("Explore")
+                                .font(.custom("InterTight-Medium", size: 14))
+                                .foregroundStyle(.primary)
+                            Spacer()
+                            Image(systemName: "arrow.right")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.horizontal, 4)
                     }
-                    .frame(width: 280, height: 160)
+                    .padding(16)
+                    .background(colorScheme == .dark ? Color(.systemGray6) : Color(.systemBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(Color(.separator), lineWidth: 0.5)
+                    )
+                    .shadow(color: .black.opacity(colorScheme == .dark ? 0.3 : 0.04), radius: 8, x: 0, y: 2)
+                    .frame(width: 250, height: 260)
 
                 default:
                     EmptyView()
@@ -4791,7 +5182,7 @@ loadDocuments()
     
     // Curation types for different views
     enum CurationType: String, CaseIterable {
-        case insights = "Insights"
+        case todaysDocuments = "Today's Documents"
         case sermonJournal = "Sermon Journal"
         case preachItAgain = "Preach it Again"
         case statistics = "Statistics"
@@ -4800,7 +5191,7 @@ loadDocuments()
         
         var icon: String {
             switch self {
-            case .insights: return "lightbulb.fill"
+            case .todaysDocuments: return "calendar.badge.checkmark"
             case .sermonJournal: return "book.pages.fill"
             case .preachItAgain: return "arrow.clockwise.circle.fill"
             case .statistics: return "chart.bar.fill"
@@ -4811,7 +5202,7 @@ loadDocuments()
         
         var description: String {
             switch self {
-            case .insights: return "AI-powered insights for your sermons"
+            case .todaysDocuments: return "Curate the documents you'll use today"
             case .sermonJournal: return "Post-preaching reflections & follow-ups"
             case .preachItAgain: return "Sermons ready for another delivery"
             case .statistics: return "Your sermon statistics and analytics"
@@ -4845,8 +5236,11 @@ loadDocuments()
     // Add state for AI-powered curation
     @State private var aiCuratedSermons: [CuratedSermon] = []
     @State private var isGeneratingInsights: Bool = false
-    @State private var selectedCurationType: CurationType = .insights
+    @State private var selectedCurationType: CurationType = .todaysDocuments
     @State private var showCurationTypeDropdown = false
+    // Today's Documents selection state
+    @State private var todayDocumentIds: Set<String> = []
+    @State private var showTodayPicker: Bool = false
     
     // Generate AI insight for a sermon
     private func generateAIInsight(for document: Letterspace_CanvasDocument) -> String {
@@ -4939,8 +5333,8 @@ loadDocuments()
     // Get documents based on selected curation type
     private func getDocumentsForCurationType() -> [Letterspace_CanvasDocument] {
         switch selectedCurationType {
-        case .insights:
-            return Array(documents.prefix(5))
+        case .todaysDocuments:
+            return Array(documents.filter { todayDocumentIds.contains($0.id) }.prefix(5))
         case .sermonJournal:
             // Return sermons that have been preached recently (have scheduled dates in the past)
             let now = Date()
@@ -4990,15 +5384,15 @@ loadDocuments()
         let hash = abs(document.title.hashValue)
         
         switch selectedCurationType {
-        case .insights:
-            let insights = [
-                "A powerful message about faith and perseverance that resonates with current challenges.",
-                "This sermon explores deep biblical truths with practical applications for daily life.",
-                "An inspiring message of hope and redemption that speaks to the heart.",
-                "A thoughtful exploration of scripture that brings fresh perspective to familiar passages.",
-                "This message offers wisdom and guidance for navigating life's complexities."
+        case .todaysDocuments:
+            let notes = [
+                "Planned for today's service.",
+                "Queued for today's preparation and delivery.",
+                "Selected for today's ministry focus.",
+                "On deck for today's session.",
+                "Curated for today."
             ]
-            return insights[hash % insights.count]
+            return notes[hash % notes.count]
             
         case .sermonJournal:
             // Check if this sermon has journal entries and include insights from them
@@ -5047,8 +5441,8 @@ loadDocuments()
         let hash = abs(document.title.hashValue)
         
         switch selectedCurationType {
-        case .insights:
-            let categories = ["Faith", "Hope", "Wisdom", "Guidance", "Inspiration"]
+        case .todaysDocuments:
+            let categories = ["Today", "Now", "Service", "Prep", "Focus"]
             return categories[hash % categories.count]
             
         case .sermonJournal:
@@ -5075,7 +5469,7 @@ loadDocuments()
     private var sermonJournalSection: some View {
         HStack {
             journalEntriesCard
-                .frame(width: 280, height: 160)
+                .frame(width: 250, height: 260)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 20)
@@ -5272,60 +5666,79 @@ loadDocuments()
         Button(action: {
             showJournalFeedSheet = true
         }) {
-            ZStack {
-                LinearGradient(colors: [Color.indigo.opacity(0.9), Color.purple.opacity(0.7)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                    .clipShape(RoundedRectangle(cornerRadius: 18))
-                    .shadow(color: .black.opacity(0.15), radius: 12, x: 0, y: 8)
-                
-                VStack(spacing: 8) {
-                    HStack(alignment: .center) {
+            VStack(alignment: .leading, spacing: 12) {
+                // Colored section (pastel)
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 8) {
                         Image(systemName: "book.pages")
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.black)
                             .font(.system(size: 18, weight: .semibold))
                         Text("Journal")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.white)
+                            .font(.custom("InterTight-Bold", size: 17))
+                            .foregroundStyle(.black)
                         Spacer()
                     }
                     
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack {
-                            Text("\(SermonJournalService.shared.entries().count)")
-                                .font(.system(size: 22, weight: .bold))
-                                .foregroundStyle(.white)
-                            Text("Entries")
-                                .font(.system(size: 12))
-                                .foregroundStyle(.white.opacity(0.9))
-                            Spacer()
-                        }
-                        
-                        if let lastEntry = SermonJournalService.shared.entries().first {
-                            Text("Last entry \(relativeDate(lastEntry.createdAt))")
-                                .font(.system(size: 11))
-                                .foregroundStyle(.white.opacity(0.85))
-                        } else {
-                            Text("No entries yet")
-                                .font(.system(size: 11))
-                                .foregroundStyle(.white.opacity(0.85))
-                        }
+                    if let lastEntry = SermonJournalService.shared.entries().first {
+                        Text("Last entry \(relativeDate(lastEntry.createdAt))")
+                            .font(.custom("InterTight-Regular", size: 14))
+                            .foregroundStyle(.black.opacity(0.7))
+                            .lineLimit(1)
+                    } else {
+                        Text("No entries yet")
+                            .font(.custom("InterTight-Regular", size: 14))
+                            .foregroundStyle(.black.opacity(0.7))
+                            .lineLimit(1)
                     }
                     
                     Spacer()
                     
+                    // Pills
                     HStack(spacing: 6) {
-                        Image(systemName: "list.bullet")
-                            .foregroundStyle(.white)
-                        Text("Open Feed")
-                            .foregroundStyle(.white)
-                            .font(.system(size: 13, weight: .medium))
+                        let total = SermonJournalService.shared.entries().count
+                        Text("\(total) Entries")
+                            .font(.custom("InterTight-Medium", size: 11))
+                            .foregroundStyle(.black)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(.black.opacity(0.1), in: Capsule())
                         Spacer()
-                        Image(systemName: "arrow.right")
-                            .foregroundStyle(.white)
                     }
                 }
-                .padding(14)
+                .padding(16)
+                .frame(height: 190)
+                .frame(maxWidth: .infinity)
+                .background(
+                    ZStack {
+                        Color.white
+                        colorTheme.currentTheme.curatedCards.journal
+                    }
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                
+                // Explore row
+                HStack(spacing: 8) {
+                    Image(systemName: "list.bullet")
+                        .foregroundStyle(.primary)
+                    Text("Open Feed")
+                        .foregroundStyle(.primary)
+                        .font(.system(size: 14, weight: .medium))
+                    Spacer()
+                    Image(systemName: "arrow.right")
+                        .foregroundStyle(.secondary)
+                        .font(.system(size: 12, weight: .medium))
+                }
+                .padding(.horizontal, 4)
             }
-            .frame(height: 160)
+            .padding(16)
+            .background(colorScheme == .dark ? Color(.systemGray6) : Color(.systemBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(Color(.separator), lineWidth: 0.5)
+            )
+            .shadow(color: .black.opacity(colorScheme == .dark ? 0.3 : 0.04), radius: 8, x: 0, y: 2)
+            .frame(height: 240)
         }
         .buttonStyle(.plain)
     }
@@ -5892,6 +6305,287 @@ private struct IgnoresSafeAreaModifier: ViewModifier {
             let hash = abs(document.title.hashValue)
             return categories[hash % categories.count]
         }
+    }
+
+    // MARK: - Today's Documents Picker (matching folder picker style)
+    private struct TodayDocumentsPicker: View {
+        let allDocuments: [Letterspace_CanvasDocument]
+        let initiallySelected: Set<String>
+        let onDone: (Set<String>) -> Void
+        let onCancel: () -> Void
+        @Environment(\.themeColors) private var theme
+        @State private var selection: Set<String> = []
+        @State private var searchText: String = ""
+
+        init(allDocuments: [Letterspace_CanvasDocument], initiallySelected: Set<String>, onDone: @escaping (Set<String>) -> Void, onCancel: @escaping () -> Void) {
+            self.allDocuments = allDocuments
+            self.initiallySelected = initiallySelected
+            self.onDone = onDone
+            self.onCancel = onCancel
+            _selection = State(initialValue: initiallySelected)
+        }
+
+        var body: some View {
+            #if os(macOS)
+            // macOS: Optimized layout for popover/modal context
+            VStack(spacing: 0) {
+                // Header
+                HStack {
+                    Text("Add Documents")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(theme.primary)
+                    Spacer()
+                    Button(action: onCancel) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(theme.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                
+                Divider()
+                
+                // Search bar
+                HStack {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(theme.secondary)
+                    TextField("Search documents...", text: $searchText)
+                        .textFieldStyle(.plain)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(theme.secondary.opacity(0.1))
+                .cornerRadius(8)
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
+                
+                // Documents list
+                ScrollView {
+                    LazyVStack(spacing: 4) {
+                        ForEach(filteredDocuments) { doc in
+                            DocumentSelectionRowForToday(
+                                document: doc,
+                                isSelected: selection.contains(doc.id),
+                                theme: theme
+                            ) {
+                                toggleDocumentSelection(doc.id)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+                }
+                .frame(maxHeight: 300) // Constrain height for modal context
+                
+                Divider()
+                
+                // Bottom action bar
+                HStack(spacing: 12) {
+                    Button(action: onCancel) {
+                        Text("Cancel")
+                            .foregroundColor(theme.secondary)
+                            .frame(height: 36)
+                            .frame(maxWidth: .infinity)
+                            .background(theme.secondary.opacity(0.1))
+                            .cornerRadius(6)
+                    }
+                    .buttonStyle(.plain)
+                    
+                    Button(action: { onDone(selection) }) {
+                        Text("Add \(selection.count) Documents")
+                            .foregroundColor(.white)
+                            .frame(height: 36)
+                            .frame(maxWidth: .infinity)
+                            .background(selection.isEmpty ? theme.secondary : theme.accent)
+                            .cornerRadius(6)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(selection.isEmpty)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+            }
+            .frame(width: 450, height: 500) // Fixed size for macOS modal
+            .background(theme.background)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 10)
+            #else
+            // iOS: Use NavigationView as before
+            NavigationView {
+                VStack(spacing: 0) {
+                    // Search bar
+                    HStack {
+                        Image(systemName: "magnifyingglass")
+                            .foregroundColor(theme.secondary)
+                        TextField("Search documents...", text: $searchText)
+                            .textFieldStyle(.plain)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .background(theme.secondary.opacity(0.1))
+                    .cornerRadius(10)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 16)
+                    
+                    // Documents list
+                    List {
+                        ForEach(filteredDocuments) { doc in
+                            DocumentSelectionRowForToday(
+                                document: doc,
+                                isSelected: selection.contains(doc.id),
+                                theme: theme
+                            ) {
+                                toggleDocumentSelection(doc.id)
+                            }
+                        }
+                    }
+                    .listStyle(.plain)
+                    
+                    // Bottom action bar
+                    HStack {
+                        Button("Cancel") {
+                            onCancel()
+                        }
+                        .foregroundColor(theme.secondary)
+                        .frame(height: 44)
+                        .frame(maxWidth: .infinity)
+                        .background(theme.secondary.opacity(0.1))
+                        .cornerRadius(8)
+                        
+                        Button("Add \(selection.count) Documents") {
+                            onDone(selection)
+                        }
+                        .foregroundColor(.white)
+                        .frame(height: 44)
+                        .frame(maxWidth: .infinity)
+                        .background(selection.isEmpty ? theme.secondary : theme.accent)
+                        .cornerRadius(8)
+                        .disabled(selection.isEmpty)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 16)
+                    .padding(.top, 8)
+                    .background(theme.surface)
+                }
+                .navigationTitle("Add Documents")
+                .navigationBarTitleDisplayMode(.inline)
+            }
+            #endif
+        }
+        
+        private var filteredDocuments: [Letterspace_CanvasDocument] {
+            if searchText.isEmpty {
+                return allDocuments
+            } else {
+                return allDocuments.filter { doc in
+                    doc.title.localizedCaseInsensitiveContains(searchText)
+                }
+            }
+        }
+        
+        private func toggleDocumentSelection(_ documentId: String) {
+            if selection.contains(documentId) {
+                selection.remove(documentId)
+            } else {
+                selection.insert(documentId)
+            }
+        }
+    }
+
+    // Document selection row matching the folder picker style
+    private struct DocumentSelectionRowForToday: View {
+        let document: Letterspace_CanvasDocument
+        let isSelected: Bool
+        let theme: ThemeColors
+        let onTap: () -> Void
+        
+        var body: some View {
+            Button(action: onTap) {
+                HStack(spacing: 12) {
+                    // Selection indicator
+                    ZStack {
+                        Circle()
+                            .stroke(theme.secondary.opacity(0.3), lineWidth: 2)
+                            .frame(width: 24, height: 24)
+                        
+                        if isSelected {
+                            Circle()
+                                .fill(theme.accent)
+                                .frame(width: 24, height: 24)
+                            
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundColor(.white)
+                        }
+                    }
+                    
+                    // Document info with proper header icon/image
+                    HStack(spacing: 10) {
+                        if let headerImage = loadHeaderImage(for: document) {
+                            let isIcon = document.elements.first(where: { $0.type == .headerImage })?.content.contains("header_icon_") ?? false
+                            #if os(macOS)
+                            Image(nsImage: headerImage)
+                                .resizable()
+                                .aspectRatio(contentMode: isIcon ? .fit : .fill)
+                                .frame(width: 20, height: 20)
+                                .clipShape(isIcon ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: 3)))
+                            #else
+                            Image(uiImage: headerImage)
+                                .resizable()
+                                .aspectRatio(contentMode: isIcon ? .fit : .fill)
+                                .frame(width: 20, height: 20)
+                                .clipShape(isIcon ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: 3)))
+                            #endif
+                        } else {
+                            Image(systemName: "doc.text")
+                                .font(.system(size: 16))
+                                .foregroundStyle(theme.secondary)
+                                .frame(width: 20)
+                        }
+                        
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(document.title.isEmpty ? "Untitled" : document.title)
+                                .font(.system(size: 16))
+                                .foregroundStyle(theme.primary)
+                                .lineLimit(1)
+                            
+                            if !document.subtitle.isEmpty {
+                                Text(document.subtitle)
+                                    .font(.system(size: 14))
+                                    .foregroundStyle(theme.secondary)
+                                    .lineLimit(1)
+                            }
+                        }
+                        
+                        Spacer()
+                    }
+                }
+                .padding(.vertical, 8)
+                .padding(.horizontal, 4)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+        
+        #if os(macOS)
+        private func loadHeaderImage(for document: Letterspace_CanvasDocument) -> NSImage? {
+            guard let headerElement = document.elements.first(where: { $0.type == .headerImage }), !headerElement.content.isEmpty, let appDirectory = Letterspace_CanvasDocument.getAppDocumentsDirectory() else { return nil }
+            let documentPath = appDirectory.appendingPathComponent("\(document.id)")
+            let imagesPath = documentPath.appendingPathComponent("Images")
+            let imageUrl = imagesPath.appendingPathComponent(headerElement.content)
+            return NSImage(contentsOf: imageUrl)
+        }
+        #else
+        private func loadHeaderImage(for document: Letterspace_CanvasDocument) -> UIImage? {
+            guard let headerElement = document.elements.first(where: { $0.type == .headerImage }), !headerElement.content.isEmpty, let appDirectory = Letterspace_CanvasDocument.getAppDocumentsDirectory() else { return nil }
+            let documentPath = appDirectory.appendingPathComponent("\(document.id)")
+            let imagesPath = documentPath.appendingPathComponent("Images")
+            let imageUrl = imagesPath.appendingPathComponent(headerElement.content)
+            return UIImage(contentsOfFile: imageUrl.path)
+        }
+        #endif
     }
 
 enum FoundationModelError: Error {

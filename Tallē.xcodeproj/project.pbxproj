@@ -33,12 +33,58 @@
 		D49BE6232CF6A36000E57C24 /* Exceptions for "Letterspace Canvas" folder in "Tallē" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				"AdditionalDocumentation/AppIntents-Updates.md",
+				"AdditionalDocumentation/AppKit-Implementing-Liquid-Glass-Design.md",
+				"AdditionalDocumentation/Foundation-AttributedString-Updates.md",
+				"AdditionalDocumentation/FoundationModels-Using-on-device-LLM-in-your-app.md",
+				"AdditionalDocumentation/Implementing-Assistive-Access-in-iOS.md",
+				"AdditionalDocumentation/Implementing-Visual-Intelligence-in-iOS.md",
+				"AdditionalDocumentation/MapKit-GeoToolbox-PlaceDescriptors.md",
+				"AdditionalDocumentation/StoreKit-Updates.md",
+				"AdditionalDocumentation/Swift-Charts-3D-Visualization.md",
+				"AdditionalDocumentation/Swift-Concurrency-Updates.md",
+				"AdditionalDocumentation/Swift-InlineArray-Span.md",
+				"AdditionalDocumentation/SwiftData-Class-Inheritance.md",
+				"AdditionalDocumentation/SwiftUI-AlarmKit-Integration.md",
+				"AdditionalDocumentation/SwiftUI-Implementing-Liquid-Glass-Design.md",
+				"AdditionalDocumentation/SwiftUI-New-Toolbar-Features.md",
+				"AdditionalDocumentation/SwiftUI-Styled-Text-Editing.md",
+				"AdditionalDocumentation/SwiftUI-WebKit-Integration.md",
+				"AdditionalDocumentation/UIKit-Implementing-Liquid-Glass-Design.md",
+				"AdditionalDocumentation/WidgetKit-Implementing-Liquid-Glass-Design.md",
+				"AdditionalDocumentation/Widgets-for-visionOS.md",
 				Info.plist,
 			);
 			platformFiltersByRelativePath = {
 				iPadAppDelegate.swift = (ios, );
 			};
 			target = D49BE5FC2CF6A35E00E57C24 /* Tallē */;
+		};
+		D4BA87772E4AF5E500AF56B7 /* Exceptions for "Letterspace Canvas" folder in "Letterspace CanvasTests" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				"AdditionalDocumentation/AppIntents-Updates.md",
+				"AdditionalDocumentation/AppKit-Implementing-Liquid-Glass-Design.md",
+				"AdditionalDocumentation/Foundation-AttributedString-Updates.md",
+				"AdditionalDocumentation/FoundationModels-Using-on-device-LLM-in-your-app.md",
+				"AdditionalDocumentation/Implementing-Assistive-Access-in-iOS.md",
+				"AdditionalDocumentation/Implementing-Visual-Intelligence-in-iOS.md",
+				"AdditionalDocumentation/MapKit-GeoToolbox-PlaceDescriptors.md",
+				"AdditionalDocumentation/StoreKit-Updates.md",
+				"AdditionalDocumentation/Swift-Charts-3D-Visualization.md",
+				"AdditionalDocumentation/Swift-Concurrency-Updates.md",
+				"AdditionalDocumentation/Swift-InlineArray-Span.md",
+				"AdditionalDocumentation/SwiftData-Class-Inheritance.md",
+				"AdditionalDocumentation/SwiftUI-AlarmKit-Integration.md",
+				"AdditionalDocumentation/SwiftUI-Implementing-Liquid-Glass-Design.md",
+				"AdditionalDocumentation/SwiftUI-New-Toolbar-Features.md",
+				"AdditionalDocumentation/SwiftUI-Styled-Text-Editing.md",
+				"AdditionalDocumentation/SwiftUI-WebKit-Integration.md",
+				"AdditionalDocumentation/UIKit-Implementing-Liquid-Glass-Design.md",
+				"AdditionalDocumentation/WidgetKit-Implementing-Liquid-Glass-Design.md",
+				"AdditionalDocumentation/Widgets-for-visionOS.md",
+			);
+			target = D49BE6102CF6A36000E57C24 /* Letterspace CanvasTests */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
@@ -47,6 +93,7 @@
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				D49BE6232CF6A36000E57C24 /* Exceptions for "Letterspace Canvas" folder in "Tallē" target */,
+				D4BA87772E4AF5E500AF56B7 /* Exceptions for "Letterspace Canvas" folder in "Letterspace CanvasTests" target */,
 			);
 			path = "Letterspace Canvas";
 			sourceTree = "<group>";

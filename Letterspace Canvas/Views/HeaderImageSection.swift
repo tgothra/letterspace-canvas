@@ -432,6 +432,14 @@ struct HeaderImageSection: View {
             .aspectRatio(contentMode: isIconContent ? .fit : .fill)
                     .frame(width: isIconContent ? currentHeight : paperWidth, height: currentHeight)
             .clipped()
+            .onTapGesture {
+                // macOS: Show header image menu when clicking the expanded image
+                print("📸 macOS: User clicked expanded header image - showing menu")
+                if let window = NSApp.keyWindow, window.firstResponder is NSTextView {
+                    window.makeFirstResponder(nil)
+                }
+                showHeaderImageMenu = true
+            }
         #elseif os(iOS)
         Image(uiImage: image)
                                     .resizable()

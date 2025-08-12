@@ -106,31 +106,45 @@ struct CleanNativeEditorView: View {
                     showHeaderImageMenu = false
                     // Icon selected - create image from SF Symbol with matching color
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                        // Find the color for this icon
-                        let iconColors: [String: Color] = [
-                            "book.fill": .indigo,
-                            "cross.fill": .purple,
-                            "heart.fill": .pink,
-                            "star.fill": .orange,
-                            "flame.fill": .red,
-                            "leaf.fill": .green,
-                            "mountain.2.fill": .teal,
-                            "sun.max.fill": .yellow,
-                            "moon.fill": .blue,
-                            "hands.sparkles.fill": .mint
+                        // Find the color for this icon - using platform-specific colors
+                        #if os(iOS)
+                        let iconColors: [String: UIColor] = [
+                            "book.fill": UIColor.systemIndigo,
+                            "cross.fill": UIColor.systemPurple,
+                            "heart.fill": UIColor.systemPink,
+                            "star.fill": UIColor.systemOrange,
+                            "flame.fill": UIColor.systemRed,
+                            "leaf.fill": UIColor.systemGreen,
+                            "mountain.2.fill": UIColor.systemTeal,
+                            "sun.max.fill": UIColor.systemYellow,
+                            "moon.fill": UIColor.systemBlue,
+                            "hands.sparkles.fill": UIColor.systemMint
                         ]
-                        let iconColor = iconColors[iconName] ?? .blue
+                        let platformIconColor = iconColors[iconName] ?? UIColor.systemBlue
+                        #else
+                        let iconColors: [String: NSColor] = [
+                            "book.fill": NSColor.systemIndigo,
+                            "cross.fill": NSColor.systemPurple,
+                            "heart.fill": NSColor.systemPink,
+                            "star.fill": NSColor.systemOrange,
+                            "flame.fill": NSColor.systemRed,
+                            "leaf.fill": NSColor.systemGreen,
+                            "mountain.2.fill": NSColor.systemTeal,
+                            "sun.max.fill": NSColor.systemYellow,
+                            "moon.fill": NSColor.systemBlue,
+                            "hands.sparkles.fill": NSColor.systemMint
+                        ]
+                        let platformIconColor = iconColors[iconName] ?? NSColor.systemBlue
+                        #endif
                         
-                        if let iconImage = IconToImageConverter.createCircularIcon(
+                        if let iconImage = IconToImageConverter.createCircularIconWithPlatformColor(
                             from: iconName,
                             size: CGSize(width: 120, height: 120),
-                            backgroundColor: iconColor,
-                            iconColor: .white
+                            backgroundColor: platformIconColor
                         ),
-                        let imageData = IconToImageConverter.createImageData(
+                        let imageData = IconToImageConverter.createImageDataWithPlatformColor(
                             from: iconName,
-                            backgroundColor: iconColor,
-                            iconColor: .white,
+                            backgroundColor: platformIconColor,
                             isCircular: true
                         ) {
                             headerImage = iconImage
@@ -483,13 +497,23 @@ private struct PhotosPickerView: View {
                 .background(.ultraThinMaterial)
             }
             .navigationTitle("Photo Library")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
+                #if os(iOS)
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Cancel") {
                         dismiss()
                     }
                 }
+                #else
+                ToolbarItem(placement: .automatic) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+                #endif
             }
         }
         .onChange(of: photosPickerItem) { _, newItem in
@@ -558,6 +582,13 @@ private struct FloatingHeaderCard: View {
                                 return isIcon ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: 14))
                             }())
                             .matchedGeometryEffect(id: "headerImage", in: imageNamespace)
+                            #if os(macOS)
+                            .onTapGesture {
+                                // macOS: Show header image menu when clicking the floating header image
+                                print("📸 macOS: User clicked floating header image - showing menu")
+                                showHeaderImageMenu = true
+                            }
+                            #endif
                         
                         // Subtle action buttons overlay
                         HStack(spacing: 8) {
@@ -574,14 +605,9 @@ private struct FloatingHeaderCard: View {
                             .buttonStyle(.plain)
                         #else
                         Button {
-                            // macOS: open panel fallback for change
-                            let panel = NSOpenPanel()
-                            panel.allowedContentTypes = [.image]
-                            panel.allowsMultipleSelection = false
-                            if panel.runModal() == .OK, let url = panel.url, let data = try? Data(contentsOf: url), let img = decodeImage(from: data) {
-                                self.image = img
-                                onImagePicked(img, data)
-                            }
+                            // macOS: Show header image menu instead of direct file picker
+                            print("📸 macOS: User clicked floating header button - showing menu")
+                            showHeaderImageMenu = true
                         } label: {
                             Image(systemName: "photo")
                                 .font(.system(size: 14, weight: .medium))
@@ -677,13 +703,9 @@ private struct FloatingHeaderCard: View {
                         .buttonStyle(.plain)
                         #else
                         Button {
-                            let panel = NSOpenPanel()
-                            panel.allowedContentTypes = [.image]
-                            panel.allowsMultipleSelection = false
-                            if panel.runModal() == .OK, let url = panel.url, let data = try? Data(contentsOf: url), let img = decodeImage(from: data) {
-                                image = img
-                                onImagePicked(img, data)
-                            }
+                            // macOS: Show header image menu instead of direct file picker for placeholder
+                            print("📸 macOS: User clicked floating header placeholder - showing menu")
+                            showHeaderImageMenu = true
                         } label: {
                             Image(systemName: "photo.badge.plus")
                                 .font(.title)

@@ -41,7 +41,11 @@ struct IconToImageConverter {
         isCircular: Bool
     ) -> UIImage? {
         
-        let renderer = UIGraphicsImageRenderer(size: size)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1.0
+        format.opaque = false
+        format.preferredRange = .standard
+        let renderer = UIGraphicsImageRenderer(size: size, format: format)
         
         return renderer.image { context in
             let rect = CGRect(origin: .zero, size: size)
@@ -90,8 +94,13 @@ struct IconToImageConverter {
     ) -> NSImage? {
         
         let image = NSImage(size: size)
-        
         image.lockFocus()
+        
+        // Set up colorspace for proper color rendering
+        if let context = NSGraphicsContext.current?.cgContext {
+            context.setFillColorSpace(CGColorSpace(name: CGColorSpace.sRGB)!)
+            context.setStrokeColorSpace(CGColorSpace(name: CGColorSpace.sRGB)!)
+        }
         
         let rect = NSRect(origin: .zero, size: size)
         
@@ -161,6 +170,37 @@ struct IconToImageConverter {
         )
     }
     
+    /// Creates a circular icon image with platform-specific colors
+    #if os(iOS)
+    static func createCircularIconWithPlatformColor(
+        from systemName: String,
+        size: CGSize = CGSize(width: 80, height: 80),
+        backgroundColor: UIColor
+    ) -> UIImage? {
+        return createUIImageWithPlatformColor(
+            from: systemName,
+            size: size,
+            backgroundColor: backgroundColor,
+            iconColor: .white,
+            isCircular: true
+        )
+    }
+    #else
+    static func createCircularIconWithPlatformColor(
+        from systemName: String,
+        size: CGSize = CGSize(width: 80, height: 80),
+        backgroundColor: NSColor
+    ) -> NSImage? {
+        return createNSImageWithPlatformColor(
+            from: systemName,
+            size: size,
+            backgroundColor: backgroundColor,
+            iconColor: .white,
+            isCircular: true
+        )
+    }
+    #endif
+    
     /// Creates image data from an SF Symbol suitable for saving
     /// - Parameters:
     ///   - systemName: The SF Symbol system name
@@ -185,16 +225,173 @@ struct IconToImageConverter {
         }
         
         #if os(iOS)
-        return image.jpegData(compressionQuality: 0.9)
+        return image.pngData()
         #else
         guard let tiffData = image.tiffRepresentation,
               let bitmapImage = NSBitmapImageRep(data: tiffData) else {
             return nil
         }
         
-        return bitmapImage.representation(using: .jpeg, properties: [.compressionFactor: 0.9])
+        return bitmapImage.representation(using: .png, properties: [:])
         #endif
     }
+    
+    /// Creates image data with platform-specific colors
+    #if os(iOS)
+    static func createImageDataWithPlatformColor(
+        from systemName: String,
+        backgroundColor: UIColor,
+        isCircular: Bool = false
+    ) -> Data? {
+        guard let image = createUIImageWithPlatformColor(
+            from: systemName,
+            backgroundColor: backgroundColor,
+            iconColor: .white,
+            isCircular: isCircular
+        ) else {
+            return nil
+        }
+        return image.pngData()
+    }
+    #else
+    static func createImageDataWithPlatformColor(
+        from systemName: String,
+        backgroundColor: NSColor,
+        isCircular: Bool = false
+    ) -> Data? {
+        guard let image = createNSImageWithPlatformColor(
+            from: systemName,
+            backgroundColor: backgroundColor,
+            iconColor: .white,
+            isCircular: isCircular
+        ) else {
+            return nil
+        }
+        
+        guard let tiffData = image.tiffRepresentation,
+              let bitmapImage = NSBitmapImageRep(data: tiffData) else {
+            return nil
+        }
+        
+        return bitmapImage.representation(using: .png, properties: [:])
+    }
+    #endif
+    
+    // MARK: - Platform-specific creation methods
+    
+    #if os(iOS)
+    private static func createUIImageWithPlatformColor(
+        from systemName: String,
+        size: CGSize = CGSize(width: 80, height: 80),
+        backgroundColor: UIColor,
+        iconColor: UIColor,
+        isCircular: Bool
+    ) -> UIImage? {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1.0
+        format.opaque = false
+        format.preferredRange = .standard
+        let renderer = UIGraphicsImageRenderer(size: size, format: format)
+        
+        return renderer.image { context in
+            let rect = CGRect(origin: .zero, size: size)
+            
+            if isCircular {
+                // Create circular clipping path
+                let radius = min(size.width, size.height) / 2
+                let center = CGPoint(x: size.width / 2, y: size.height / 2)
+                let circlePath = UIBezierPath(arcCenter: center, radius: radius, startAngle: 0, endAngle: .pi * 2, clockwise: true)
+                circlePath.addClip()
+            }
+            
+            // Fill background with platform color
+            backgroundColor.setFill()
+            context.fill(rect)
+            
+            // Create and draw the SF Symbol
+            let iconSize = min(size.width, size.height) * (isCircular ? 0.5 : 0.4)
+            let configuration = UIImage.SymbolConfiguration(pointSize: iconSize, weight: .medium)
+            
+            guard let symbolImage = UIImage(systemName: systemName, withConfiguration: configuration) else {
+                return
+            }
+            
+            // Tint the icon with platform color
+            let tintedImage = symbolImage.withTintColor(iconColor, renderingMode: .alwaysOriginal)
+            
+            // Center the icon
+            let iconRect = CGRect(
+                x: (size.width - tintedImage.size.width) / 2,
+                y: (size.height - tintedImage.size.height) / 2,
+                width: tintedImage.size.width,
+                height: tintedImage.size.height
+            )
+            
+            tintedImage.draw(in: iconRect)
+        }
+    }
+    #else
+    private static func createNSImageWithPlatformColor(
+        from systemName: String,
+        size: CGSize = CGSize(width: 80, height: 80),
+        backgroundColor: NSColor,
+        iconColor: NSColor,
+        isCircular: Bool
+    ) -> NSImage? {
+        let image = NSImage(size: size)
+        image.lockFocus()
+        
+        // Set up colorspace for proper color rendering
+        if let context = NSGraphicsContext.current?.cgContext {
+            context.setFillColorSpace(CGColorSpace(name: CGColorSpace.sRGB)!)
+            context.setStrokeColorSpace(CGColorSpace(name: CGColorSpace.sRGB)!)
+        }
+        
+        let rect = NSRect(origin: .zero, size: size)
+        
+        if isCircular {
+            // Create circular clipping path
+            let radius = min(size.width, size.height) / 2
+            let center = NSPoint(x: size.width / 2, y: size.height / 2)
+            let circlePath = NSBezierPath()
+            circlePath.appendArc(withCenter: center, radius: radius, startAngle: 0, endAngle: 360)
+            circlePath.addClip()
+        }
+        
+        // Fill background with platform color
+        backgroundColor.setFill()
+        rect.fill()
+        
+        // Create and draw the SF Symbol
+        let iconSize = min(size.width, size.height) * (isCircular ? 0.5 : 0.4)
+        let configuration = NSImage.SymbolConfiguration(pointSize: iconSize, weight: .medium)
+        
+        guard let symbolImage = NSImage(systemSymbolName: systemName, accessibilityDescription: nil)?.withSymbolConfiguration(configuration) else {
+            image.unlockFocus()
+            return nil
+        }
+        
+        // Tint the icon with platform color
+        symbolImage.lockFocus()
+        iconColor.set()
+        NSRect(origin: .zero, size: symbolImage.size).fill(using: .sourceAtop)
+        symbolImage.unlockFocus()
+        
+        // Center the icon
+        let iconRect = NSRect(
+            x: (size.width - symbolImage.size.width) / 2,
+            y: (size.height - symbolImage.size.height) / 2,
+            width: symbolImage.size.width,
+            height: symbolImage.size.height
+        )
+        
+        symbolImage.draw(in: iconRect)
+        
+        image.unlockFocus()
+        
+        return image
+    }
+    #endif
 }
 
 

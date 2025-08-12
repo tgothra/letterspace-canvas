@@ -2267,7 +2267,7 @@ struct MainLayout: View {
                 } else {
                     // Solid background for default gradients
                     Rectangle()
-                        .fill(colorScheme == .light ? Color.white : Color(red: 0.11, green: 0.11, blue: 0.12))
+                        .fill(colorScheme == .light ? Color.white : Color.black)
                 }
             }
         )

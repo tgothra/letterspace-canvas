@@ -18,7 +18,7 @@ class GradientWallpaperManager {
                 endPoint: .bottomTrailing
             ),
             darkGradient: .linear(
-                colors: [Color(red: 0.11, green: 0.11, blue: 0.12), Color(red: 0.11, green: 0.11, blue: 0.12)],
+                colors: [Color.black, Color.black],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )

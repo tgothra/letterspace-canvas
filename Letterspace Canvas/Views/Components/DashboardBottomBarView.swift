@@ -24,14 +24,14 @@ enum DashboardTab: String, CaseIterable {
         }
     }
     
-    var color: Color {
+    func color(using colorTheme: ColorThemeManager) -> Color {
         switch self {
         case .pinned:
-            return .green
+            return colorTheme.currentTheme.bottomNav.starred
         case .wip:
-            return .orange
+            return colorTheme.currentTheme.bottomNav.wip
         case .schedule:
-            return .blue
+            return colorTheme.currentTheme.bottomNav.schedule
         }
     }
 }
@@ -40,6 +40,7 @@ enum DashboardTab: String, CaseIterable {
 struct FloatingDashboardBottomBar: View {
     @Environment(\.themeColors) var theme
     @Environment(\.colorScheme) var colorScheme
+    @EnvironmentObject var colorTheme: ColorThemeManager
     
     // State management
     @State private var selectedTab: DashboardTab? = nil
@@ -216,6 +217,10 @@ struct FloatingDashboardBottomBar: View {
 /// Individual Tab Button for Floating Bar
 struct TabButton: View {
     @Environment(\.themeColors) var theme
+    @Environment(\.colorScheme) var colorScheme
+    @EnvironmentObject var colorTheme: ColorThemeManager
+    
+
     let tab: DashboardTab
     let count: Int?
     let isSelected: Bool
@@ -233,14 +238,14 @@ struct TabButton: View {
                             Image(systemName: tab.symbolImage)
                                 .font(.system(size: isiOS26 ? 16 : 16, weight: .medium))
                                 .symbolVariant(isSelected ? .fill : .none)
-                                .foregroundStyle(isSelected ? tab.color : theme.secondary)
+                                .foregroundStyle(isSelected ? tab.color(using: colorTheme) : theme.secondary)
                                 .symbolEffect(.bounce.down, value: isSelected)
                                 .contentTransition(.symbolEffect(.replace.downUp))
                         } else {
                             // Fallback for older iOS - smaller icons
                             Image(systemName: tab.symbolImage)
                                 .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(isSelected ? tab.color : theme.secondary)
+                                .foregroundColor(isSelected ? tab.color(using: colorTheme) : theme.secondary)
                                 .symbolEffect(.bounce, value: isSelected)
                         }
                     }
@@ -252,12 +257,16 @@ struct TabButton: View {
                                 Text("\(count)")
                                     .font(.caption2)
                                     .fontWeight(.bold)
-                                    .foregroundColor(.white)
+                                    .foregroundColor(.black)
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 2)
                                     .background {
                                         Capsule()
-                                            .fill(tab.color)
+                                            .fill(Color.white)
+                                            .overlay(
+                                                Capsule()
+                                                    .fill(tab.color(using: colorTheme))
+                                            )
                                             .glassEffect(.regular, in: .capsule)
                                     }
                                     .offset(x: 14, y: -10)
@@ -265,12 +274,16 @@ struct TabButton: View {
                                 Text("\(count)")
                                     .font(.caption2)
                                     .fontWeight(.bold)
-                                    .foregroundColor(.white)
+                                    .foregroundColor(.black)
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 2)
                                     .background(
                                         Capsule()
-                                            .fill(tab.color)
+                                            .fill(Color.white)
+                                            .overlay(
+                                                Capsule()
+                                                    .fill(tab.color(using: colorTheme))
+                                            )
                                     )
                                     .offset(x: 12, y: -8)
                             }
@@ -281,7 +294,7 @@ struct TabButton: View {
                 Text(tab.rawValue)
                     .font(isiOS26 ? .caption2 : .caption2)
                     .fontWeight(.medium)
-                    .foregroundStyle(isSelected ? tab.color : theme.secondary)
+                    .foregroundStyle(isSelected ? tab.color(using: colorTheme) : theme.secondary)
                     .scaleEffect(isSelected ? (isiOS26 ? 1.02 : 1.05) : 1.0)
                     .animation(.interpolatingSpring(duration: 0.3, bounce: 0.3), value: isSelected)
             }
@@ -309,6 +322,7 @@ struct TabButton: View {
 struct DashboardSheetContent: View {
     @Environment(\.themeColors) var theme
     @Environment(\.colorScheme) var colorScheme
+    @EnvironmentObject var colorTheme: ColorThemeManager
     @Environment(\.dismiss) var dismiss
     
     let tab: DashboardTab
@@ -358,7 +372,7 @@ struct DashboardSheetContent: View {
                         HStack(spacing: 8) {
                             Image(systemName: tab.symbolImage)
                                 .font(.title3)
-                                .foregroundColor(tab.color)
+                                .foregroundColor(tab.color(using: colorTheme))
                             
                             Text(tab.rawValue)
                                 .font(.title2)
@@ -377,7 +391,7 @@ struct DashboardSheetContent: View {
                         dismiss()
                     }
                     .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(tab.color)
+                    .foregroundColor(tab.color(using: colorTheme))
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 16)

@@ -81,7 +81,7 @@ enum DesignSystem {
             var glassSubtle: Color { primary.opacity(0.05) }
             
             static let dark = ThemeColors(
-                background: Color(red: 0.11, green: 0.11, blue: 0.12),
+                background: Color.black,
                 surface: Color(.sRGB, red: 0.15, green: 0.15, blue: 0.15, opacity: 1.0),
                 primary: .white,
                 secondary: Color.white.opacity(0.7),

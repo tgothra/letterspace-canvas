@@ -154,7 +154,7 @@ struct HeaderImageMenuView: View {
                                 onIconSelected(iconData.icon)
                             }) {
                                 ZStack {
-                                    RoundedRectangle(cornerRadius: 16)
+                                    Circle()
                                         .fill(iconData.color.gradient.opacity(0.15))
                                         .stroke(iconData.color.opacity(0.3), lineWidth: 1.5)
                                         .frame(width: 56, height: 56)
