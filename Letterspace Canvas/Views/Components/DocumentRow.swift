@@ -16,6 +16,7 @@ struct DocumentRow: View {
     
     @Environment(\.themeColors) private var theme
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.colorTheme) private var colorTheme
     @State private var showCalendarContext = false
     
     // Use ColorManager from the app to get consistent tag colors
@@ -33,7 +34,7 @@ struct DocumentRow: View {
                             Button(action: {}) {
                                 Image(systemName: "pin.fill")
                                     .font(.system(size: 12))
-                                    .foregroundStyle(pinnedDocuments.contains(document.id) ? .green : theme.primary.opacity(0.7))
+                                    .foregroundStyle(pinnedDocuments.contains(document.id) ? (colorTheme.currentTheme.statusIcons?.pinned ?? .green) : theme.primary.opacity(0.7))
                                     .frame(width: 16, height: 16)
                             }
                             .buttonStyle(.plain)
@@ -43,7 +44,7 @@ struct DocumentRow: View {
                             Button(action: {}) {
                                 Image(systemName: "clock.fill")
                                     .font(.system(size: 12))
-                                    .foregroundStyle(wipDocuments.contains(document.id) ? .orange : theme.primary.opacity(0.7))
+                                    .foregroundStyle(wipDocuments.contains(document.id) ? (colorTheme.currentTheme.statusIcons?.wip ?? .orange) : theme.primary.opacity(0.7))
                                     .frame(width: 16, height: 16)
                             }
                             .buttonStyle(.plain)
@@ -57,7 +58,7 @@ struct DocumentRow: View {
                             }) {
                                 Image(systemName: "calendar")
                                     .font(.system(size: 12))
-                                    .foregroundStyle(calendarDocuments.contains(document.id) ? .blue : theme.primary.opacity(0.7))
+                                    .foregroundStyle(calendarDocuments.contains(document.id) ? (colorTheme.currentTheme.statusIcons?.calendar ?? .blue) : theme.primary.opacity(0.7))
                                     .frame(width: 16, height: 16)
                             }
                             .buttonStyle(.plain)
@@ -78,34 +79,34 @@ struct DocumentRow: View {
                     // Non-hover indicators
                     if pinnedDocuments.contains(document.id) {
                         Circle()
-                            .fill(Color.green)
+                            .fill(colorTheme.currentTheme.statusIcons?.pinned ?? .green)
                             .frame(width: 8, height: 8)
                     }
                     if wipDocuments.contains(document.id) {
                         Circle()
-                            .fill(Color.orange)
+                            .fill(colorTheme.currentTheme.statusIcons?.wip ?? .orange)
                             .frame(width: 8, height: 8)
                     }
                     if calendarDocuments.contains(document.id) {
                         Circle()
-                            .fill(Color.blue)
+                            .fill(colorTheme.currentTheme.statusIcons?.calendar ?? .blue)
                             .frame(width: 8, height: 8)
                     }
                 } else {
                     // Non-hover indicators
                     if pinnedDocuments.contains(document.id) {
                         Circle()
-                            .fill(Color.green)
+                            .fill(colorTheme.currentTheme.statusIcons?.pinned ?? .green)
                             .frame(width: 8, height: 8)
                     }
                     if wipDocuments.contains(document.id) {
                         Circle()
-                            .fill(Color.orange)
+                            .fill(colorTheme.currentTheme.statusIcons?.wip ?? .orange)
                             .frame(width: 8, height: 8)
                     }
                     if calendarDocuments.contains(document.id) {
                         Circle()
-                            .fill(Color.blue)
+                            .fill(colorTheme.currentTheme.statusIcons?.calendar ?? .blue)
                             .frame(width: 8, height: 8)
                     }
                 }

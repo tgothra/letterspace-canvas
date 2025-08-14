@@ -402,6 +402,7 @@ struct BibleReaderView: View {
     @State private var bookmarkNotes = "" // For new bookmark notes
     @State private var currentVerseForBookmark = 1 // Current verse for bookmarking
     @State private var isBookSelectorSidebarVisible: Bool = true // For iPad sidebar toggle
+    @Namespace private var glassNamespace
     @State private var headerOffset: CGFloat = 0
     @State private var lastScrollOffset: CGFloat = 0
     @State private var isHeaderHidden: Bool = false
@@ -561,7 +562,7 @@ struct BibleReaderView: View {
             #endif
         }
         .modifier(BibleReaderFrameModifier())
-        .background(theme.surface)
+        .background(.clear)
         #if os(iOS)
         .applyIf(UIDevice.current.userInterfaceIdiom != .phone, {
             $0.cornerRadius(12)
@@ -688,7 +689,7 @@ struct BibleReaderView: View {
                     Group {
                         if showingSplashPage {
                             splashPageView
-                                .background(theme.surface)
+                                .background(.clear)
                         } else {
                             readingArea
                         }
@@ -700,7 +701,7 @@ struct BibleReaderView: View {
                         
                         if showingSplashPage {
                             splashPageView
-                                .background(theme.surface)
+                                .background(.clear)
                         }
                     }
                 }
@@ -711,7 +712,7 @@ struct BibleReaderView: View {
                     
                     if showingSplashPage {
                         splashPageView
-                            .background(theme.surface)
+                            .background(.clear)
                     }
                 }
                 #endif
@@ -725,10 +726,26 @@ struct BibleReaderView: View {
             let isPhone = UIDevice.current.userInterfaceIdiom == .phone
             if isPhone {
                 VStack(spacing: 12) {
-                    // Title section
+                    // Title section (only show header controls; hide title on splash)
                     HStack {
-                        Text("Bible Reader")
-                            .font(.system(size: 18, weight: .semibold))
+                        if !showingSplashPage {
+                            Button(action: {
+                                readerData.saveLastRead(book: selectedBook, chapter: selectedChapter, translation: selectedTranslation)
+                                withAnimation(.easeInOut(duration: 0.3)) { showingSplashPage = true }
+                            }) {
+                                Text("Bible Reader")
+                                    .font(.system(size: 18, weight: .semibold))
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 6)
+                                    .background {
+                                        RoundedRectangle(cornerRadius: 10)
+                                            .fill(.clear)
+                                            .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 10))
+                                    }
+                            }
+                            .buttonStyle(.plain)
+                            .contentShape(Rectangle())
+                        }
                         Spacer()
                         // Close button for iPhone modal
                         Button(action: { onDismiss() }) {
@@ -743,21 +760,7 @@ struct BibleReaderView: View {
                     // Navigation section
                     if !showingSplashPage {
                         HStack(spacing: 8) {
-                            // Back button (moved from right side)
-                            Button(action: {
-                                readerData.saveLastRead(book: selectedBook, chapter: selectedChapter, translation: selectedTranslation)
-                                withAnimation(.easeInOut(duration: 0.3)) {
-                                    showingSplashPage = true
-                                }
-                            }) {
-                                Image(systemName: "chevron.left")
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundColor(.blue)
-                                    .frame(width: 32, height: 32)
-                                    .background(Circle().fill(Color.blue.opacity(0.1)))
-                                    .contentShape(Circle())
-                            }
-                            .buttonStyle(.plain)
+                            // Back arrow removed; title above now acts as back to splash
                             
                             // Book selector
                             Menu {
@@ -775,8 +778,11 @@ struct BibleReaderView: View {
                                     .foregroundColor(.blue)
                                     .frame(height: 32)
                                     .padding(.horizontal, 12)
-                                    .background(Color.blue.opacity(0.1))
-                                    .cornerRadius(8)
+                                    .background {
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .fill(.clear)
+                                            .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 8))
+                                    }
                             }
                             
                             // Chapter selector
@@ -792,8 +798,11 @@ struct BibleReaderView: View {
                                     .font(.system(size: 12, weight: .medium))
                                     .foregroundColor(.blue)
                                     .frame(width: 32, height: 32)
-                                    .background(Color.blue.opacity(0.1))
-                                    .cornerRadius(8)
+                                    .background {
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .fill(.clear)
+                                            .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 8))
+                                    }
                             }
                             
                             Spacer()
@@ -805,7 +814,11 @@ struct BibleReaderView: View {
                                         .font(.system(size: 12, weight: .medium))
                                         .foregroundColor(.blue)
                                         .frame(width: 32, height: 32)
-                                        .background(Circle().fill(Color.blue.opacity(0.1)))
+                                        .background {
+                                            Circle()
+                                                .fill(.clear)
+                                                .glassEffect(.regular.interactive(), in: .circle)
+                                        }
                                         .contentShape(Circle())
                                 }
                                 .buttonStyle(.plain)
@@ -815,7 +828,11 @@ struct BibleReaderView: View {
                                         .font(.system(size: 12, weight: .medium))
                                         .foregroundColor(.blue)
                                         .frame(width: 32, height: 32)
-                                        .background(Circle().fill(Color.blue.opacity(0.1)))
+                                        .background {
+                                            Circle()
+                                                .fill(.clear)
+                                                .glassEffect(.regular.interactive(), in: .circle)
+                                        }
                                         .contentShape(Circle())
                                 }
                                 .buttonStyle(.plain)
@@ -834,7 +851,11 @@ struct BibleReaderView: View {
                                         .font(.system(size: 12))
                                         .foregroundColor(.blue)
                                         .frame(width: 32, height: 32)
-                                        .background(Circle().fill(Color.blue.opacity(0.1)))
+                                        .background {
+                                            Circle()
+                                                .fill(.clear)
+                                                .glassEffect(.regular.interactive(), in: .circle)
+                                        }
                                         .contentShape(Circle())
                                 }
                                 .buttonStyle(.plain)
@@ -844,7 +865,11 @@ struct BibleReaderView: View {
                                         .font(.system(size: 12))
                                         .foregroundColor(.blue)
                                         .frame(width: 32, height: 32)
-                                        .background(Circle().fill(Color.blue.opacity(0.1)))
+                                        .background {
+                                            Circle()
+                                                .fill(.clear)
+                                                .glassEffect(.regular.interactive(), in: .circle)
+                                        }
                                         .contentShape(Circle())
                                 }
                                 .buttonStyle(.plain)
@@ -856,7 +881,7 @@ struct BibleReaderView: View {
                 .padding(.horizontal, 20)
                 .padding(.vertical, 8)
                 .padding(.top, 4) // Add breathing room at the top for iPhone
-                .background(theme.surface)
+                .background(.clear)
                 // SEARCH MODAL
                 // Uses Dynamic Zoom sheet transition for iOS 26
                 .sheet(isPresented: $showingSearchModal) {
@@ -915,15 +940,35 @@ struct BibleReaderView: View {
                     .font(.system(size: 16, weight: .medium))
                     .foregroundColor(.blue)
                     .frame(width: 44, height: 44)
-                    .background(Circle().fill(Color.blue.opacity(0.1)))
+                    .background {
+                        Circle()
+                            .fill(.clear)
+                            .glassEffect(.regular.interactive(), in: .circle)
+                    }
                     .contentShape(Circle())
             }
             .buttonStyle(.plain)
             .help("Back")
             .padding(.trailing, 12)
 
-            Text("Bible Reader")
-                .font(.system(size: 24, weight: .semibold))
+            if !showingSplashPage {
+                Button(action: {
+                    readerData.saveLastRead(book: selectedBook, chapter: selectedChapter, translation: selectedTranslation)
+                    withAnimation(.easeInOut(duration: 0.3)) { showingSplashPage = true }
+                }) {
+                    Text("Bible Reader")
+                        .font(.system(size: 24, weight: .semibold))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background {
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(.clear)
+                                .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 12))
+                        }
+                }
+                .buttonStyle(.plain)
+                .contentShape(Rectangle())
+            }
             
             Spacer()
             
@@ -935,7 +980,11 @@ struct BibleReaderView: View {
                             .font(.system(size: 16, weight: .medium))
                             .foregroundColor(.blue)
                             .frame(width: 44, height: 44)
-                            .background(Circle().fill(Color.blue.opacity(0.1)))
+                            .background {
+                                Circle()
+                                    .fill(.clear)
+                                    .glassEffect(.regular.interactive(), in: .circle)
+                            }
                             .contentShape(Circle())
                     }
                     .buttonStyle(.plain)
@@ -973,7 +1022,11 @@ struct BibleReaderView: View {
                             .font(.system(size: 16, weight: .medium))
                             .foregroundColor(.blue)
                             .frame(width: 44, height: 44)
-                            .background(Circle().fill(Color.blue.opacity(0.1)))
+                            .background {
+                                Circle()
+                                    .fill(.clear)
+                                    .glassEffect(.regular.interactive(), in: .circle)
+                            }
                             .contentShape(Circle())
                     }
                     .buttonStyle(.plain)
@@ -994,7 +1047,11 @@ struct BibleReaderView: View {
                             .font(.system(size: 16))
                             .foregroundColor(.blue)
                             .frame(width: 44, height: 44)
-                            .background(Circle().fill(Color.blue.opacity(0.1)))
+                            .background {
+                                Circle()
+                                    .fill(.clear)
+                                    .glassEffect(.regular.interactive(), in: .circle)
+                            }
                             .contentShape(Circle())
                     }
                     .buttonStyle(.plain)
@@ -1017,7 +1074,7 @@ struct BibleReaderView: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 16)
-        .background(theme.surface)
+        .background(.clear)
     }
     
     private var macOSHeaderLayout: some View {
@@ -1033,15 +1090,35 @@ struct BibleReaderView: View {
                     .font(.system(size: 16, weight: .medium))
                     .foregroundColor(.blue)
                     .frame(width: 44, height: 44)
-                    .background(Circle().fill(Color.blue.opacity(0.1)))
+                    .background {
+                        Circle()
+                            .fill(.clear)
+                            .glassEffect(.regular.interactive(), in: .circle)
+                    }
                     .contentShape(Circle())
             }
             .buttonStyle(.plain)
             .help("Back")
             .padding(.trailing, 12)
 
-            Text("Bible Reader")
-                .font(.system(size: 24, weight: .semibold))
+            if !showingSplashPage {
+                Button(action: {
+                    readerData.saveLastRead(book: selectedBook, chapter: selectedChapter, translation: selectedTranslation)
+                    withAnimation(.easeInOut(duration: 0.3)) { showingSplashPage = true }
+                }) {
+                    Text("Bible Reader")
+                        .font(.system(size: 24, weight: .semibold))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background {
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(.clear)
+                                .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 12))
+                        }
+                }
+                .buttonStyle(.plain)
+                .contentShape(Rectangle())
+            }
             
             Spacer()
             
@@ -1053,7 +1130,11 @@ struct BibleReaderView: View {
                             .font(.system(size: 16, weight: .medium))
                             .foregroundColor(.blue)
                             .frame(width: 44, height: 44)
-                            .background(Circle().fill(Color.blue.opacity(0.1)))
+                            .background {
+                                Circle()
+                                    .fill(.clear)
+                                    .glassEffect(.regular.interactive(), in: .circle)
+                            }
                             .contentShape(Circle())
                     }
                     .buttonStyle(.plain)
@@ -1135,7 +1216,7 @@ struct BibleReaderView: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 16)
-        .background(theme.surface)
+        .background(.clear)
     }
     
     private var bookSelectorSidebar: some View {
@@ -1167,7 +1248,7 @@ struct BibleReaderView: View {
             Spacer()
         }
         .frame(width: 220)
-        .background(theme.surface)
+        .background(.clear)
     }
     
 
@@ -1319,7 +1400,7 @@ struct BibleReaderView: View {
                 Divider()
             }
             .frame(width: 300, height: 400) // Fixed height prevents popover container from resizing
-            .background(theme.surface)
+            .background(.clear)
         }
     }
     
@@ -1420,7 +1501,7 @@ struct BibleReaderView: View {
             }
         }
         .frame(width: 320, height: 400)
-        .background(theme.surface)
+        .background(.clear)
     }
     
     private var readingArea: some View {
@@ -1452,7 +1533,7 @@ struct BibleReaderView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(theme.surface)
+        .background(.clear)
         #if os(iOS)
         // Add swipe gestures for iPhone chapter navigation
         .simultaneousGesture(
@@ -1643,7 +1724,9 @@ struct BibleReaderView: View {
                 .font(.system(size: 10, weight: .medium))
                 .foregroundColor(.blue)
                 .frame(width: 20, height: 20)
-                .background(Circle().fill(Color.blue.opacity(0.12)))
+                .background(
+                    Circle().fill(Color.blue.opacity(0.12))
+                )
             
             // Verse text
             Text(verse.text)
@@ -1692,7 +1775,9 @@ struct BibleReaderView: View {
                     return 24 // macOS default
                     #endif
                 }())
-                .background(Circle().fill(Color.blue.opacity(0.12)))
+                .background(
+                    Circle().fill(Color.blue.opacity(0.12))
+                )
             
             // Verse text
             Text(verse.text)
@@ -1981,7 +2066,7 @@ struct BibleReaderView: View {
                             showingSplashPage = false
                         }
                     }) {
-                        HStack {
+                        HStack(spacing: 8) {
                             Image(systemName: "arrow.right.circle.fill")
                                 .font(.system(size: 16))
                             Text("Go to \(selectedBook) \(selectedChapter)")
@@ -1989,11 +2074,8 @@ struct BibleReaderView: View {
                         }
                         .padding(.horizontal, 20)
                         .padding(.vertical, 12)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(Color.blue)
-                        )
-                        .foregroundColor(.white)
+                        .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 12))
+                        .glassEffectID("readerTitle", in: glassNamespace)
                     }
                     .buttonStyle(.plain)
                 }

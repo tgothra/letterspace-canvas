@@ -985,6 +985,10 @@ var body: some View {
             if let calendarArray = UserDefaults.standard.array(forKey: "CalendarDocuments") as? [String] {
                 calendarDocuments = Set(calendarArray)
             }
+            // Load Today's Docs selection (persist across opens)
+            if let savedToday = UserDefaults.standard.array(forKey: "TodayDocumentIds") as? [String] {
+                todayDocumentIds = Set(savedToday)
+            }
             #if os(macOS)
             // Ensure Series and Location columns are always visible by default on macOS
             visibleColumns.insert("series")
@@ -993,6 +997,18 @@ var body: some View {
             UserDefaults.standard.set(Array(visibleColumns), forKey: "VisibleColumns")
             #endif
             loadDocuments()
+        }
+        // Persist Today's selection when it changes
+        .onChange(of: todayDocumentIds) { newValue in
+            UserDefaults.standard.set(Array(newValue), forKey: "TodayDocumentIds")
+        }
+        // Sanitize Today's selection when documents list refreshes
+        .onChange(of: documents) { _ in
+            let available = Set(documents.map { $0.id })
+            let filtered = todayDocumentIds.intersection(available)
+            if filtered != todayDocumentIds {
+                todayDocumentIds = filtered
+            }
         }
                 .onChange(of: refreshTrigger) {
 loadDocuments()
@@ -1075,7 +1091,7 @@ loadDocuments()
                     #endif
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
-                    .presentationBackground(.ultraThinMaterial)
+                    .background(.clear)
                     
             case .sermonJournal(let document):
                 SermonJournalView(document: document, allDocuments: documents) {
@@ -1086,7 +1102,7 @@ loadDocuments()
                 #endif
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
-                .presentationBackground(.ultraThinMaterial)
+                .background(.clear)
                 
             case .reflectionSelection:
                 ReflectionSelectionView(
@@ -1103,7 +1119,7 @@ loadDocuments()
                 #endif
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
-                .presentationBackground(.ultraThinMaterial)
+                .background(.clear)
                 
             case .preachItAgainDetails(let document):
                 PreachItAgainDetailsView(
@@ -1121,7 +1137,7 @@ loadDocuments()
                 #endif
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
-                .presentationBackground(.ultraThinMaterial)
+                .background(.clear)
                 
             case .documentDetails(let document):
                 DocumentDetailsCard(
@@ -1145,7 +1161,7 @@ loadDocuments()
                 #endif
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
-                .presentationBackground(.ultraThinMaterial)
+                .background(.clear)
             
             case .curatedCategory(let type):
                 Group {
@@ -1164,7 +1180,7 @@ loadDocuments()
                 #endif
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
-                .presentationBackground(.ultraThinMaterial)
+                .background(.clear)
             }
         }
         .sheet(isPresented: Binding(
@@ -1192,7 +1208,7 @@ loadDocuments()
                 .environment(\.colorScheme, colorScheme)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
-                .presentationBackground(.ultraThinMaterial)
+                .background(.clear)
             }
         }
         // Automatic journal prompt overlay
@@ -1487,7 +1503,13 @@ loadDocuments()
                             .font(.system(size: 16))
                             .foregroundStyle(.white)
                             .frame(width: 30, height: 30)
-                            .background(Color.black, in: Circle())
+                            .background(
+                                (colorTheme.gradients != nil
+                                    ? AnyShapeStyle(colorTheme.gradients!.filterGradient)
+                                    : AnyShapeStyle(colorTheme.currentTheme.headerButtons.filter)
+                                ),
+                                in: Circle()
+                            )
                     }
                     #endif
                     
@@ -1563,7 +1585,11 @@ loadDocuments()
                                             .fill(Color.white)
                                             .overlay(
                                                 Circle()
-                                                    .fill(Color.orange.opacity(0.3))
+                                                    .fill(
+                                                        colorTheme.gradients != nil
+                                                            ? AnyShapeStyle(colorTheme.gradients!.filterGradient)
+                                                            : AnyShapeStyle(colorTheme.currentTheme.headerButtons.filter)
+                                                    )
                                             )
                                     }
                                 }
@@ -1699,7 +1725,13 @@ loadDocuments()
                         .foregroundStyle(.white)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
-                        .background(Color.blue, in: RoundedRectangle(cornerRadius: 8))
+                        .background(
+                            (colorTheme.gradients != nil
+                                ? AnyShapeStyle(colorTheme.gradients!.sortGradient)
+                                : AnyShapeStyle(colorTheme.currentTheme.headerButtons.sort)
+                            ),
+                            in: RoundedRectangle(cornerRadius: 8)
+                        )
                         #else
                         Image(systemName: "arrow.up.arrow.down")
                             .font(.system(size: 16))
@@ -1710,7 +1742,11 @@ loadDocuments()
                                     .fill(Color.white)
                                     .overlay(
                                         Circle()
-                                            .fill(Color.green.opacity(0.2))
+                                            .fill(
+                                                colorTheme.gradients != nil
+                                                    ? AnyShapeStyle(colorTheme.gradients!.sortGradient)
+                                                    : AnyShapeStyle(colorTheme.currentTheme.headerButtons.sort)
+                                            )
                                     )
                             )
                         #endif
@@ -1797,7 +1833,7 @@ loadDocuments()
                         .foregroundStyle(.white)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
-                        .background(!selectedTags.isEmpty ? theme.accent : Color.blue, in: RoundedRectangle(cornerRadius: 8))
+                        .background(!selectedTags.isEmpty ? theme.accent : colorTheme.currentTheme.headerButtons.tags, in: RoundedRectangle(cornerRadius: 8))
                         #else
                         ZStack {
                             Image(systemName: "tag")
@@ -1813,7 +1849,11 @@ loadDocuments()
                                                 .fill(Color.white)
                                                 .overlay(
                                                     Circle()
-                                                        .fill(Color.blue.opacity(0.3))
+                                                        .fill(
+                                                            colorTheme.gradients != nil
+                                                                ? AnyShapeStyle(colorTheme.gradients!.tagsGradient)
+                                                                : AnyShapeStyle(colorTheme.currentTheme.headerButtons.tags)
+                                                        )
                                                 )
                                         }
                                     }
@@ -4326,7 +4366,7 @@ loadDocuments()
             // Unified "Spotify-like" cards grid (each card opens its sheet)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 20) {
-                    ForEach(CurationType.allCases.filter { $0 != .trending }, id: \.self) { type in
+                    ForEach(CurationType.allCases, id: \.self) { type in
                         curatedCategoryCard(type)
                     }
                 }
@@ -4376,10 +4416,11 @@ loadDocuments()
         let document: Letterspace_CanvasDocument
         @Environment(\.themeColors) private var theme
         @Environment(\.colorScheme) private var colorScheme
-        private let iconSize: CGFloat = 24
+        @Environment(\.colorTheme) private var colorTheme
+        private let iconSize: CGFloat = 36
 
         var body: some View {
-            HStack(spacing: 10) {
+            HStack(spacing: 14) {
                 if let headerImage = loadHeaderImage(for: document) {
                     let isIcon = document.elements.first(where: { $0.type == .headerImage })?.content.contains("header_icon_") ?? false
                     #if os(macOS)
@@ -4387,35 +4428,133 @@ loadDocuments()
                         .resizable()
                         .aspectRatio(contentMode: isIcon ? .fit : .fill)
                         .frame(width: iconSize, height: iconSize)
-                        .clipShape(isIcon ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: 4)))
+                        .clipShape(isIcon ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: 8)))
                     #else
                     Image(uiImage: headerImage)
                         .resizable()
                         .aspectRatio(contentMode: isIcon ? .fit : .fill)
                         .frame(width: iconSize, height: iconSize)
-                        .clipShape(isIcon ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: 4)))
+                        .clipShape(isIcon ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: 8)))
                     #endif
                 } else {
-                    Image(systemName: "doc.text")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundStyle(.secondary)
-                        .frame(width: iconSize, height: iconSize)
+                    ZStack {
+                        Circle()
+                            .fill(colorScheme == .dark ? Color.white.opacity(0.08) : Color.black.opacity(0.05))
+                        Image(systemName: "doc.text")
+                            .font(.system(size: 24, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(width: iconSize, height: iconSize)
                 }
 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 4) {
                     Text(document.title.isEmpty ? "Untitled" : document.title)
-                        .font(.custom("InterTight-SemiBold", size: 14))
+                        .font(.custom("InterTight-SemiBold", size: 19))
                         .foregroundStyle(colorScheme == .dark ? .white : .black)
                         .lineLimit(1)
                     if !document.subtitle.isEmpty {
                         Text(document.subtitle)
-                            .font(.custom("InterTight-Regular", size: 12))
+                            .font(.custom("InterTight-Regular", size: 15))
                             .foregroundStyle(theme.primary.opacity(0.65))
                             .lineLimit(1)
                     }
                 }
                 Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(.secondary)
             }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .background(
+                ZStack {
+                    // Themed tint background under the glass
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(
+                            colorTheme.currentTheme.curatedCards.todaysDocs
+                                .opacity(colorScheme == .dark ? 0.10 : 0.08)
+                        )
+                    // Liquid glass on top
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(.ultraThinMaterial)
+                }
+            )
+            // Subtle inner sheen for liquid glass
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                .white.opacity(colorScheme == .dark ? 0.14 : 0.10),
+                                .white.opacity(0.02)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .blendMode(.overlay)
+                    .allowsHitTesting(false)
+            )
+            // Specular highlight blob
+            .overlay(alignment: .topLeading) {
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [
+                                .white.opacity(colorScheme == .dark ? 0.35 : 0.28),
+                                .white.opacity(0.0)
+                            ],
+                            center: .topLeading,
+                            startRadius: 0,
+                            endRadius: 90
+                        )
+                    )
+                    .frame(width: 120, height: 120)
+                    .offset(x: -28, y: -28)
+                    .allowsHitTesting(false)
+            }
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .strokeBorder(
+                        LinearGradient(
+                            colors: [
+                                .white.opacity(colorScheme == .dark ? 0.28 : 0.16),
+                                .white.opacity(colorScheme == .dark ? 0.10 : 0.06)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 0.75
+                    )
+                    .blendMode(.overlay)
+            )
+            // Gentle inner shadow towards bottom-trailing for depth
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .stroke(
+                        LinearGradient(
+                            colors: [
+                                .clear,
+                                .black.opacity(colorScheme == .dark ? 0.10 : 0.06)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1
+                    )
+                    .blendMode(.multiply)
+            )
+            .compositingGroup()
+            .shadow(color: .black.opacity(colorScheme == .dark ? 0.35 : 0.08), radius: 12, x: 0, y: 6)
+            // Micro-noise overlay to break banding (per Liquid Glass docs)
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(
+                        .white.opacity(colorScheme == .dark ? 0.03 : 0.02)
+                    )
+                    .blendMode(.softLight)
+                    .allowsHitTesting(false)
+            )
         }
 
         #if os(macOS)
@@ -4470,11 +4609,14 @@ loadDocuments()
                     ForEach(documents.filter { todayDocumentIds.contains($0.id) }) { doc in
                         Button(action: { onSelectDocument(doc) }) {
                             TodayListRow(document: doc)
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 10)
+                                .environment(\.sizeCategory, .large)
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 14)
                         }
                         .buttonStyle(.plain)
-                        Divider().padding(.leading, 16)
+                        Divider()
+                            .padding(.leading, 20)
+                            .padding(.vertical, 2)
                     }
                 }
             }
@@ -4534,6 +4676,7 @@ loadDocuments()
                 initiallySelected: todayDocumentIds,
                 onDone: { selection in
                     todayDocumentIds = selection
+                    UserDefaults.standard.set(Array(todayDocumentIds), forKey: "TodayDocumentIds")
                     updateContentForNewCurationType()
                     showTodayPicker = false
                 },
@@ -4653,19 +4796,22 @@ loadDocuments()
                     VStack(alignment: .leading, spacing: 12) {
                         // Colored section
                         VStack(alignment: .leading, spacing: 8) {
+                            // Override: Today's Docs uses black text/pills for readability when gradients are on
+                            let isGradient = colorTheme.hasGradients
+                            let useWhite = (!isGradient) && (colorTheme.currentTheme.id == "punchy")
                             HStack(spacing: 8) {
                                 Image(systemName: "doc.text")
-                                    .foregroundStyle(.black)
+                                    .foregroundStyle(useWhite ? .white : .black)
                                     .font(.system(size: 18, weight: .semibold))
                                 Text("Today's Docs")
                                     .font(.custom("InterTight-Bold", size: 17))
-                                    .foregroundStyle(.black)
+                                    .foregroundStyle(useWhite ? .white : .black)
                                 Spacer()
                             }
                             
                             Text("Curate what you'll use today")
                                 .font(.custom("InterTight-Regular", size: 14))
-                                .foregroundStyle(.black.opacity(0.7))
+                                .foregroundStyle(useWhite ? .white.opacity(0.9) : .black.opacity(0.7))
                                 .lineLimit(2)
                             
                             Spacer()
@@ -4676,17 +4822,17 @@ loadDocuments()
                                 if count > 0 {
                                     Text("\(count) Selected")
                                         .font(.custom("InterTight-Medium", size: 11))
-                                        .foregroundStyle(.black)
+                                        .foregroundStyle(useWhite ? .white : .black)
                                         .padding(.horizontal, 8)
                                         .padding(.vertical, 3)
-                                        .background(.black.opacity(0.1), in: Capsule())
+                                        .background((useWhite ? Color.white.opacity(0.22) : Color.black.opacity(0.1)), in: Capsule())
                                 } else {
                                     Text("Empty")
                                         .font(.custom("InterTight-Medium", size: 11))
-                                        .foregroundStyle(.black)
+                                        .foregroundStyle(useWhite ? .white : .black)
                                         .padding(.horizontal, 8)
                                         .padding(.vertical, 3)
-                                        .background(.black.opacity(0.1), in: Capsule())
+                                        .background((useWhite ? Color.white.opacity(0.22) : Color.black.opacity(0.1)), in: Capsule())
                                 }
                                 Spacer()
                             }
@@ -4697,7 +4843,11 @@ loadDocuments()
                         .background(
                             ZStack {
                                 Color.white
-                                colorTheme.currentTheme.curatedCards.todaysDocs
+                                if let gradients = colorTheme.gradients {
+                                    Rectangle().fill(gradients.todaysDocsGradient)
+                                } else {
+                                    Rectangle().fill(colorTheme.currentTheme.curatedCards.todaysDocs)
+                                }
                             }
                         )
                         .clipShape(RoundedRectangle(cornerRadius: 12))
@@ -4728,19 +4878,20 @@ loadDocuments()
                     VStack(alignment: .leading, spacing: 12) {
                         // Colored section
                         VStack(alignment: .leading, spacing: 8) {
+                            let isPunchy = colorTheme.currentTheme.id == "punchy"
                             HStack(spacing: 8) {
                                 Image(systemName: "arrow.clockwise.circle")
-                                    .foregroundStyle(.black)
+                                    .foregroundStyle(isPunchy ? .white : .black)
                                     .font(.system(size: 18, weight: .semibold))
                                 Text("Preach it Again")
                                     .font(.custom("InterTight-Bold", size: 17))
-                                    .foregroundStyle(.black)
+                                    .foregroundStyle(isPunchy ? .white : .black)
                                 Spacer()
                             }
                             
                             Text("Sermons ready for another delivery")
                                 .font(.custom("InterTight-Regular", size: 14))
-                                .foregroundStyle(.black.opacity(0.7))
+                                .foregroundStyle(isPunchy ? .white.opacity(0.9) : .black.opacity(0.7))
                                 .lineLimit(2)
                             
                             Spacer()
@@ -4754,17 +4905,17 @@ loadDocuments()
                                 if count > 0 {
                                     Text("\(count) Ready")
                                         .font(.custom("InterTight-Medium", size: 11))
-                                        .foregroundStyle(.black)
+                                        .foregroundStyle(isPunchy ? .white : .black)
                                         .padding(.horizontal, 8)
                                         .padding(.vertical, 3)
-                                        .background(.black.opacity(0.1), in: Capsule())
+                                        .background((isPunchy ? Color.white.opacity(0.22) : Color.black.opacity(0.1)), in: Capsule())
                                 } else {
                                     Text("None Ready")
                                         .font(.custom("InterTight-Medium", size: 11))
-                                        .foregroundStyle(.black)
+                                        .foregroundStyle(isPunchy ? .white : .black)
                                         .padding(.horizontal, 8)
                                         .padding(.vertical, 3)
-                                        .background(.black.opacity(0.1), in: Capsule())
+                                        .background((isPunchy ? Color.white.opacity(0.22) : Color.black.opacity(0.1)), in: Capsule())
                                 }
                                 Spacer()
                             }
@@ -4775,7 +4926,11 @@ loadDocuments()
                         .background(
                             ZStack {
                                 Color.white
-                                Color.orange.opacity(0.3)
+                                if let gradients = colorTheme.gradients {
+                                    Rectangle().fill(gradients.preachItAgainGradient)
+                                } else {
+                                    Rectangle().fill(colorTheme.currentTheme.curatedCards.preachItAgain)
+                                }
                             }
                         )
                         .clipShape(RoundedRectangle(cornerRadius: 12))
@@ -4806,19 +4961,20 @@ loadDocuments()
                     VStack(alignment: .leading, spacing: 12) {
                         // Colored section
                         VStack(alignment: .leading, spacing: 8) {
+                            let isLightOnColor = (colorTheme.currentTheme.id == "punchy") || colorTheme.hasGradients
                             HStack(spacing: 8) {
                                 Image(systemName: "chart.bar")
-                                    .foregroundStyle(.black)
+                                    .foregroundStyle(isLightOnColor ? .white : .black)
                                     .font(.system(size: 18, weight: .semibold))
                                 Text("Statistics")
                                     .font(.custom("InterTight-Bold", size: 17))
-                                    .foregroundStyle(.black)
+                                    .foregroundStyle(isLightOnColor ? .white : .black)
                                 Spacer()
                             }
                             
                             Text("Analytics and sermon insights")
                                 .font(.custom("InterTight-Regular", size: 14))
-                                .foregroundStyle(.black.opacity(0.7))
+                                .foregroundStyle(isLightOnColor ? .white.opacity(0.9) : .black.opacity(0.7))
                                 .lineLimit(2)
                             
                             Spacer()
@@ -4827,17 +4983,17 @@ loadDocuments()
                             HStack(spacing: 6) {
                                 Text("Analytics")
                                     .font(.custom("InterTight-Medium", size: 11))
-                                    .foregroundStyle(.black)
+                                    .foregroundStyle(isLightOnColor ? .white : .black)
                                     .padding(.horizontal, 8)
                                     .padding(.vertical, 3)
-                                    .background(.black.opacity(0.1), in: Capsule())
+                                    .background((isLightOnColor ? Color.white.opacity(0.22) : Color.black.opacity(0.1)), in: Capsule())
                                 
                                 Text("Trends")
                                     .font(.custom("InterTight-Medium", size: 11))
-                                    .foregroundStyle(.black)
+                                    .foregroundStyle(isLightOnColor ? .white : .black)
                                     .padding(.horizontal, 8)
                                     .padding(.vertical, 3)
-                                    .background(.black.opacity(0.1), in: Capsule())
+                                    .background((isLightOnColor ? Color.white.opacity(0.22) : Color.black.opacity(0.1)), in: Capsule())
                                 Spacer()
                             }
                         }
@@ -4847,7 +5003,11 @@ loadDocuments()
                         .background(
                             ZStack {
                                 Color.white
-                                colorTheme.currentTheme.curatedCards.statistics
+                                if let gradients = colorTheme.gradients {
+                                    Rectangle().fill(gradients.statisticsGradient)
+                                } else {
+                                    Rectangle().fill(colorTheme.currentTheme.curatedCards.statistics)
+                                }
                             }
                         )
                         .clipShape(RoundedRectangle(cornerRadius: 12))
@@ -4878,19 +5038,20 @@ loadDocuments()
                     VStack(alignment: .leading, spacing: 12) {
                         // Colored section
                         VStack(alignment: .leading, spacing: 8) {
+                            let isPunchy = colorTheme.currentTheme.id == "punchy"
                             HStack(spacing: 8) {
                                 Image(systemName: "clock")
-                                    .foregroundStyle(.black)
+                                    .foregroundStyle(isPunchy ? .white : .black)
                                     .font(.system(size: 18, weight: .semibold))
                                 Text("Recently Opened")
                                     .font(.custom("InterTight-Bold", size: 17))
-                                    .foregroundStyle(.black)
+                                    .foregroundStyle(isPunchy ? .white : .black)
                                 Spacer()
                             }
                             
                             Text("Your latest document activity")
                                 .font(.custom("InterTight-Regular", size: 14))
-                                .foregroundStyle(.black.opacity(0.7))
+                                .foregroundStyle(isPunchy ? .white.opacity(0.9) : .black.opacity(0.7))
                                 .lineLimit(2)
                             
                             Spacer()
@@ -4901,17 +5062,17 @@ loadDocuments()
                                 if recentCount > 0 {
                                     Text("\(recentCount) Recent")
                                         .font(.custom("InterTight-Medium", size: 11))
-                                        .foregroundStyle(.black)
+                                        .foregroundStyle(isPunchy ? .white : .black)
                                         .padding(.horizontal, 8)
                                         .padding(.vertical, 3)
-                                        .background(.black.opacity(0.1), in: Capsule())
+                                        .background((isPunchy ? Color.white.opacity(0.22) : Color.black.opacity(0.1)), in: Capsule())
                                 } else {
                                     Text("No Activity")
                                         .font(.custom("InterTight-Medium", size: 11))
-                                        .foregroundStyle(.black)
+                                        .foregroundStyle(isPunchy ? .white : .black)
                                         .padding(.horizontal, 8)
                                         .padding(.vertical, 3)
-                                        .background(.black.opacity(0.1), in: Capsule())
+                                        .background((isPunchy ? Color.white.opacity(0.22) : Color.black.opacity(0.1)), in: Capsule())
                                 }
                                 Spacer()
                             }
@@ -4922,7 +5083,11 @@ loadDocuments()
                         .background(
                             ZStack {
                                 Color.white
-                                Color.blue.opacity(0.3)
+                                if let gradients = colorTheme.gradients {
+                                    Rectangle().fill(gradients.recentlyOpenedGradient)
+                                } else {
+                                    Rectangle().fill(colorTheme.currentTheme.curatedCards.recentlyOpened)
+                                }
                             }
                         )
                         .clipShape(RoundedRectangle(cornerRadius: 12))
@@ -4953,27 +5118,27 @@ loadDocuments()
                     VStack(alignment: .leading, spacing: 12) {
                         // Colored section
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("Trending")
+                            Text("Meetings")
                                 .font(.custom("InterTight-Bold", size: 18))
                                 .foregroundStyle(.black)
                             
-                            Text("Most accessed sermons this month")
+                            Text("Recent and upcoming meetings")
                                 .font(.custom("InterTight-Regular", size: 14))
                                 .foregroundStyle(.black.opacity(0.7))
                                 .lineLimit(2)
                             
                             Spacer()
                             
-                            // Pills showing trending info
+                            // Pills showing meeting info
                             HStack(spacing: 6) {
-                                Text("Popular")
+                                Text("Team")
                                     .font(.custom("InterTight-Medium", size: 11))
                                     .foregroundStyle(.black)
                                     .padding(.horizontal, 8)
                                     .padding(.vertical, 3)
                                     .background(.black.opacity(0.1), in: Capsule())
                                 
-                                Text("This Month")
+                                Text("This Week")
                                     .font(.custom("InterTight-Medium", size: 11))
                                     .foregroundStyle(.black)
                                     .padding(.horizontal, 8)
@@ -4985,7 +5150,16 @@ loadDocuments()
                         .padding(16)
                         .frame(height: 190)
                         .frame(maxWidth: .infinity)
-                        .background(.green.opacity(0.3))
+                        .background(
+                            ZStack {
+                                Color.white
+                                if let gradients = colorTheme.gradients {
+                                    Rectangle().fill(gradients.meetingsGradient)
+                                } else {
+                                    Rectangle().fill(colorTheme.currentTheme.curatedCards.meetings)
+                                }
+                            }
+                        )
                         .clipShape(RoundedRectangle(cornerRadius: 12))
                         
                         // Explore button below colored section
@@ -5184,10 +5358,10 @@ loadDocuments()
     enum CurationType: String, CaseIterable {
         case todaysDocuments = "Today's Documents"
         case sermonJournal = "Sermon Journal"
+        case trending = "Meetings"           // Place Meetings after Journal
         case preachItAgain = "Preach it Again"
         case statistics = "Statistics"
         case recent = "Recently Opened"
-        case trending = "Trending"
         
         var icon: String {
             switch self {
@@ -5207,7 +5381,7 @@ loadDocuments()
             case .preachItAgain: return "Sermons ready for another delivery"
             case .statistics: return "Your sermon statistics and analytics"
             case .recent: return "Recently opened sermons"
-            case .trending: return "Most accessed sermons this month"
+            case .trending: return "Recent and upcoming meetings"
             }
         }
     }
@@ -5373,7 +5547,8 @@ loadDocuments()
         case .recent:
             return Array(documents.prefix(5))
         case .trending:
-            return Array(documents.sorted { $0.title.count > $1.title.count }.prefix(5))
+            // Placeholder: meetings-focused curation could pull from calendar or tagged docs
+            return Array(documents.prefix(5))
         case .statistics:
             return []
         }
@@ -5429,7 +5604,7 @@ loadDocuments()
             return "Recently created content that reflects current spiritual insights and growth."
             
         case .trending:
-            return "Popular content that has resonated with many seeking spiritual guidance."
+            return "Stay on top of your upcoming and recent meetings at a glance."
             
         case .statistics:
             return ""
@@ -5457,7 +5632,7 @@ loadDocuments()
             return "New"
             
         case .trending:
-            return "Popular"
+            return "Meeting"
             
         case .statistics:
             return "Data"
@@ -5669,25 +5844,26 @@ loadDocuments()
             VStack(alignment: .leading, spacing: 12) {
                 // Colored section (pastel)
                 VStack(alignment: .leading, spacing: 8) {
+                    let isLightOnColor = (colorTheme.currentTheme.id == "punchy") || colorTheme.hasGradients
                     HStack(spacing: 8) {
                         Image(systemName: "book.pages")
-                            .foregroundStyle(.black)
+                            .foregroundStyle(isLightOnColor ? .white : .black)
                             .font(.system(size: 18, weight: .semibold))
                         Text("Journal")
                             .font(.custom("InterTight-Bold", size: 17))
-                            .foregroundStyle(.black)
+                            .foregroundStyle(isLightOnColor ? .white : .black)
                         Spacer()
                     }
                     
                     if let lastEntry = SermonJournalService.shared.entries().first {
                         Text("Last entry \(relativeDate(lastEntry.createdAt))")
                             .font(.custom("InterTight-Regular", size: 14))
-                            .foregroundStyle(.black.opacity(0.7))
+                            .foregroundStyle(isLightOnColor ? .white.opacity(0.9) : .black.opacity(0.7))
                             .lineLimit(1)
                     } else {
                         Text("No entries yet")
                             .font(.custom("InterTight-Regular", size: 14))
-                            .foregroundStyle(.black.opacity(0.7))
+                            .foregroundStyle(isLightOnColor ? .white.opacity(0.9) : .black.opacity(0.7))
                             .lineLimit(1)
                     }
                     
@@ -5698,10 +5874,10 @@ loadDocuments()
                         let total = SermonJournalService.shared.entries().count
                         Text("\(total) Entries")
                             .font(.custom("InterTight-Medium", size: 11))
-                            .foregroundStyle(.black)
+                            .foregroundStyle(isLightOnColor ? .white : .black)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 3)
-                            .background(.black.opacity(0.1), in: Capsule())
+                            .background((isLightOnColor ? Color.white.opacity(0.22) : Color.black.opacity(0.1)), in: Capsule())
                         Spacer()
                     }
                 }
@@ -5711,7 +5887,11 @@ loadDocuments()
                 .background(
                     ZStack {
                         Color.white
-                        colorTheme.currentTheme.curatedCards.journal
+                        if let gradients = colorTheme.gradients {
+                            Rectangle().fill(gradients.journalGradient)
+                        } else {
+                            Rectangle().fill(colorTheme.currentTheme.journalCards?.background ?? colorTheme.currentTheme.curatedCards.journal)
+                        }
                     }
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 12))

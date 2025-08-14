@@ -27,31 +27,20 @@ struct DashboardDocumentRow: View {
     
     @Environment(\.themeColors) var theme: ThemeColors
     @Environment(\.colorScheme) var colorScheme
+    @Environment(\.colorTheme) var colorTheme
     private let gradientManager = GradientWallpaperManager.shared
     
     // Computed properties for theme-aware status colors
     private var pinColor: Color {
-        let useThemeColors = colorScheme == .dark ? 
-            gradientManager.selectedDarkGradientIndex != 0 :
-            gradientManager.selectedLightGradientIndex != 0
-            
-        return useThemeColors ? theme.accent : .orange
+        return colorTheme.currentTheme.statusIcons?.pinned ?? .orange
     }
     
     private var wipColor: Color {
-        let useThemeColors = colorScheme == .dark ? 
-            gradientManager.selectedDarkGradientIndex != 0 :
-            gradientManager.selectedLightGradientIndex != 0
-            
-        return useThemeColors ? theme.primary : .blue
+        return colorTheme.currentTheme.statusIcons?.wip ?? .blue
     }
     
     private var calendarColor: Color {
-        let useThemeColors = colorScheme == .dark ? 
-            gradientManager.selectedDarkGradientIndex != 0 :
-            gradientManager.selectedLightGradientIndex != 0
-            
-        return useThemeColors ? theme.secondary : .green
+        return colorTheme.currentTheme.statusIcons?.calendar ?? .green
     }
     
     // Helper function to calculate flexible column widths for iPhone

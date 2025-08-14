@@ -35,6 +35,7 @@ struct DocumentStatusView: View {
     let isHovering: Bool
     @Environment(\.themeColors) var theme
     @Environment(\.colorScheme) var colorScheme
+    @Environment(\.colorTheme) var colorTheme
     @State private var showDetailsPopover = false
     @State private var showCalendarContext: Bool = false
     @State private var pinHover = false
@@ -68,7 +69,7 @@ struct DocumentStatusView: View {
                         }) {
                             Image(systemName: "pin.fill")
                                 .font(.system(size: 12))
-                                .foregroundStyle(pinnedDocuments.contains(document.id) ? .green : (pinHover ? theme.accent : (colorScheme == .dark ? .white : .black)))
+                                .foregroundStyle(pinnedDocuments.contains(document.id) ? (colorTheme.currentTheme.statusIcons?.pinned ?? .green) : (pinHover ? theme.accent : (colorScheme == .dark ? .white : .black)))
                                 .scaleEffect(pinHover ? 1.2 : 1.0)
                                 .animation(.easeInOut(duration: 0.15), value: pinHover)
                                 // ✨ iOS 26 Animated SF Symbol: Bounce when pinned/unpinned
@@ -87,7 +88,7 @@ struct DocumentStatusView: View {
                         }) {
                             Image(systemName: "clock.fill")
                                 .font(.system(size: 12))
-                                .foregroundStyle(wipDocuments.contains(document.id) ? .orange : (wipHover ? theme.accent : (colorScheme == .dark ? .white : .black)))
+                                .foregroundStyle(wipDocuments.contains(document.id) ? (colorTheme.currentTheme.statusIcons?.wip ?? .orange) : (wipHover ? theme.accent : (colorScheme == .dark ? .white : .black)))
                                 .scaleEffect(wipHover ? 1.2 : 1.0)
                                 .animation(.easeInOut(duration: 0.15), value: wipHover)
                                 // ✨ iOS 26 Animated SF Symbol: Bounce when WIP toggled

@@ -297,30 +297,70 @@ struct MainLayout: View {
                 },
                 set: { showBibleReaderModal = $0 }
             )) {
-                BibleReaderView(onDismiss: {
-                    showBibleReaderModal = false
-                })
-                .presentationBackground(.ultraThinMaterial)
+                ZStack {
+                    // Glass effect background
+                    Rectangle()
+                        .fill(.clear)
+                        .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 20))
+                        .ignoresSafeArea()
+                    
+                    // Content with transparent background
+                    BibleReaderView(onDismiss: {
+                        showBibleReaderModal = false
+                    })
+                    .background(.clear)
+                }
+                .presentationBackground(.clear)
             }
             .sheet(isPresented: $showFoldersModal) {
-                FoldersView(onDismiss: {
-                    showFoldersModal = false
-                })
-                .presentationBackground(.ultraThinMaterial)
+                ZStack {
+                    // Glass effect background
+                    Rectangle()
+                        .fill(.clear)
+                        .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 20))
+                        .ignoresSafeArea()
+                    
+                    // Content with transparent background
+                    FoldersView(onDismiss: {
+                        showFoldersModal = false
+                    })
+                    .background(.clear)
+                }
+                .presentationBackground(.clear)
             }
             .sheet(isPresented: $showSearchModal) {
-                SearchView(onDismiss: {
-                    showSearchModal = false
-                })
+                ZStack {
+                    // Glass effect background
+                    Rectangle()
+                        .fill(.clear)
+                        .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 20))
+                        .ignoresSafeArea()
+                    
+                    // Content with transparent background
+                    SearchView(onDismiss: {
+                        showSearchModal = false
+                    })
+                    .background(.clear)
+                }
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
-                .presentationBackground(.ultraThinMaterial)
+                .presentationBackground(.clear)
             }
             .sheet(isPresented: $showUserProfileSheet) {
-                UserProfileView(onDismiss: {
-                    showUserProfileSheet = false
-                })
-                .presentationBackground(.ultraThinMaterial)
+                ZStack {
+                    // Glass effect background
+                    Rectangle()
+                        .fill(.clear)
+                        .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 20))
+                        .ignoresSafeArea()
+                    
+                    // Content with transparent background
+                    UserProfileView(onDismiss: {
+                        showUserProfileSheet = false
+                    })
+                    .background(.clear)
+                }
+                .presentationBackground(.clear)
             }
             .sheet(isPresented: Binding(
                 get: { 
@@ -332,10 +372,20 @@ struct MainLayout: View {
                 },
                 set: { showSmartStudyModal = $0 }
             )) {
-                SmartStudyView(onDismiss: {
-                    showSmartStudyModal = false
-                })
-                .presentationBackground(.ultraThinMaterial)
+                ZStack {
+                    // Glass effect background
+                    Rectangle()
+                        .fill(.clear)
+                        .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 20))
+                        .ignoresSafeArea()
+                    
+                    // Content with transparent background
+                    SmartStudyView(onDismiss: {
+                        showSmartStudyModal = false
+                    })
+                    .background(.clear)
+                }
+                .presentationBackground(.clear)
             }
 
             .sheet(isPresented: Binding(
@@ -348,8 +398,18 @@ struct MainLayout: View {
                 },
                 set: { showRecentlyDeletedModal = $0 }
             )) {
-                RecentlyDeletedView(isPresented: $showRecentlyDeletedModal)
-                    .presentationBackground(.ultraThinMaterial)
+                ZStack {
+                    // Glass effect background
+                    Rectangle()
+                        .fill(.clear)
+                        .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 20))
+                        .ignoresSafeArea()
+                    
+                    // Content with transparent background
+                    RecentlyDeletedView(isPresented: $showRecentlyDeletedModal)
+                        .background(.clear)
+                }
+                .presentationBackground(.clear)
             }
             .overlay {
                 #if os(macOS)

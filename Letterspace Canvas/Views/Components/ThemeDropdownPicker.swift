@@ -15,6 +15,8 @@ struct ThemeDropdownPicker: View {
     @Environment(\.themeColors) var theme
     @State private var isExpanded = false
     @State private var hoveredTheme: AppColorTheme?
+    @State private var draggedTheme: AppColorTheme?
+    @State private var isDragging = false
     
     var body: some View {
         ZStack(alignment: .topTrailing) {
@@ -55,18 +57,23 @@ struct ThemeDropdownPicker: View {
                         ThemeOptionRow(
                             theme: themeOption,
                             isSelected: themeOption.id == colorTheme.currentTheme.id,
-                            isHovered: hoveredTheme?.id == themeOption.id
+                            isHovered: hoveredTheme?.id == themeOption.id || draggedTheme?.id == themeOption.id,
+                            isDraggedOver: isDragging && draggedTheme?.id == themeOption.id
                         ) {
                             // Don't close dropdown, let user keep exploring
-                            print("🎨 Theme changing to: \(themeOption.name)")
-                            colorTheme.setTheme(themeOption)
-                            
-                            #if os(iOS)
-                            HapticFeedback.impact(.light)
-                            #endif
+                            if !isDragging { // Only respond to taps when not dragging
+                                print("🎨 Theme changing to: \(themeOption.name)")
+                                colorTheme.setTheme(themeOption)
+                                
+                                #if os(iOS)
+                                HapticFeedback.impact(.light)
+                                #endif
+                            }
                         }
                         .onHover { hovering in
-                            hoveredTheme = hovering ? themeOption : nil
+                            if !isDragging { // Only update hover when not dragging
+                                hoveredTheme = hovering ? themeOption : nil
+                            }
                         }
                     }
                 }
@@ -75,17 +82,44 @@ struct ThemeDropdownPicker: View {
                 .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 16))
                 .offset(y: 45) // Position below the button
                 .zIndex(1000) // Ensure it's on top
+                .gesture(
+                    DragGesture(minimumDistance: 0, coordinateSpace: .local)
+                        .onChanged { value in
+                            isDragging = true
+                            // Find which theme option is under the drag location
+                            let optionHeight: CGFloat = 32 // Estimated row height
+                            let paddingTop: CGFloat = 8
+                            let index = Int((value.location.y - paddingTop) / optionHeight)
+                            
+                            if index >= 0 && index < ColorThemeManager.allThemes.count {
+                                let targetTheme = ColorThemeManager.allThemes[index]
+                                if draggedTheme != targetTheme {
+                                    draggedTheme = targetTheme
+                                    // Preview the theme immediately
+                                    colorTheme.setTheme(targetTheme)
+                                    
+                                    #if os(iOS)
+                                    HapticFeedback.impact(.light)
+                                    #endif
+                                }
+                            }
+                        }
+                        .onEnded { _ in
+                            isDragging = false
+                            draggedTheme = nil
+                        }
+                )
                 .transition(.asymmetric(
                     insertion: .scale(scale: 0.95, anchor: .topTrailing).combined(with: .opacity),
                     removal: .scale(scale: 0.95, anchor: .topTrailing).combined(with: .opacity)
                 ))
             }
         }
-        // Add a background overlay to close dropdown when tapping outside
+        // Add a full-screen overlay to block clicks and close dropdown
         .background(
             Group {
                 if isExpanded {
-                    Color.clear
+                    Color.black.opacity(0.001) // Nearly transparent but blocks clicks
                         .contentShape(Rectangle())
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .onTapGesture {
@@ -93,6 +127,7 @@ struct ThemeDropdownPicker: View {
                                 isExpanded = false
                             }
                         }
+                        .ignoresSafeArea(.all) // Cover entire screen including safe areas
                 }
             }
         )
@@ -103,6 +138,7 @@ struct ThemeOptionRow: View {
     let theme: AppColorTheme
     let isSelected: Bool
     let isHovered: Bool
+    let isDraggedOver: Bool
     let action: () -> Void
     
     @Environment(\.themeColors) var currentTheme
@@ -142,15 +178,22 @@ struct ThemeOptionRow: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
+            .frame(maxWidth: .infinity, alignment: .leading) // Make full width clickable
+            .contentShape(Rectangle()) // Make entire area clickable
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(isHovered ? currentTheme.background.opacity(0.1) : Color.clear)
+                    .fill(
+                        isDraggedOver ? currentTheme.background.opacity(0.15) :
+                        isHovered ? currentTheme.background.opacity(0.1) : 
+                        Color.clear
+                    )
             )
         }
         .buttonStyle(PlainButtonStyle())
-        .scaleEffect(isSelected ? 1.02 : 1.0)
+        .scaleEffect(isSelected ? 1.02 : (isDraggedOver ? 1.01 : 1.0))
         .animation(.easeInOut(duration: 0.15), value: isSelected)
         .animation(.easeInOut(duration: 0.1), value: isHovered)
+        .animation(.easeInOut(duration: 0.1), value: isDraggedOver)
     }
 }
 
@@ -168,5 +211,4 @@ struct ThemeOptionRow: View {
         Spacer()
     }
     .background(Color.gray.opacity(0.1))
-    .withTheme()
 }

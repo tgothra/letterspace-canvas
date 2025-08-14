@@ -197,6 +197,12 @@ struct FloatingDashboardBottomBar: View {
                 .presentationBackground(.clear)
                 .presentationBackgroundInteraction(.enabled)
                 .presentationDragIndicator(.visible)
+                .background {
+                    Rectangle()
+                        .fill(.clear)
+                        .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 20))
+                        .ignoresSafeArea()
+                }
             }
         }
     }

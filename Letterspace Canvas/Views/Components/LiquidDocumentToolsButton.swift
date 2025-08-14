@@ -76,6 +76,7 @@ struct DocumentToolsSheet: View {
     @Environment(\.themeColors) var theme
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.dismiss) var dismiss
+    @EnvironmentObject var colorTheme: ColorThemeManager
     
     @Binding var document: Letterspace_CanvasDocument
     @Binding var selectedElement: UUID?
@@ -111,14 +112,14 @@ struct DocumentToolsSheet: View {
             }
         }
         
-        var color: Color {
+        func color(using colorTheme: ColorThemeManager) -> Color {
             switch self {
-            case .series: return .blue
-            case .tags: return .green
-            case .variations: return .purple
-            case .bookmarks: return .orange
-            case .links: return .pink
-            case .details: return .gray
+            case .details: return colorTheme.currentTheme.documentTools?.details ?? .gray
+            case .series: return colorTheme.currentTheme.documentTools?.series ?? .blue
+            case .tags: return colorTheme.currentTheme.documentTools?.tags ?? .green
+            case .variations: return colorTheme.currentTheme.documentTools?.variations ?? .purple
+            case .bookmarks: return colorTheme.currentTheme.documentTools?.bookmarks ?? .orange
+            case .links: return colorTheme.currentTheme.documentTools?.links ?? .pink
             }
         }
     }
@@ -201,6 +202,7 @@ struct DocumentToolsSheet: View {
 
 struct LiquidToolSelector: View {
     @Environment(\.themeColors) var theme
+    @EnvironmentObject var colorTheme: ColorThemeManager
     @Binding var selectedTool: DocumentToolsSheet.DocumentTool
     @State private var dragLocation: CGPoint = .zero
     @State private var isDragging: Bool = false
@@ -229,7 +231,7 @@ struct LiquidToolSelector: View {
             HStack(spacing: 8) {
                 Image(systemName: tool.icon)
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(isSelected ? .white : tool.color)
+                    .foregroundColor(isSelected ? .white : tool.color(using: colorTheme))
                 
                 Text(tool.rawValue)
                     .font(.system(size: 14, weight: .semibold))
@@ -242,7 +244,7 @@ struct LiquidToolSelector: View {
                     .fill(
                         isSelected
                             ? LinearGradient(
-                                colors: [tool.color, tool.color.opacity(0.8)],
+                                colors: [tool.color(using: colorTheme), tool.color(using: colorTheme).opacity(0.8)],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
@@ -255,7 +257,7 @@ struct LiquidToolSelector: View {
                     .overlay(
                         RoundedRectangle(cornerRadius: 20)
                             .stroke(
-                                isSelected ? Color.clear : tool.color.opacity(0.2),
+                                isSelected ? Color.clear : tool.color(using: colorTheme).opacity(0.2),
                                 lineWidth: 1
                             )
                     )

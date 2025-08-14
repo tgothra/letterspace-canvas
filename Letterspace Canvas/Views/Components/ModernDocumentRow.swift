@@ -15,6 +15,7 @@ struct ModernDocumentRow: View {
     
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.themeColors) var theme
+    @EnvironmentObject var colorTheme: ColorThemeManager
     @Environment(\.documentStatus) var documentStatus
     
     @State private var isHovered = false
@@ -262,19 +263,19 @@ struct ModernDocumentRow: View {
                     if documentStatus.isPinned {
                         Image(systemName: "star.fill")
                             .font(.system(size: statusIconFontSize, weight: .medium))
-                            .foregroundColor(.orange)
+                            .foregroundColor(colorTheme.currentTheme.statusIcons?.pinned ?? .orange)
                     }
                     
                     if documentStatus.isWIP {
                         Image(systemName: "pencil.circle.fill")
                             .font(.system(size: statusIconFontSize, weight: .medium))
-                            .foregroundColor(.blue)
+                            .foregroundColor(colorTheme.currentTheme.statusIcons?.wip ?? .blue)
                     }
                     
                     if documentStatus.isScheduled {
                         Image(systemName: "calendar.circle.fill")
                             .font(.system(size: statusIconFontSize, weight: .medium))
-                            .foregroundColor(.green)
+                            .foregroundColor(colorTheme.currentTheme.statusIcons?.calendar ?? .green)
                     }
                 }
             }
