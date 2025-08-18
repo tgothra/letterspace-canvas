@@ -997,10 +997,21 @@ var body: some View {
             UserDefaults.standard.set(Array(visibleColumns), forKey: "VisibleColumns")
             #endif
             loadDocuments()
+            loadTodayStructure()
         }
         // Persist Today's selection when it changes
         .onChange(of: todayDocumentIds) { newValue in
             UserDefaults.standard.set(Array(newValue), forKey: "TodayDocumentIds")
+            // Update structure documents when selection changes
+            let newStructureDocs = newValue.map { docId in
+                if let existing = todayStructureDocuments.first(where: { $0.id == docId }) {
+                    return existing
+                } else {
+                    return TodayStructureDocument(id: docId, headerId: nil, order: todayStructureDocuments.count)
+                }
+            }
+            todayStructureDocuments = newStructureDocs
+            saveTodayStructure()
         }
         // Sanitize Today's selection when documents list refreshes
         .onChange(of: documents) { _ in
@@ -4411,152 +4422,377 @@ loadDocuments()
         }
     }
     
-    // Row used in Today's Documents list, showing proper document icons/headers
-    private struct TodayListRow: View {
+
+    
+    // Handle document selection in Today's Documents
+    private func onSelectDocument(_ document: Letterspace_CanvasDocument) {
+        self.document = document
+        self.sidebarMode = .details
+        self.isRightSidebarVisible = true
+    }
+
+    // MARK: - Today's Documents Section (numbered with reordering)
+    @ViewBuilder
+    private var todaysDocumentsSection: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            // Description text
+            Text("Documents you've selected for today")
+                .font(.custom("InterTight-Regular", size: 16))
+                .foregroundStyle(theme.secondary)
+                .padding(.horizontal, 20)
+            
+            if todayDocumentIds.isEmpty {
+                // Empty state
+                VStack(spacing: 16) {
+                    Image(systemName: "calendar.badge.checkmark")
+                        .font(.system(size: 48))
+                        .foregroundStyle(theme.primary.opacity(0.4))
+                    
+                    VStack(spacing: 8) {
+                        Text("No documents added for today")
+                            .font(.custom("InterTight-Medium", size: 18))
+                            .foregroundStyle(theme.primary.opacity(0.7))
+                        
+                        Text("Tap the + button to add documents you want to work with today")
+                            .font(.custom("InterTight-Regular", size: 14))
+                            .foregroundStyle(theme.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 40)
+            } else {
+                // Documents list with headers and reordering
+                VStack(spacing: 16) {
+                    // Add Header button
+                    Button(action: { showAddHeaderSheet = true }) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.system(size: 16, weight: .semibold))
+                            Text("Add Section Header")
+                                .font(.custom("InterTight-Medium", size: 14))
+                        }
+                        .foregroundStyle(theme.accent)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(theme.accent.opacity(0.1))
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    
+                    // Render structure with headers and documents
+                    ForEach(renderTodayStructure(), id: \.id) { item in
+                        switch item {
+                        case .header(let header):
+                            TodaySectionHeaderView(
+                                header: header,
+                                onUpdateTitle: { updateHeaderTitle(header.id, newTitle: $0) },
+                                onRemove: { removeHeader(header.id) }
+                            )
+                        case .document(let doc, let index):
+                            TodayDocumentCard(
+                                document: doc,
+                                index: index,
+                                onTap: { onSelectDocument(doc) },
+                                onRemove: { removeFromToday(doc.id) }
+                        )
+                        }
+                    }
+                    .onMove { from, to in
+                        reorderTodayStructure(from: from, to: to)
+                    }
+                }
+                .padding(.horizontal, 20)
+            }
+        }
+    }
+    
+    // MARK: - Helper functions for Today's Documents
+    private func removeFromToday(_ documentId: String) {
+        todayDocumentIds.remove(documentId)
+        UserDefaults.standard.set(Array(todayDocumentIds), forKey: "TodayDocumentIds")
+    }
+    
+    private func reorderTodayDocuments(from source: IndexSet, to destination: Int) {
+        let todayDocs = documents.filter { todayDocumentIds.contains($0.id) }
+        var reorderedIds = todayDocs.map { $0.id }
+        reorderedIds.move(fromOffsets: source, toOffset: destination)
+        
+        // Update the todayDocumentIds set with the new order
+        todayDocumentIds = Set(reorderedIds)
+        UserDefaults.standard.set(Array(todayDocumentIds), forKey: "TodayDocumentIds")
+    }
+    
+    // MARK: - Today's Documents Structure Management
+    private func addHeader() {
+        let newHeader = TodaySectionHeader(
+            id: UUID().uuidString,
+            title: "New Section",
+            order: todayStructure.count
+        )
+        todayStructure.append(newHeader)
+        saveTodayStructure()
+    }
+    
+    private func removeHeader(_ headerId: String) {
+        todayStructure.removeAll { $0.id == headerId }
+        // Move any documents that were under this header to the root level
+        let documentsUnderHeader = todayStructureDocuments.filter { $0.headerId == headerId }
+        for doc in documentsUnderHeader {
+            if let index = todayStructureDocuments.firstIndex(where: { $0.id == doc.id }) {
+                todayStructureDocuments[index].headerId = nil
+            }
+        }
+        saveTodayStructure()
+    }
+    
+    private func updateHeaderTitle(_ headerId: String, newTitle: String) {
+        if let index = todayStructure.firstIndex(where: { $0.id == headerId }) {
+            todayStructure[index].title = newTitle
+            saveTodayStructure()
+        }
+    }
+    
+    private func moveDocumentToHeader(_ documentId: String, headerId: String?) {
+        if let index = todayStructureDocuments.firstIndex(where: { $0.id == documentId }) {
+            todayStructureDocuments[index].headerId = headerId
+            saveTodayStructure()
+        }
+    }
+    
+    private func saveTodayStructure() {
+        let structureData = TodayStructureData(
+            headers: todayStructure,
+            documents: todayStructureDocuments
+        )
+        if let encoded = try? JSONEncoder().encode(structureData) {
+            UserDefaults.standard.set(encoded, forKey: "TodayStructureData")
+        }
+    }
+    
+    private func loadTodayStructure() {
+        if let data = UserDefaults.standard.data(forKey: "TodayStructureData"),
+           let structureData = try? JSONDecoder().decode(TodayStructureData.self, from: data) {
+            todayStructure = structureData.headers
+            todayStructureDocuments = structureData.documents
+        } else {
+            // Initialize with default structure if none exists
+            todayStructure = []
+            todayStructureDocuments = documents.filter { todayDocumentIds.contains($0.id) }.map { doc in
+                TodayStructureDocument(id: doc.id, headerId: nil, order: 0)
+            }
+        }
+    }
+    
+    private func renderTodayStructure() -> [TodayStructureItem] {
+        var items: [TodayStructureItem] = []
+        
+        // Add headers first
+        for header in todayStructure.sorted(by: { $0.order < $1.order }) {
+            items.append(.header(header))
+            
+            // Add documents under this header
+            let documentsUnderHeader = todayStructureDocuments
+                .filter { $0.headerId == header.id }
+                .sorted(by: { $0.order < $1.order })
+            
+            for (index, docStruct) in documentsUnderHeader.enumerated() {
+                if let document = documents.first(where: { $0.id == docStruct.id }) {
+                    items.append(.document(document, index + 1))
+                }
+            }
+        }
+        
+        // Add documents without headers (root level)
+        let rootDocuments = todayStructureDocuments
+            .filter { $0.headerId == nil }
+            .sorted(by: { $0.order < $1.order })
+        
+        for (index, docStruct) in rootDocuments.enumerated() {
+            if let document = documents.first(where: { $0.id == docStruct.id }) {
+                items.append(.document(document, index + 1))
+            }
+        }
+        
+        return items
+    }
+    
+    private func reorderTodayStructure(from source: IndexSet, to destination: Int) {
+        var items = renderTodayStructure()
+        var reorderedItems: [TodayStructureItem] = []
+        
+        // Remove items from source
+        for index in source {
+            reorderedItems.append(items[index])
+        }
+        
+        // Insert at destination
+        items.insert(contentsOf: reorderedItems, at: destination)
+        
+        // Update the structure based on new order
+        updateStructureFromItems(items)
+    }
+    
+    private func updateStructureFromItems(_ items: [TodayStructureItem]) {
+        var newHeaders: [TodaySectionHeader] = []
+        var newDocuments: [TodayStructureDocument] = []
+        
+        for (index, item) in items.enumerated() {
+            switch item {
+            case .header(let header):
+                var updatedHeader = header
+                updatedHeader.order = index
+                newHeaders.append(updatedHeader)
+            case .document(let document, _):
+                let headerId = findHeaderIdForDocument(at: index, in: items)
+                let docStruct = TodayStructureDocument(
+                    id: document.id,
+                    headerId: headerId,
+                    order: index
+                )
+                newDocuments.append(docStruct)
+            }
+        }
+        
+        todayStructure = newHeaders
+        todayStructureDocuments = newDocuments
+        saveTodayStructure()
+    }
+    
+    private func findHeaderIdForDocument(at index: Int, in items: [TodayStructureItem]) -> String? {
+        // Find the most recent header before this document
+        for i in (0..<index).reversed() {
+            if case .header(let header) = items[i] {
+                return header.id
+            }
+        }
+        return nil
+    }
+    
+    // MARK: - Today Document Card
+    private struct TodayDocumentCard: View {
         let document: Letterspace_CanvasDocument
+        let index: Int
+        let onTap: () -> Void
+        let onRemove: () -> Void
         @Environment(\.themeColors) private var theme
         @Environment(\.colorScheme) private var colorScheme
         @Environment(\.colorTheme) private var colorTheme
-        private let iconSize: CGFloat = 36
-
+        @State private var isRemoveButtonHovered = false
+        
         var body: some View {
-            HStack(spacing: 14) {
-                if let headerImage = loadHeaderImage(for: document) {
-                    let isIcon = document.elements.first(where: { $0.type == .headerImage })?.content.contains("header_icon_") ?? false
-                    #if os(macOS)
-                    Image(nsImage: headerImage)
-                        .resizable()
-                        .aspectRatio(contentMode: isIcon ? .fit : .fill)
-                        .frame(width: iconSize, height: iconSize)
-                        .clipShape(isIcon ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: 8)))
-                    #else
-                    Image(uiImage: headerImage)
-                        .resizable()
-                        .aspectRatio(contentMode: isIcon ? .fit : .fill)
-                        .frame(width: iconSize, height: iconSize)
-                        .clipShape(isIcon ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: 8)))
-                    #endif
-                } else {
-                    ZStack {
-                        Circle()
-                            .fill(colorScheme == .dark ? Color.white.opacity(0.08) : Color.black.opacity(0.05))
-                        Image(systemName: "doc.text")
-                            .font(.system(size: 24, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                    }
-                    .frame(width: iconSize, height: iconSize)
-                }
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(document.title.isEmpty ? "Untitled" : document.title)
-                        .font(.custom("InterTight-SemiBold", size: 19))
-                        .foregroundStyle(colorScheme == .dark ? .white : .black)
-                        .lineLimit(1)
-                    if !document.subtitle.isEmpty {
-                        Text(document.subtitle)
-                            .font(.custom("InterTight-Regular", size: 15))
-                            .foregroundStyle(theme.primary.opacity(0.65))
-                            .lineLimit(1)
-                    }
-                }
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
-            .background(
+            HStack(spacing: 0) {
+                // Beautiful number system on the left
                 ZStack {
-                    // Themed tint background under the glass
-                    RoundedRectangle(cornerRadius: 14)
-                        .fill(
-                            colorTheme.currentTheme.curatedCards.todaysDocs
-                                .opacity(colorScheme == .dark ? 0.10 : 0.08)
-                        )
-                    // Liquid glass on top
-                    RoundedRectangle(cornerRadius: 14)
-                        .fill(.ultraThinMaterial)
+                    Circle()
+                        .fill(theme.accent.opacity(0.15))
+                        .frame(width: 32, height: 32)
+                    
+                    Text("\(index)")
+                        .font(.custom("InterTight-Bold", size: 16))
+                        .foregroundStyle(theme.accent)
                 }
-            )
-            // Subtle inner sheen for liquid glass
-            .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                .white.opacity(colorScheme == .dark ? 0.14 : 0.10),
-                                .white.opacity(0.02)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .blendMode(.overlay)
-                    .allowsHitTesting(false)
-            )
-            // Specular highlight blob
-            .overlay(alignment: .topLeading) {
-                Circle()
-                    .fill(
-                        RadialGradient(
-                            colors: [
-                                .white.opacity(colorScheme == .dark ? 0.35 : 0.28),
-                                .white.opacity(0.0)
-                            ],
-                            center: .topLeading,
-                            startRadius: 0,
-                            endRadius: 90
-                        )
-                    )
-                    .frame(width: 120, height: 120)
-                    .offset(x: -28, y: -28)
-                    .allowsHitTesting(false)
+                .padding(.leading, 16)
+                
+                // Card content
+                HStack(spacing: 16) {
+                    // Document icon/image
+                    if let headerImage = loadHeaderImage(for: document) {
+                        let isIcon = document.elements.first(where: { $0.type == .headerImage })?.content.contains("header_icon_") ?? false
+                        #if os(macOS)
+                        Image(nsImage: headerImage)
+                            .resizable()
+                            .aspectRatio(contentMode: isIcon ? .fit : .fill)
+                            .frame(width: 40, height: 40)
+                            .clipShape(isIcon ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: 8)))
+                        #else
+                        Image(uiImage: headerImage)
+                            .resizable()
+                            .aspectRatio(contentMode: isIcon ? .fit : .fill)
+                            .frame(width: 40, height: 40)
+                            .clipShape(isIcon ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: 8)))
+                        #endif
+                    } else {
+                        ZStack {
+                            Circle()
+                                .fill(theme.accent.opacity(0.1))
+                                .frame(width: 40, height: 40)
+                            
+                            Image(systemName: "doc.text")
+                                .font(.system(size: 20, weight: .semibold))
+                                .foregroundStyle(theme.accent)
+                        }
+                    }
+                    
+                    // Document info
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(document.title.isEmpty ? "Untitled" : document.title)
+                            .font(.custom("InterTight-SemiBold", size: 16))
+                            .foregroundStyle(theme.primary)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
+                        
+                        if !document.subtitle.isEmpty {
+                            Text(document.subtitle)
+                                .font(.custom("InterTight-Regular", size: 14))
+                                .foregroundStyle(theme.secondary)
+                                .lineLimit(1)
+                        }
+                    }
+                    
+                    Spacer()
+                    
+                    // Action buttons on the right
+                    HStack(spacing: 12) {
+                        // Reorder handle
+                        Image(systemName: "line.3.horizontal")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(theme.secondary.opacity(0.6))
+                            .frame(width: 24, height: 24)
+                            .contentShape(Rectangle())
+                        
+                        // Red remove button (same style as WIP modal)
+                        Button(action: onRemove) {
+                            ZStack {
+                                Circle()
+                                    .fill(isRemoveButtonHovered ? Color.red.opacity(0.8) : Color.red)
+                                    .frame(width: 24, height: 24)
+                                
+                                Image(systemName: "xmark")
+                                    .font(.system(size: 12, weight: .bold))
+                                    .foregroundColor(.white)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .help("Remove from Today's Documents")
+                        .scaleEffect(isRemoveButtonHovered ? 1.15 : 1.0)
+                        .onHover { hovering in
+                            withAnimation(.spring(response: 0.2, dampingFraction: 0.6)) {
+                                isRemoveButtonHovered = hovering
+                            }
+                        }
+                    }
+                    .padding(.trailing, 16)
+                }
+                .padding(.vertical, 16)
             }
-            .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .strokeBorder(
-                        LinearGradient(
-                            colors: [
-                                .white.opacity(colorScheme == .dark ? 0.28 : 0.16),
-                                .white.opacity(colorScheme == .dark ? 0.10 : 0.06)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 0.75
-                    )
-                    .blendMode(.overlay)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(colorScheme == .dark ? Color(.systemGray6) : Color(.systemBackground))
             )
-            // Gentle inner shadow towards bottom-trailing for depth
             .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .stroke(
-                        LinearGradient(
-                            colors: [
-                                .clear,
-                                .black.opacity(colorScheme == .dark ? 0.10 : 0.06)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 1
-                    )
-                    .blendMode(.multiply)
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(Color(.separator), lineWidth: 0.5)
             )
-            .compositingGroup()
-            .shadow(color: .black.opacity(colorScheme == .dark ? 0.35 : 0.08), radius: 12, x: 0, y: 6)
-            // Micro-noise overlay to break banding (per Liquid Glass docs)
-            .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(
-                        .white.opacity(colorScheme == .dark ? 0.03 : 0.02)
-                    )
-                    .blendMode(.softLight)
-                    .allowsHitTesting(false)
-            )
+            .shadow(color: .black.opacity(colorScheme == .dark ? 0.2 : 0.05), radius: 8, x: 0, y: 2)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                onTap()
+            }
         }
-
+        
         #if os(macOS)
         private func loadHeaderImage(for document: Letterspace_CanvasDocument) -> NSImage? {
             guard let headerElement = document.elements.first(where: { $0.type == .headerImage }), !headerElement.content.isEmpty, let appDirectory = Letterspace_CanvasDocument.getAppDocumentsDirectory() else { return nil }
@@ -4574,53 +4810,6 @@ loadDocuments()
             return UIImage(contentsOfFile: imageUrl.path)
         }
         #endif
-    }
-    
-    // Handle document selection in Today's Documents
-    private func onSelectDocument(_ document: Letterspace_CanvasDocument) {
-        self.document = document
-        self.sidebarMode = .details
-        self.isRightSidebarVisible = true
-    }
-
-    // MARK: - Today's Documents Section (list style)
-    @ViewBuilder
-    private var todaysDocumentsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-
-            if todayDocumentIds.isEmpty {
-                VStack(spacing: 8) {
-                    Image(systemName: "calendar.badge.checkmark")
-                        .font(.system(size: 28))
-                        .foregroundStyle(theme.primary.opacity(0.4))
-                    Text("No documents added for today")
-                        .font(.custom("InterTight-Medium", size: 14))
-                        .foregroundStyle(theme.primary.opacity(0.6))
-                    Button(action: { showTodayPicker = true }) {
-                        Text("Add Documents")
-                            .font(.custom("InterTight-SemiBold", size: 13))
-                    }
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 24)
-            } else {
-                // List style with proper icons
-                VStack(spacing: 0) {
-                    ForEach(documents.filter { todayDocumentIds.contains($0.id) }) { doc in
-                        Button(action: { onSelectDocument(doc) }) {
-                            TodayListRow(document: doc)
-                                .environment(\.sizeCategory, .large)
-                                .padding(.horizontal, 20)
-                                .padding(.vertical, 14)
-                        }
-                        .buttonStyle(.plain)
-                        Divider()
-                            .padding(.leading, 20)
-                            .padding(.vertical, 2)
-                    }
-                }
-            }
-        }
     }
 
     @ViewBuilder
@@ -4684,6 +4873,24 @@ loadDocuments()
             )
             #if os(macOS)
             .frame(width: 500, height: 650)
+            #endif
+        }
+        .sheet(isPresented: $showAddHeaderSheet) {
+            AddHeaderSheet(
+                onAdd: { title in
+                    let newHeader = TodaySectionHeader(
+                        id: UUID().uuidString,
+                        title: title,
+                        order: todayStructure.count
+                    )
+                    todayStructure.append(newHeader)
+                    saveTodayStructure()
+                    showAddHeaderSheet = false
+                },
+                onCancel: { showAddHeaderSheet = false }
+            )
+            #if os(macOS)
+            .frame(width: 400, height: 300)
             #endif
         }
     }
@@ -5415,6 +5622,11 @@ loadDocuments()
     // Today's Documents selection state
     @State private var todayDocumentIds: Set<String> = []
     @State private var showTodayPicker: Bool = false
+    
+    // Today's Documents structure state
+    @State private var todayStructure: [TodaySectionHeader] = []
+    @State private var todayStructureDocuments: [TodayStructureDocument] = []
+    @State private var showAddHeaderSheet: Bool = false
     
     // Generate AI insight for a sermon
     private func generateAIInsight(for document: Letterspace_CanvasDocument) -> String {
@@ -6773,8 +6985,218 @@ enum FoundationModelError: Error {
     case generationFailed
 }
 
-// MARK: - Latest Entry Card
-struct LatestEntryCard: View {
+    // MARK: - Today's Documents Data Models
+    struct TodaySectionHeader: Identifiable, Codable {
+        let id: String
+        var title: String
+        var order: Int
+    }
+    
+    struct TodayStructureDocument: Identifiable, Codable {
+        let id: String
+        var headerId: String?
+        var order: Int
+    }
+    
+    struct TodayStructureData: Codable {
+        var headers: [TodaySectionHeader]
+        var documents: [TodayStructureDocument]
+    }
+    
+    enum TodayStructureItem: Identifiable {
+        case header(TodaySectionHeader)
+        case document(Letterspace_CanvasDocument, Int)
+        
+        var id: String {
+            switch self {
+            case .header(let header):
+                return "header-\(header.id)"
+            case .document(let document, _):
+                return "document-\(document.id)"
+            }
+        }
+    }
+    
+    // MARK: - Today Section Header View
+    private struct TodaySectionHeaderView: View {
+        let header: TodaySectionHeader
+        let onUpdateTitle: (String) -> Void
+        let onRemove: () -> Void
+        @Environment(\.themeColors) private var theme
+        @Environment(\.colorScheme) private var colorScheme
+        @State private var isEditing = false
+        @State private var editedTitle: String = ""
+        @State private var isRemoveButtonHovered = false
+        
+        var body: some View {
+            HStack(spacing: 0) {
+                // Header icon
+                ZStack {
+                    Circle()
+                        .fill(theme.primary.opacity(0.15))
+                        .frame(width: 32, height: 32)
+                    
+                    Image(systemName: "folder.fill")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(theme.primary)
+                }
+                .padding(.leading, 16)
+                
+                // Header content
+                HStack(spacing: 16) {
+                    if isEditing {
+                        TextField("Section Title", text: $editedTitle)
+                            .font(.custom("InterTight-Bold", size: 18))
+                            .foregroundStyle(theme.primary)
+                            .textFieldStyle(.plain)
+                            .onSubmit {
+                                if !editedTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                    onUpdateTitle(editedTitle.trimmingCharacters(in: .whitespacesAndNewlines))
+                                }
+                                isEditing = false
+                            }
+                            .onAppear {
+                                editedTitle = header.title
+                            }
+                    } else {
+                        Text(header.title)
+                            .font(.custom("InterTight-Bold", size: 18))
+                            .foregroundStyle(theme.primary)
+                            .onTapGesture(count: 2) {
+                                isEditing = true
+                            }
+                    }
+                    
+                    Spacer()
+                    
+                    // Action buttons
+                    HStack(spacing: 12) {
+                        // Edit button
+                        Button(action: { isEditing = true }) {
+                            Image(systemName: "pencil")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundStyle(theme.secondary.opacity(0.6))
+                                .frame(width: 24, height: 24)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Edit header title")
+                        
+                        // Reorder handle
+                        Image(systemName: "line.3.horizontal")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(theme.secondary.opacity(0.6))
+                            .frame(width: 24, height: 24)
+                            .contentShape(Rectangle())
+                        
+                        // Red remove button
+                        Button(action: onRemove) {
+                            ZStack {
+                                Circle()
+                                    .fill(isRemoveButtonHovered ? Color.red.opacity(0.8) : Color.red)
+                                    .frame(width: 24, height: 24)
+                                
+                                Image(systemName: "xmark")
+                                    .font(.system(size: 12, weight: .bold))
+                                    .foregroundColor(.white)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .help("Remove section header")
+                        .scaleEffect(isRemoveButtonHovered ? 1.15 : 1.0)
+                        .onHover { hovering in
+                            withAnimation(.spring(response: 0.2, dampingFraction: 0.6)) {
+                                isRemoveButtonHovered = hovering
+                            }
+                        }
+                    }
+                    .padding(.trailing, 16)
+                }
+                .padding(.vertical, 16)
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(colorScheme == .dark ? Color(.systemGray5) : Color(.systemGray6))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(Color(.separator), lineWidth: 0.5)
+            )
+        }
+    }
+    
+    // MARK: - Add Header Sheet
+    private struct AddHeaderSheet: View {
+        let onAdd: (String) -> Void
+        let onCancel: () -> Void
+        @Environment(\.themeColors) private var theme
+        @State private var headerTitle: String = ""
+        @FocusState private var isTitleFieldFocused: Bool
+        
+        var body: some View {
+            VStack(spacing: 20) {
+                // Header
+                Text("Add Section Header")
+                    .font(.custom("InterTight-Bold", size: 20))
+                    .foregroundStyle(theme.primary)
+                
+                // Description
+                Text("Create a section to organize your documents for today")
+                    .font(.custom("InterTight-Regular", size: 14))
+                    .foregroundStyle(theme.secondary)
+                    .multilineTextAlignment(.center)
+                
+                // Input field
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Section Title")
+                        .font(.custom("InterTight-Medium", size: 14))
+                        .foregroundStyle(theme.primary)
+                    
+                    TextField("e.g., Morning Prep, Afternoon Meetings", text: $headerTitle)
+                        .font(.custom("InterTight-Regular", size: 16))
+                        .textFieldStyle(.roundedBorder)
+                        .focused($isTitleFieldFocused)
+                        .onSubmit {
+                            if !headerTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                onAdd(headerTitle.trimmingCharacters(in: .whitespacesAndNewlines))
+                            }
+                        }
+                }
+                
+                Spacer()
+                
+                // Action buttons
+                HStack(spacing: 12) {
+                    Button("Cancel", action: onCancel)
+                        .font(.custom("InterTight-Medium", size: 14))
+                        .foregroundStyle(theme.secondary)
+                        .frame(height: 44)
+                        .frame(maxWidth: .infinity)
+                        .background(theme.secondary.opacity(0.1))
+                        .cornerRadius(8)
+                    
+                    Button("Add Header") {
+                        if !headerTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            onAdd(headerTitle.trimmingCharacters(in: .whitespacesAndNewlines))
+                        }
+                    }
+                    .font(.custom("InterTight-Medium", size: 14))
+                    .foregroundStyle(.white)
+                    .frame(height: 44)
+                    .frame(maxWidth: .infinity)
+                    .background(headerTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? theme.secondary : theme.accent)
+                    .cornerRadius(8)
+                    .disabled(headerTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+            .padding(24)
+            .onAppear {
+                isTitleFieldFocused = true
+            }
+        }
+    }
+    
+    // MARK: - Latest Entry Card
+    struct LatestEntryCard: View {
     let entry: SermonJournalEntry
     let onTap: () -> Void
     @Environment(\.themeColors) var theme
