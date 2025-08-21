@@ -2497,12 +2497,10 @@ extension MainLayout {
             return
         }
         
-        guard let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
-            print("❌ Could not access documents directory")
+        guard let appDirectory = Letterspace_CanvasDocument.getAppDocumentsDirectory() else {
+            print("❌ Could not determine app documents directory")
             return
         }
-        
-        let appDirectory = documentsPath.appendingPathComponent("Letterspace Canvas")
         let fileURL = appDirectory.appendingPathComponent("\(id).canvas")
         print("📂 Looking for file at: \(fileURL.path)")
         
