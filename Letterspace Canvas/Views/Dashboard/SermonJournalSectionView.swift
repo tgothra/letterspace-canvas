@@ -17,7 +17,7 @@ struct SermonJournalSectionView: View {
     
     @Environment(\.themeColors) private var theme
     @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.colorTheme) private var colorTheme
+    @EnvironmentObject var colorTheme: ColorThemeManager
     @ObservedObject private var journalService = SermonJournalService.shared
     
     // MARK: - Body

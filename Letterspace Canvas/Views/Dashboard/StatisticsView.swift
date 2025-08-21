@@ -15,7 +15,7 @@ struct StatisticsView: View {
     
     @Environment(\.themeColors) private var theme
     @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.colorTheme) private var colorTheme
+    @EnvironmentObject var colorTheme: ColorThemeManager
     @State private var isGeneratingInsights: Bool = false
     @State private var aiCuratedSermons: [CuratedSermon] = []
     
@@ -127,6 +127,7 @@ struct StatisticsDetailView: View {
     let onDismiss: () -> Void
     
     @Environment(\.themeColors) private var theme
+    @EnvironmentObject var colorTheme: ColorThemeManager
     @State private var isGeneratingInsights: Bool = false
     @State private var aiCuratedSermons: [CuratedSermon] = []
     
