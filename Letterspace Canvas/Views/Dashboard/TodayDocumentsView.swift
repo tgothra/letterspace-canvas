@@ -68,10 +68,9 @@ struct TodayDocumentsView: View {
                             .listRowBackground(Color.clear)
                             .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 4, trailing: 20))
                             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                Button { /* inline rename via view's local state */ } label: { EmptyView() }
-                                    .hidden()
-                                Button { /* handled inside view via context */ } label: { EmptyView() }
-                                    .hidden()
+                                Button(role: .destructive) { onRemoveHeader(header.id) } label: {
+                                    Label("Delete Section", systemImage: "trash")
+                                }
                             }
                         case .document(let doc, let index):
                             TodayDocumentCard(
@@ -92,7 +91,6 @@ struct TodayDocumentsView: View {
                     }
                     .onMove(perform: onReorderStructure)
                 }
-                .environment(\.editMode, .constant(.active))
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
                 .frame(height: CGFloat(renderTodayStructure().count * 80 + 100))

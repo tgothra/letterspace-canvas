@@ -24,10 +24,11 @@ List {
     }
     .onMove(perform: onReorderItems)
 }
-.environment(\.editMode, .constant(.active))
 .listStyle(.plain)
 .scrollContentBackground(.hidden)
 .frame(height: CGFloat(renderItems().count * estimatedRowHeight + paddingBuffer))
+// Optional: show drag handles if you want visible grips
+// .environment(\.editMode, .constant(.active))
 ```
 
 ### 2. Required Data Models
@@ -146,7 +147,7 @@ private func renderItems() -> [StructureItem] {
 ### ✅ DO This
 1. **Use `items.move(fromOffsets:toOffset:)`** in reorder function
 2. **Set explicit List height** based on content count
-3. **Use `.environment(\.editMode, .constant(.active))`** for drag handles
+3. **Visible handles are optional**: add `.environment(\.editMode, .constant(.active))` if desired
 4. **Implement stable IDs** for all items
 5. **Add proper list row modifiers** for clean appearance
 
@@ -168,6 +169,7 @@ private func renderItems() -> [StructureItem] {
 - **No duplicate items** during or after drag operations
 - **Proper data persistence** to UserDefaults/Core Data
 - **Swipe-to-delete functionality** on individual rows
+- **Optional header swipe actions** (e.g., delete section)
 - **Mixed content types** (headers + documents) in same list
 - **Hierarchical organization** with items under headers
 
@@ -175,6 +177,8 @@ private func renderItems() -> [StructureItem] {
 
 This pattern is successfully implemented in:
 - **Today's Documents** - Headers and documents with reordering
+  - Handle-less drag and drop (long-press to move)
+  - Swipe-to-delete on documents; delete section on headers
 - Ready for use in:
   - **Calendar events** reordering
   - **Sermon series** organization
