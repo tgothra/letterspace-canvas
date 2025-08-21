@@ -492,20 +492,21 @@ struct DashboardSheetContent: View {
                 .padding(.bottom, 16)
                 
                 // Content
-                ScrollView(.vertical, showsIndicators: false) {
-                    VStack(spacing: 0) {
-                        switch tab {
-                        case .pinned:
-                            StarredSheetContent()
-                        case .wip:
-                            WIPSheetContent()
-                        case .schedule:
-                            ScheduleSheetContent()
-                        }
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 100)
+                TabView(selection: .constant(tab)) {
+                    StarredSheetContent()
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 100)
+                        .tag(DashboardTab.pinned)
+                    WIPSheetContent()
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 100)
+                        .tag(DashboardTab.wip)
+                    ScheduleSheetContent()
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 100)
+                        .tag(DashboardTab.schedule)
                 }
+                .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .background {
