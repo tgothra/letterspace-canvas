@@ -682,11 +682,11 @@ struct DashboardSheetContent: View {
                 color: .blue
             )
         } else {
-            LazyVStack(spacing: 12) {
+            List {
                 ForEach(scheduledDocs, id: \.id) { document in
                     ScheduledDocumentCard(
                         document: document,
-                        onTap: { 
+                        onTap: {
                             onSelectDocument(document)
                             dismiss()
                         },
@@ -699,8 +699,25 @@ struct DashboardSheetContent: View {
                             }
                         }
                     )
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))
+                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                        Button(role: .destructive) {
+                            // Mirror onRemove behavior
+                            removeScheduledPresentations(for: document)
+                            if calendarDocuments.contains(document.id) {
+                                onCalendar(document.id)
+                            }
+                        } label: { Label("Remove", systemImage: "trash") }
+                    }
                 }
             }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, -20)
+            .frame(height: CGFloat(scheduledDocs.count * 70 + 60))
         }
     }
     
@@ -790,33 +807,7 @@ struct DocumentSheetCard: View {
                 
                 Spacer()
                 
-                // Action buttons - Replace with remove button
-                Button(action: {
-                    showingDeleteConfirmation = true
-                }) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 20))
-                        .foregroundColor(Color(red: 1.0, green: 0.23, blue: 0.19))
-                }
-                .buttonStyle(.plain)
-                .confirmationDialog(
-                    isPinned ? "Remove from Starred" : "Remove from WIP",
-                    isPresented: $showingDeleteConfirmation,
-                    titleVisibility: .visible
-                ) {
-                    Button(isPinned ? "Remove from Starred" : "Remove from WIP", role: .destructive) {
-                        if isPinned {
-                            onPin() // This should toggle it off
-                        } else if isWIP {
-                            onWIP() // This should toggle it off
-                        }
-                    }
-                    Button("Cancel", role: .cancel) { }
-                } message: {
-                    Text(isPinned ? 
-                         "This will remove the document from your starred list." :
-                         "This will remove the document from your work in progress list.")
-                }
+                // Swipe to remove is provided by parent List; no inline delete button
             }
             .padding(16)
             .background(
@@ -1313,29 +1304,7 @@ struct ScheduledDocumentCard: View {
                 }
                 .buttonStyle(.plain)
                 
-                // Delete button
-                Button(action: {
-                    showingDeleteConfirmation = true
-                }) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 20))
-                        .foregroundColor(Color(red: 1.0, green: 0.23, blue: 0.19))
-                        .symbolEffect(.bounce, value: removeAnimationTrigger)
-                }
-                .buttonStyle(.plain)
-                .confirmationDialog(
-                    "Remove Scheduled Presentations",
-                    isPresented: $showingDeleteConfirmation,
-                    titleVisibility: .visible
-                ) {
-                    Button("Remove from Schedule", role: .destructive) {
-                        onRemove()
-                        removeAnimationTrigger += 1
-                    }
-                    Button("Cancel", role: .cancel) { }
-                } message: {
-                    Text("This will remove all scheduled presentations for this document. The document itself will not be deleted.")
-                }
+                // Inline delete removed; swipe action provided by parent List
             }
             .padding(16)
             .background(
