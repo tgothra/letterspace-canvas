@@ -600,7 +600,7 @@ struct DashboardSheetContent: View {
                     )
                     .listRowSeparator(.hidden)
                     .listRowBackground(Color.clear)
-                    .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
+                    .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))
                     .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                         Button(role: .destructive) { onPin(document.id) } label: { Label("Remove", systemImage: "trash") }
                     }
@@ -615,6 +615,8 @@ struct DashboardSheetContent: View {
             }
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, -20)
             .frame(height: CGFloat(pinnedDocs.count * 70 + 60))
         }
     }
@@ -648,7 +650,7 @@ struct DashboardSheetContent: View {
                     )
                     .listRowSeparator(.hidden)
                     .listRowBackground(Color.clear)
-                    .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
+                    .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))
                     .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                         Button(role: .destructive) { onWIP(document.id) } label: { Label("Remove", systemImage: "trash") }
                     }
@@ -662,6 +664,8 @@ struct DashboardSheetContent: View {
             }
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, -20)
             .frame(height: CGFloat(wipDocs.count * 70 + 60))
         }
     }
