@@ -617,6 +617,10 @@ struct DashboardSheetContent: View {
             .scrollContentBackground(.hidden)
             .frame(maxWidth: .infinity)
             .frame(height: CGFloat(pinnedDocs.count * 70 + 60))
+            // Prevent TabView from paging when user drags on list rows
+            .highPriorityGesture(
+                DragGesture(minimumDistance: 5)
+            )
         }
     }
     
@@ -665,6 +669,10 @@ struct DashboardSheetContent: View {
             .scrollContentBackground(.hidden)
             .frame(maxWidth: .infinity)
             .frame(height: CGFloat(wipDocs.count * 70 + 60))
+            // Prevent TabView from paging when user drags on list rows
+            .highPriorityGesture(
+                DragGesture(minimumDistance: 5)
+            )
         }
     }
     
@@ -715,6 +723,10 @@ struct DashboardSheetContent: View {
             .scrollContentBackground(.hidden)
             .frame(maxWidth: .infinity)
             .frame(height: CGFloat(scheduledDocs.count * 70 + 60))
+            // Prevent TabView from paging when user drags on list rows
+            .highPriorityGesture(
+                DragGesture(minimumDistance: 5)
+            )
         }
     }
     
