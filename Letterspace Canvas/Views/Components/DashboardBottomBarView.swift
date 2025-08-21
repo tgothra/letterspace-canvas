@@ -583,7 +583,7 @@ struct DashboardSheetContent: View {
                 color: .green
             )
         } else {
-            LazyVStack(spacing: 12) {
+            List {
                 ForEach(pinnedDocs, id: \.id) { document in
                     DocumentSheetCard(
                         document: document,
@@ -598,8 +598,23 @@ struct DashboardSheetContent: View {
                         onWIP: { onWIP(document.id) },
                         onCalendar: { onCalendar(document.id) }
                     )
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
+                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                        Button(role: .destructive) { onPin(document.id) } label: { Label("Remove", systemImage: "trash") }
+                    }
+                }
+                .onMove { indices, newOffset in
+                    var ids = pinnedDocs.map { $0.id }
+                    ids.move(fromOffsets: indices, toOffset: newOffset)
+                    // Rebuild set to keep membership, optional: persist order if desired
+                    pinnedDocuments = Set(ids)
+                    UserDefaults.standard.set(Array(pinnedDocuments), forKey: "PinnedDocuments")
                 }
             }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
         }
     }
     
@@ -615,7 +630,7 @@ struct DashboardSheetContent: View {
                 color: .orange
             )
         } else {
-            LazyVStack(spacing: 12) {
+            List {
                 ForEach(wipDocs, id: \.id) { document in
                     DocumentSheetCard(
                         document: document,
@@ -630,8 +645,22 @@ struct DashboardSheetContent: View {
                         onWIP: { onWIP(document.id) },
                         onCalendar: { onCalendar(document.id) }
                     )
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
+                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                        Button(role: .destructive) { onWIP(document.id) } label: { Label("Remove", systemImage: "trash") }
+                    }
+                }
+                .onMove { indices, newOffset in
+                    var ids = wipDocs.map { $0.id }
+                    ids.move(fromOffsets: indices, toOffset: newOffset)
+                    wipDocuments = Set(ids)
+                    UserDefaults.standard.set(Array(wipDocuments), forKey: "WIPDocuments")
                 }
             }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
         }
     }
     
