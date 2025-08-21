@@ -176,9 +176,11 @@ private func renderItems() -> [StructureItem] {
 ## 📱 Usage Examples
 
 This pattern is successfully implemented in:
-- **Today's Documents** - Headers and documents with reordering
-  - Handle-less drag and drop (long-press to move)
-  - Swipe-to-delete on documents; delete section on headers
+  - **Today's Documents** - Headers and documents with reordering
+    - Handle-less drag and drop (long-press to move)
+    - Swipe-to-delete on documents; delete section on headers
+    - Tap anywhere on header row to rename inline
+    - Leading swipe on headers for quick rename
 - Ready for use in:
   - **Calendar events** reordering
   - **Sermon series** organization
@@ -190,6 +192,7 @@ This pattern is successfully implemented in:
 - **Row height estimation**: Adjust `estimatedRowHeight` value
 - **Padding buffer**: Modify padding added to total height
 - **Swipe actions**: Customize trailing/leading swipe buttons
+- **Header interactions**: Configure tap areas and inline editing behavior
 - **Visual styling**: Modify list row appearance
 - **Persistence layer**: Adapt save/load functions to your data store
 

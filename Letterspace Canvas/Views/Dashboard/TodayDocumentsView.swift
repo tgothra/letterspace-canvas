@@ -67,11 +67,6 @@ struct TodayDocumentsView: View {
                             .listRowSeparator(.hidden)
                             .listRowBackground(Color.clear)
                             .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 4, trailing: 20))
-                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                Button(role: .destructive) { onRemoveHeader(header.id) } label: {
-                                    Label("Delete Section", systemImage: "trash")
-                                }
-                            }
                         case .document(let doc, let index):
                             TodayDocumentCard(
                                 document: doc,
@@ -295,6 +290,7 @@ private struct TodaySectionHeaderView: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var isEditing = false
     @State private var editedTitle: String = ""
+    @FocusState private var isTitleFocused: Bool
     
     var body: some View {
         HStack(spacing: 0) {
@@ -305,6 +301,7 @@ private struct TodaySectionHeaderView: View {
                         .font(.custom("InterTight-Bold", size: 18))
                         .foregroundStyle(theme.primary)
                         .textFieldStyle(.plain)
+                        .focused($isTitleFocused)
                         .onSubmit {
                             if !editedTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                                 onUpdateTitle(editedTitle.trimmingCharacters(in: .whitespacesAndNewlines))
@@ -313,14 +310,12 @@ private struct TodaySectionHeaderView: View {
                         }
                         .onAppear {
                             editedTitle = header.title
+                            DispatchQueue.main.async { isTitleFocused = true }
                         }
                 } else {
                     Text(header.title)
                         .font(.custom("InterTight-Bold", size: 18))
                         .foregroundStyle(theme.primary)
-                        .onTapGesture(count: 2) {
-                            isEditing = true
-                        }
                 }
                 
                 Spacer()
@@ -356,6 +351,24 @@ private struct TodaySectionHeaderView: View {
                     #endif
                 }(), lineWidth: 0.5)
         )
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if !isEditing {
+                editedTitle = header.title
+                isEditing = true
+                DispatchQueue.main.async { isTitleFocused = true }
+            }
+        }
+        .swipeActions(edge: .leading, allowsFullSwipe: false) {
+            Button { isEditing = true } label: {
+                Label("Rename", systemImage: "pencil")
+            }
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            Button(role: .destructive) { onRemove() } label: {
+                Label("Delete Section", systemImage: "trash")
+            }
+        }
     }
 }
 
