@@ -703,7 +703,11 @@ struct DocumentSheetCard: View {
     @State private var wipAnimationTrigger = 0
     @State private var calendarAnimationTrigger = 0
     @State private var showingDeleteConfirmation = false
+    #if os(iOS)
     @State private var headerImage: UIImage? = nil
+    #else
+    @State private var headerImage: NSImage? = nil
+    #endif
     
     // Get header image from document elements
     private var hasHeaderImage: Bool {
@@ -716,11 +720,19 @@ struct DocumentSheetCard: View {
                 // Document icon or header image
                 Group {
                     if let image = headerImage {
+                        #if os(iOS)
                         Image(uiImage: image)
                             .resizable()
                             .aspectRatio(contentMode: .fill)
                             .frame(width: 32, height: 32)
                             .clipShape(RoundedRectangle(cornerRadius: 6))
+                        #else
+                        Image(nsImage: image)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: 32, height: 32)
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                        #endif
                     } else {
                         Image(systemName: "doc.text.fill")
                             .font(.title2)
@@ -797,9 +809,15 @@ struct DocumentSheetCard: View {
         let imageUrl = imagesPath.appendingPathComponent(headerElement.content)
         
         // Load image from file
+        #if os(iOS)
         if let loadedImage = UIImage(contentsOfFile: imageUrl.path) {
             self.headerImage = loadedImage
         }
+        #else
+        if let loadedImage = NSImage(contentsOfFile: imageUrl.path) {
+            self.headerImage = loadedImage
+        }
+        #endif
     }
 }
 
@@ -1175,7 +1193,11 @@ struct ScheduledDocumentCard: View {
     @State private var removeAnimationTrigger = 0
     @State private var showingDeleteConfirmation = false
     @State private var showingNotesSheet = false
+    #if os(iOS)
     @State private var headerImage: UIImage? = nil
+    #else
+    @State private var headerImage: NSImage? = nil
+    #endif
     
     // Get the next scheduled presentation for notes/todos
     private var nextScheduledPresentation: DocumentPresentation? {
@@ -1204,11 +1226,19 @@ struct ScheduledDocumentCard: View {
                 // Document icon or header image
                 Group {
                     if let image = headerImage {
+                        #if os(iOS)
                         Image(uiImage: image)
                             .resizable()
                             .aspectRatio(contentMode: .fill)
                             .frame(width: 32, height: 32)
                             .clipShape(RoundedRectangle(cornerRadius: 6))
+                        #else
+                        Image(nsImage: image)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: 32, height: 32)
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                        #endif
                     } else {
                         Image(systemName: "doc.text.fill")
                             .font(.title2)
@@ -1319,9 +1349,15 @@ struct ScheduledDocumentCard: View {
         let imageUrl = imagesPath.appendingPathComponent(headerElement.content)
         
         // Load image from file
+        #if os(iOS)
         if let loadedImage = UIImage(contentsOfFile: imageUrl.path) {
             self.headerImage = loadedImage
         }
+        #else
+        if let loadedImage = NSImage(contentsOfFile: imageUrl.path) {
+            self.headerImage = loadedImage
+        }
+        #endif
     }
 }
 
@@ -1495,8 +1531,11 @@ struct PresentationNotesSheet: View {
                 .padding(20)
             }
             .navigationTitle("Presentation Details")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
+                #if os(iOS)
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Cancel") {
                         dismiss()
@@ -1509,6 +1548,20 @@ struct PresentationNotesSheet: View {
                     }
                     .fontWeight(.semibold)
                 }
+                #else
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        savePresentationData()
+                        dismiss()
+                    }
+                    .fontWeight(.semibold)
+                }
+                #endif
             }
         }
         .onAppear {

@@ -828,15 +828,15 @@ struct MainLayout: View {
                     // Custom dashboard icon - sized to match system icons
                     VStack(spacing: 1.5) {
                         Rectangle()
-                            .fill(.black)
+                            .fill(.primary)
                             .frame(width: 12, height: 4)
                             .cornerRadius(1)
                         Rectangle()
-                            .fill(.black)
+                            .fill(.primary)
                             .frame(width: 16, height: 5)
                             .cornerRadius(1)
                         Rectangle()
-                            .fill(.black)
+                            .fill(.primary)
                             .frame(width: 14, height: 4)
                             .cornerRadius(1)
                     }
