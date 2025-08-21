@@ -350,7 +350,6 @@ struct DashboardSheetContent: View {
     // State for document picker sheet
     @State private var showDocumentPicker = false
     @State private var presentationDocument: Letterspace_CanvasDocument? // Single source of truth
-    @State private var currentTab: DashboardTab = .pinned
     
     var body: some View {
         Group {
@@ -364,10 +363,9 @@ struct DashboardSheetContent: View {
             }
             #endif
         }
-        .onAppear { currentTab = tab }
         .sheet(isPresented: $showDocumentPicker) {
             DocumentPickerSheet(
-                tab: currentTab,
+                tab: tab,
                 documents: documents,
                 pinnedDocuments: $pinnedDocuments,
                 wipDocuments: $wipDocuments,
@@ -411,17 +409,17 @@ struct DashboardSheetContent: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(spacing: 8) {
-                            Image(systemName: currentTab.symbolImage)
+                            Image(systemName: tab.symbolImage)
                                 .font(.title3)
-                                .foregroundColor(currentTab.color(using: colorTheme))
+                                .foregroundColor(tab.color(using: colorTheme))
                             
-                            Text(currentTab.rawValue)
+                            Text(tab.rawValue)
                                 .font(.title2)
                                 .fontWeight(.bold)
                                 .foregroundColor(theme.primary)
                         }
                         
-                        Text(getTabSubtitle(for: currentTab))
+                        Text(getTabSubtitle())
                             .font(.subheadline)
                             .foregroundColor(theme.secondary)
                     }
@@ -432,7 +430,7 @@ struct DashboardSheetContent: View {
                     HStack(spacing: 8) {
                         // Add documents button or Schedule Presentation button
                         Button(action: {
-                            if currentTab == .schedule {
+                            if tab == .schedule {
                                 // For schedule tab, show document picker to select which document to schedule
                                 showScheduleDocumentPicker()
                             } else {
@@ -441,7 +439,7 @@ struct DashboardSheetContent: View {
                             }
                             HapticFeedback.impact(.light)
                         }) {
-                            Image(systemName: currentTab == .schedule ? "calendar.badge.plus" : "plus")
+                            Image(systemName: tab == .schedule ? "calendar.badge.plus" : "plus")
                                 .font(.system(size: 16, weight: .medium))
                                 .foregroundColor(.black)
                                 .frame(width: 32, height: 32)
@@ -494,18 +492,20 @@ struct DashboardSheetContent: View {
                 .padding(.bottom, 16)
                 
                 // Content
-                TabView(selection: $currentTab) {
-                    StarredSheetContent()
-                        .padding(.bottom, 100)
-                        .tag(DashboardTab.pinned)
-                    WIPSheetContent()
-                        .padding(.bottom, 100)
-                        .tag(DashboardTab.wip)
-                    ScheduleSheetContent()
-                        .padding(.bottom, 100)
-                        .tag(DashboardTab.schedule)
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(spacing: 0) {
+                        switch tab {
+                        case .pinned:
+                            StarredSheetContent()
+                        case .wip:
+                            WIPSheetContent()
+                        case .schedule:
+                            ScheduleSheetContent()
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 100)
                 }
-                .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .background {
@@ -522,8 +522,8 @@ struct DashboardSheetContent: View {
 #endif
     }
     
-    private func getTabSubtitle(for tab: DashboardTab) -> String {
-        let count = getTabCount(for: tab)
+    private func getTabSubtitle() -> String {
+        let count = getTabCount() ?? 0
         switch tab {
         case .pinned:
             return count == 1 ? "1 pinned document" : "\(count) pinned documents"
@@ -534,7 +534,7 @@ struct DashboardSheetContent: View {
         }
     }
     
-    private func getTabCount(for tab: DashboardTab) -> Int {
+    private func getTabCount() -> Int? {
         switch tab {
         case .pinned:
             return pinnedDocuments.count
@@ -616,11 +616,8 @@ struct DashboardSheetContent: View {
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
             .frame(maxWidth: .infinity)
+            .padding(.horizontal, -20)
             .frame(height: CGFloat(pinnedDocs.count * 70 + 60))
-            // Prevent TabView from paging when user drags on list rows
-            .highPriorityGesture(
-                DragGesture(minimumDistance: 5)
-            )
         }
     }
     
@@ -668,11 +665,8 @@ struct DashboardSheetContent: View {
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
             .frame(maxWidth: .infinity)
+            .padding(.horizontal, -20)
             .frame(height: CGFloat(wipDocs.count * 70 + 60))
-            // Prevent TabView from paging when user drags on list rows
-            .highPriorityGesture(
-                DragGesture(minimumDistance: 5)
-            )
         }
     }
     
@@ -722,11 +716,8 @@ struct DashboardSheetContent: View {
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
             .frame(maxWidth: .infinity)
+            .padding(.horizontal, -20)
             .frame(height: CGFloat(scheduledDocs.count * 70 + 60))
-            // Prevent TabView from paging when user drags on list rows
-            .highPriorityGesture(
-                DragGesture(minimumDistance: 5)
-            )
         }
     }
     
