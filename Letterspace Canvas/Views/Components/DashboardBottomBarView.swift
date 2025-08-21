@@ -496,15 +496,12 @@ struct DashboardSheetContent: View {
                 // Content
                 TabView(selection: $currentTab) {
                     StarredSheetContent()
-                        .padding(.horizontal, 20)
                         .padding(.bottom, 100)
                         .tag(DashboardTab.pinned)
                     WIPSheetContent()
-                        .padding(.horizontal, 20)
                         .padding(.bottom, 100)
                         .tag(DashboardTab.wip)
                     ScheduleSheetContent()
-                        .padding(.horizontal, 20)
                         .padding(.bottom, 100)
                         .tag(DashboardTab.schedule)
                 }
@@ -619,7 +616,6 @@ struct DashboardSheetContent: View {
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
             .frame(maxWidth: .infinity)
-            .padding(.horizontal, -20)
             .frame(height: CGFloat(pinnedDocs.count * 70 + 60))
         }
     }
@@ -668,7 +664,6 @@ struct DashboardSheetContent: View {
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
             .frame(maxWidth: .infinity)
-            .padding(.horizontal, -20)
             .frame(height: CGFloat(wipDocs.count * 70 + 60))
         }
     }
@@ -719,7 +714,6 @@ struct DashboardSheetContent: View {
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
             .frame(maxWidth: .infinity)
-            .padding(.horizontal, -20)
             .frame(height: CGFloat(scheduledDocs.count * 70 + 60))
         }
     }
