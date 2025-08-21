@@ -88,6 +88,8 @@ struct TodayDocumentsView: View {
                 }
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, -20)
                 .frame(height: CGFloat(renderTodayStructure().count * 80 + 100))
             }
         }
