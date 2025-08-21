@@ -615,6 +615,7 @@ struct DashboardSheetContent: View {
             }
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
+            .frame(height: CGFloat(pinnedDocs.count * 70 + 60))
         }
     }
     
@@ -661,6 +662,7 @@ struct DashboardSheetContent: View {
             }
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
+            .frame(height: CGFloat(wipDocs.count * 70 + 60))
         }
     }
     
