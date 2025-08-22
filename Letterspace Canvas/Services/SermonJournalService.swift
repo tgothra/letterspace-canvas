@@ -67,6 +67,8 @@ class SermonJournalService: ObservableObject {
         }
         allEntries = updated
         persistEntriesToDisk()
+
+        summarizeEntry(entry)
     }
 
     func entries() -> [SermonJournalEntry] {
@@ -258,6 +260,56 @@ class SermonJournalService: ObservableObject {
         ))
         
         return actions
+    }
+
+    func summarizeEntry(_ entry: SermonJournalEntry) {
+        Task {
+            let summary = await FoundationModelService.shared.summarizeJournalEntry(
+                feelings: entry.feelings,
+                atmosphere: entry.spiritualAtmosphere,
+                insights: entry.godRevealedNew,
+                testimonies: entry.testimoniesAndBreakthroughs,
+                improvements: entry.improvementNotes,
+                followUp: entry.followUpNotes,
+                mood: entry.emotionalState.rawValue,
+                energyLevel: entry.energyLevel,
+                physicalEnergy: entry.physicalEnergy,
+                spiritualFulfillment: entry.spiritualFulfillment,
+                kind: entry.kind
+            )
+            if !summary.isEmpty {
+                self.updateEntry(id: entry.id) { entry in
+                    entry.aiSummary = summary
+                }
+            }
+        }
+    }
+
+    @discardableResult
+    func regenerateMissingSummaries() async -> Int {
+        var count = 0
+        for e in allEntries where (e.aiSummary == nil || e.aiSummary?.isEmpty == true) {
+            let summary = await FoundationModelService.shared.summarizeJournalEntry(
+                feelings: e.feelings,
+                atmosphere: e.spiritualAtmosphere,
+                insights: e.godRevealedNew,
+                testimonies: e.testimoniesAndBreakthroughs,
+                improvements: e.improvementNotes,
+                followUp: e.followUpNotes,
+                mood: e.emotionalState.rawValue,
+                energyLevel: e.energyLevel,
+                physicalEnergy: e.physicalEnergy,
+                spiritualFulfillment: e.spiritualFulfillment,
+                kind: e.kind
+            )
+            if !summary.isEmpty {
+                updateEntry(id: e.id) { entry in
+                    entry.aiSummary = summary
+                }
+                count += 1
+            }
+        }
+        return count
     }
 }
 

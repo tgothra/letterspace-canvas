@@ -124,13 +124,7 @@ struct SermonJournalSectionView: View {
             .clipShape(RoundedRectangle(cornerRadius: 16))
             .overlay(
                 RoundedRectangle(cornerRadius: 16)
-                    .stroke({
-                        #if os(iOS)
-                        return Color(.separator)
-                        #else
-                        return Color(.separatorColor)
-                        #endif
-                    }(), lineWidth: 0.5)
+                    .stroke(borderColor, lineWidth: 0.5)
             )
             .shadow(color: .black.opacity(colorScheme == .dark ? 0.3 : 0.04), radius: 8, x: 0, y: 2)
             .frame(height: 240)
@@ -138,6 +132,14 @@ struct SermonJournalSectionView: View {
         .buttonStyle(.plain)
     }
     
+    private var borderColor: Color {
+        #if os(iOS)
+        return Color(.separator)
+        #else
+        return Color(.separatorColor)
+        #endif
+    }
+
     // MARK: - Helper Functions
     private func relativeDate(_ date: Date) -> String {
         let formatter = RelativeDateTimeFormatter()
@@ -199,10 +201,8 @@ struct SermonJournalCard: View {
     var body: some View {
         Button(action: onTap) {
             ZStack {
-                // Modern gradient background
                 LinearGradient(colors: [Color.purple.opacity(0.85), Color.blue.opacity(0.7)], startPoint: .topLeading, endPoint: .bottomTrailing)
                     .overlay(
-                        // Subtle mesh overlay
                         AngularGradient(gradient: Gradient(colors: [Color.white.opacity(0.15), .clear, .clear, Color.white.opacity(0.15)]), center: .center)
                             .blendMode(.softLight)
                     )
@@ -260,40 +260,72 @@ struct LatestEntryCard: View {
     let entry: SermonJournalEntry
     let onTap: () -> Void
     @Environment(\.themeColors) var theme
-    
+    @Environment(\.colorScheme) var colorScheme
+
+    private var accentColor: Color {
+        switch entry.kind {
+        case .sermon: return .blue
+        case .personal: return .pink
+        case .prayer: return .purple
+        case .study: return .teal
+        }
+    }
+
+    private var backgroundColor: Color {
+        let opacity = (colorScheme == .dark) ? 0.22 : 0.12
+        return accentColor.opacity(opacity)
+    }
+
     var body: some View {
         Button(action: onTap) {
             ZStack {
-                LinearGradient(colors: [Color.mint.opacity(0.85), Color.blue.opacity(0.7)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                    .clipShape(RoundedRectangle(cornerRadius: 18))
-                    .shadow(color: .black.opacity(0.15), radius: 12, x: 0, y: 8)
+                RoundedRectangle(cornerRadius: 18)
+                    .fill(backgroundColor)
+                    .shadow(color: .black.opacity(0.08), radius: 12, x: 0, y: 8)
                 
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(spacing: 8) {
                         Image(systemName: "rectangle.and.text.magnifyingglass")
-                            .foregroundStyle(.white)
+                            .foregroundStyle(accentColor)
                             .font(.system(size: 16, weight: .semibold))
-                        Text("Entry")
+                        Text(entry.kind.title)
                             .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.95))
+                            .foregroundStyle(theme.secondary)
                         Spacer()
                     }
                     
                     Text(sermonTitle)
                         .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(theme.primary)
                         .lineLimit(2)
                     Text(formatted(entry.createdAt))
                         .font(.system(size: 12))
-                        .foregroundStyle(.white.opacity(0.9))
+                        .foregroundStyle(theme.secondary)
+
+                    HStack(spacing: 8) {
+                        Text(entry.emotionalState.emoji)
+                            .font(.system(size: 16))
+                        Text(entry.emotionalState.rawValue)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(entry.emotionalState.color)
+                    }
+                    .padding(.vertical, 2)
+
+                    if let summary = entry.aiSummary, !summary.isEmpty {
+                        Text(summary)
+                            .font(.system(size: 11))
+                            .foregroundStyle(theme.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
                     Spacer()
                     HStack(spacing: 6) {
                         Text("Open")
                             .font(.system(size: 14, weight: .medium))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(theme.primary)
                         Spacer()
                         Image(systemName: "arrow.right")
-                            .foregroundStyle(.white)
+                            .foregroundStyle(accentColor)
                             .font(.system(size: 12, weight: .semibold))
                     }
                 }
@@ -323,20 +355,14 @@ struct JournalFeedView: View {
     @State private var showPicker = false
     @State private var selectedEntryForDetail: SermonJournalEntry? = nil
     @Environment(\.themeColors) var theme
-    
+
+    @State private var selectedTab: JournalFeedTab = .all
+
+    @State private var searchText: String = ""
+    @FocusState private var isSearchFocused: Bool
+    @State private var selectedMonthKey: String? = nil
+
     // Group entries by month (yyyy-MM)
-    private var groupedByMonth: [String: [SermonJournalEntry]] {
-        Dictionary(grouping: service.entries()) { entry in
-            let comps = Calendar.current.dateComponents([.year, .month], from: entry.createdAt)
-            let y = comps.year ?? 0, m = comps.month ?? 0
-            return String(format: "%04d-%02d", y, m)
-        }
-    }
-    
-    private var groupedByMonthSorted: [(key: String, value: [SermonJournalEntry])] {
-        groupedByMonth.sorted { $0.key > $1.key }
-    }
-    
     private func monthTitle(_ key: String) -> String {
         let parts = key.split(separator: "-")
         guard parts.count == 2, let y = Int(parts[0]), let m = Int(parts[1]) else { return key }
@@ -345,26 +371,72 @@ struct JournalFeedView: View {
         let f = DateFormatter(); f.dateFormat = "LLLL yyyy"
         return f.string(from: date)
     }
-    
+
+    private func entries(for tab: JournalFeedTab) -> [SermonJournalEntry] {
+        let all = service.entries()
+        let base: [SermonJournalEntry]
+        switch tab {
+        case .all: base = all
+        case .sermon: base = all.filter { $0.kind == .sermon }
+        case .personal: base = all.filter { $0.kind == .personal }
+        case .prayer: base = all.filter { $0.kind == .prayer }
+        case .study: base = all.filter { $0.kind == .study }
+        }
+        let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !q.isEmpty else { return base }
+        return base.filter { e in
+            let fields = [
+                e.aiSummary ?? "",
+                e.feelings,
+                e.spiritualAtmosphere,
+                e.godRevealedNew,
+                e.testimoniesAndBreakthroughs,
+                e.improvementNotes,
+                e.followUpNotes
+            ].map { $0.lowercased() }
+            return fields.contains(where: { $0.contains(q) })
+        }
+    }
+
+    private func groupedByMonthSorted(for tab: JournalFeedTab) -> [(key: String, value: [SermonJournalEntry])] {
+        let source = entries(for: tab)
+        let grouped = Dictionary(grouping: source) { entry in
+            let comps = Calendar.current.dateComponents([.year, .month], from: entry.createdAt)
+            let y = comps.year ?? 0, m = comps.month ?? 0
+            return String(format: "%04d-%02d", y, m)
+        }
+        return grouped.sorted { $0.key > $1.key }
+    }
+
     var body: some View {
         Group {
             #if os(macOS)
             NavigationStack {
                 journalContent
             }
+            .searchable(
+                text: $searchText,
+                placement: .automatic,
+                prompt: "Search entries"
+            )
+            .applySearchMinimizeIfAvailable()
             #else
-            NavigationView {
+            NavigationStack {
                 journalContent
             }
+            .searchable(
+                text: $searchText,
+                placement: .automatic,
+                prompt: "Search entries"
+            )
+            .applySearchMinimizeIfAvailable()
             #endif
         }
     }
-    
-    @ViewBuilder
+
     private var journalContent: some View {
         Group {
             if service.entries().isEmpty {
-                // Clean empty state – no stray timeline dot
                 VStack(spacing: 16) {
                     Image(systemName: "text.badge.plus")
                         .font(.system(size: 44, weight: .semibold))
@@ -379,67 +451,92 @@ struct JournalFeedView: View {
             } else {
                 ScrollViewReader { proxy in
                     ScrollView {
-                        HStack(alignment: .top, spacing: 16) {
-                            // Left vertical timeline with month nodes and a bottom dot
-                            VStack(alignment: .trailing, spacing: 32) {
-                                ForEach(groupedByMonthSorted, id: \.key) { month, _ in
-                                    HStack(spacing: 8) {
-                                        VStack(spacing: 6) {
-                                            Circle()
-                                                .fill(theme.accent)
-                                                .frame(width: 8, height: 8)
-                                            Rectangle()
-                                                .fill(theme.accent.opacity(0.3))
-                                                .frame(width: 2, height: 24)
+                        ScrollView {
+                            LazyVStack(alignment: .leading, spacing: 24) {
+                                let sections = groupedByMonthSorted(for: selectedTab)
+                                ForEach(sections, id: \.key) { section in
+                                    let month = section.key
+                                    let entries = section.value
+                                    let title = monthTitle(month)
+
+                                    Text(title)
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundStyle(theme.secondary)
+                                        .padding(.top, 8)
+                                        .padding(.bottom, 4)
+                                        .id(monthId(selectedTab, month))
+
+                                    ForEach(entries) { entry in
+                                        JournalListRow(entry: entry) {
+                                            selectedEntryForDetail = entry
                                         }
-                                        Text(monthTitle(month))
-                                            .font(.system(size: 15, weight: .semibold))
-                                            .foregroundStyle(theme.secondary)
-                                            .frame(maxWidth: .infinity, alignment: .leading)
-                                    }
-                                }
-                                // Bottom terminal dot
-                                Circle()
-                                    .fill(theme.accent.opacity(0.7))
-                                    .frame(width: 6, height: 6)
-                                    .padding(.top, -12)
-                            }
-                            .frame(width: 120, alignment: .trailing)
-                            
-                            // Right: month groups with color-coded summary cards
-                            VStack(alignment: .leading, spacing: 20) {
-                                ForEach(groupedByMonthSorted, id: \.key) { month, entries in
-                                    Text(monthTitle(month))
-                                        .font(.system(size: 20, weight: .semibold))
-                                        .foregroundStyle(theme.primary)
-                                    
-                                    VStack(spacing: 12) {
-                                        ForEach(entries) { entry in
-                                            LatestEntryCard(entry: entry) {
-                                                selectedEntryForDetail = entry
-                                            }
-                                            .id(entry.id)
-                                            .contextMenu {
-                                                Button(role: .destructive) {
-                                                    service.deleteEntry(id: entry.id)
-                                                } label: {
-                                                    Label("Delete Entry", systemImage: "trash")
-                                                }
-                                            }
-                                        }
+                                        .padding(.vertical, 4)
+                                        Divider()
                                     }
                                 }
                             }
-                            .padding(16)
+                            .padding(.horizontal, 16)
+                            .padding(.top, 8)
+                            .padding(.bottom, 0)
                         }
+                        .onChange(of: selectedMonthKey) { old, new in
+                            if let key = new {
+                                withAnimation(.easeInOut(duration: 0.25)) {
+                                    proxy.scrollTo(monthId(selectedTab, key), anchor: .top)
+                                }
+                            }
+                        }
+                        .safeAreaPadding(.bottom, 60)
                     }
                 }
                 .navigationTitle("Journal")
                 .toolbar {
                     #if os(iOS)
+                    // Scrollable horizontal picker only - remove search button
+                    ToolbarItem(placement: .bottomBar) {
+                        ScrollViewReader { proxy in
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 8) {
+                                    ForEach(JournalFeedTab.allCases, id: \.self) { tab in
+                                        Button(action: { 
+                                            selectedTab = tab
+                                            // Scroll to show selected item at leading edge
+                                            withAnimation(.easeInOut(duration: 0.3)) {
+                                                proxy.scrollTo(tab, anchor: .leading)
+                                            }
+                                        }) {
+                                            Text(tab.title)
+                                                .font(.system(size: 14, weight: .medium))
+                                                .foregroundStyle(selectedTab == tab ? .white : .primary)
+                                                .padding(.horizontal, 16)
+                                                .padding(.vertical, 16)
+                                                .background(
+                                                    Capsule().fill(selectedTab == tab ? .blue : Color(.systemGray6))
+                                                )
+                                        }
+                                        .buttonStyle(.plain)
+                                        .id(tab)
+                                    }
+                                }
+                                .padding(.horizontal, 16)
+                            }
+                            .frame(maxWidth: .infinity)
+                        }
+                    }
+
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Menu {
+                            ForEach(availableMonths(for: selectedTab), id: \.self) { key in
+                                Button(monthTitle(key)) {
+                                    selectedMonthKey = key
+                                }
+                            }
+                        } label: {
+                            Label("Jump", systemImage: "calendar")
+                        }
+                    }
                     ToolbarItem(placement: .navigationBarTrailing) {
                         Button(action: {
-                            // Open custom entry immediately
                             NotificationCenter.default.post(name: NSNotification.Name("StartJournalCustomEntry"), object: nil)
                         }) {
                             Image(systemName: "plus.circle.fill").font(.title3)
@@ -449,9 +546,35 @@ struct JournalFeedView: View {
                         Button("Done", action: onDismiss)
                     }
                     #else
+                    // macOS toolbar with segmented control
+                    ToolbarItem(placement: .automatic) {
+                        Picker("Filter", selection: $selectedTab) {
+                            ForEach(JournalFeedTab.allCases, id: \.self) { tab in
+                                Text(tab.title).tag(tab)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .frame(width: 360)
+                    }
+
+                    // Reposition search in toolbar on macOS 15+
+                    if #available(macOS 15.0, *) {
+                        DefaultToolbarItem(kind: .search, placement: .automatic)
+                    }
+
+                    ToolbarItem(placement: .automatic) {
+                        Menu {
+                            ForEach(availableMonths(for: selectedTab), id: \.self) { key in
+                                Button(monthTitle(key)) {
+                                    selectedMonthKey = key
+                                }
+                            }
+                        } label: {
+                            Label("Jump", systemImage: "calendar")
+                        }
+                    }
                     ToolbarItem(placement: .automatic) {
                         Button(action: {
-                            // Open custom entry immediately
                             NotificationCenter.default.post(name: NSNotification.Name("StartJournalCustomEntry"), object: nil)
                         }) {
                             Image(systemName: "plus.circle.fill").font(.title3)
@@ -462,10 +585,12 @@ struct JournalFeedView: View {
                     }
                     #endif
                 }
+                .task {
+                    _ = await service.regenerateMissingSummaries()
+                }
             }
         }
         .sheet(isPresented: $showPicker) {
-            // Allow custom (no sermon) or pick from all documents
             ReflectionSelectionView(
                 documents: loadAllDocuments(),
                 onSelectDocument: { doc in
@@ -492,9 +617,16 @@ struct JournalFeedView: View {
             .presentationBackground(.ultraThinMaterial)
         }
     }
-    
+
+    private func monthId(_ tab: JournalFeedTab, _ key: String) -> String {
+        "month-\(tab.key)-\(key)"
+    }
+
+    private func availableMonths(for tab: JournalFeedTab) -> [String] {
+        groupedByMonthSorted(for: tab).map(\.key)
+    }
+
     private func loadAllDocuments() -> [Letterspace_CanvasDocument] {
-        // Prefer the service/state from dashboard if accessible; fallback to on-disk scan
         var results: [Letterspace_CanvasDocument] = []
         if let appDir = Letterspace_CanvasDocument.getAppDocumentsDirectory() {
             if let files = try? FileManager.default.contentsOfDirectory(at: appDir, includingPropertiesForKeys: nil) {
@@ -507,6 +639,119 @@ struct JournalFeedView: View {
             }
         }
         return results.sorted { ($0.modifiedAt ?? $0.createdAt) > ($1.modifiedAt ?? $1.createdAt) }
+    }
+
+    private func tabIcon(_ tab: JournalFeedTab) -> String {
+        switch tab {
+        case .all: return "list.bullet"
+        case .sermon: return "book.pages"
+        case .personal: return "person.circle"
+        case .prayer: return "hands.sparkles"
+        case .study: return "graduationcap"
+        }
+    }
+
+    enum JournalFeedTab: CaseIterable, Hashable {
+        case all, sermon, personal, prayer, study
+
+        var title: String {
+            switch self {
+            case .all: return "All"
+            case .sermon: return "Sermon"
+            case .personal: return "Personal"
+            case .prayer: return "Prayer"
+            case .study: return "Study Notes"
+            }
+        }
+
+        var key: String {
+            switch self {
+            case .all: return "all"
+            case .sermon: return "sermon"
+            case .personal: return "personal"
+            case .prayer: return "prayer"
+            case .study: return "study"
+            }
+        }
+    }
+}
+
+struct JournalListRow: View {
+    let entry: SermonJournalEntry
+    let onTap: () -> Void
+    @Environment(\.themeColors) var theme
+
+    private var kindColor: Color {
+        switch entry.kind {
+        case .sermon: return .blue
+        case .personal: return .pink
+        case .prayer: return .purple
+        case .study: return .teal
+        }
+    }
+
+    private var summaryLine: String {
+        if let s = entry.aiSummary, !s.isEmpty {
+            return s.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        if !entry.feelings.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return entry.feelings.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        if !entry.spiritualAtmosphere.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return entry.spiritualAtmosphere.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        if !entry.godRevealedNew.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return entry.godRevealedNew.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return "—"
+    }
+
+    private var timeString: String {
+        let f = DateFormatter()
+        f.dateFormat = "hh:mm a, EEE, M/d/yyyy"
+        return f.string(from: entry.createdAt).uppercased()
+    }
+
+    var body: some View {
+        Button(action: onTap) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(entry.kind.title.uppercased())
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(kindColor)
+                    .tracking(0.6)
+
+                Text(summaryLine)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(theme.primary)
+                    .lineLimit(5)
+                    .truncationMode(.tail)
+                    .multilineTextAlignment(.leading)
+
+                HStack(spacing: 8) {
+                    Text(timeString)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(theme.secondary)
+
+                    Spacer(minLength: 8)
+
+                    HStack(spacing: 6) {
+                        Text(entry.emotionalState.emoji)
+                            .font(.system(size: 12))
+                        Text(entry.emotionalState.rawValue)
+                            .font(.system(size: 11, weight: .medium))
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(
+                        Capsule().fill(entry.emotionalState.color.opacity(0.15))
+                    )
+                    .foregroundStyle(entry.emotionalState.color)
+                }
+                .padding(.top, 2)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -556,7 +801,7 @@ struct PreachItAgainCard: View {
                     Text(document.subtitle)
                         .font(.system(size: 13))
                         .foregroundStyle(.white.opacity(0.9))
-                        .lineLimit(1)
+                    .lineLimit(1)
                 }
                 Spacer()
                 HStack(spacing: 6) {
@@ -587,4 +832,28 @@ struct PreachItAgainCard: View {
         .frame(width: 280, height: 160)
     }
 }
+
+#if os(iOS)
+// Search toolbar minimize on supported OS
+private extension View {
+    @ViewBuilder
+    func applySearchMinimizeIfAvailable() -> some View {
+        if #available(iOS 18.0, *) {
+            self.searchToolbarBehavior(.minimize)
+        } else {
+            self
+        }
+    }
+
+    @ViewBuilder
+    func applyStableTabBarInsetsIfAvailable() -> some View {
+        if #available(iOS 18.0, *) {
+            // 60 approximates tab bar height + a touch of breathing room; keeps inset stable during minimize/expand
+            self.contentMargins(.bottom, 60, for: .scrollContent)
+        } else {
+            self
+        }
+    }
+}
+#endif
 #endif
