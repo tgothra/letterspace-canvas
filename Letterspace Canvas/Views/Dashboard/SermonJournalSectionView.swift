@@ -231,7 +231,7 @@ struct SermonJournalCard: View {
                         Text(document.subtitle)
                             .font(.system(size: 13))
                             .foregroundStyle(.white.opacity(0.9))
-                            .lineLimit(1)
+                        .lineLimit(1)
                     }
                     Spacer()
                     HStack(spacing: 6) {
@@ -352,8 +352,10 @@ struct JournalFeedView: View {
     let onDismiss: () -> Void
     @ObservedObject private var service = SermonJournalService.shared
     @State private var isGenerating: Set<String> = []
-    @State private var showPicker = false
     @State private var selectedEntryForDetail: SermonJournalEntry? = nil
+    @State private var showingSermonDocument: Letterspace_CanvasDocument? = nil
+    @State private var showingJournalForm: Bool = false
+    @State private var showingHealthMeter: Bool = false
     @Environment(\.themeColors) var theme
 
     @State private var selectedTab: JournalFeedTab = .all
@@ -432,6 +434,9 @@ struct JournalFeedView: View {
             .applySearchMinimizeIfAvailable()
             #endif
         }
+        .sheet(isPresented: $showingHealthMeter) {
+            SermonHealthMeterView(onDismiss: { showingHealthMeter = false })
+        }
     }
 
     private var journalContent: some View {
@@ -450,78 +455,124 @@ struct JournalFeedView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollViewReader { proxy in
-                    ScrollView {
-                        ScrollView {
-                            LazyVStack(alignment: .leading, spacing: 24) {
-                                let sections = groupedByMonthSorted(for: selectedTab)
-                                ForEach(sections, id: \.key) { section in
-                                    let month = section.key
-                                    let entries = section.value
-                                    let title = monthTitle(month)
+                    List {
+                        // Header section showing current view
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Image(systemName: tabIcon(selectedTab))
+                                    .font(.system(size: 20, weight: .semibold))
+                                    .foregroundStyle(theme.primary)
+                                
+                                Text("\(selectedTab.title) Entries")
+                                    .font(.system(size: 24, weight: .bold))
+                                    .foregroundStyle(theme.primary)
+                                
+                                Spacer()
+                                
+                                Button(action: {
+                                    showingHealthMeter = true
+                                }) {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "chart.line.uptrend.xyaxis")
+                                            .font(.system(size: 14, weight: .medium))
+                                        Text("Health")
+                                            .font(.system(size: 14, weight: .medium))
+                                    }
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 8)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .fill(Color.pink.opacity(0.1))
+                                    )
+                                    .foregroundColor(.pink)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            
+                            if !searchText.isEmpty {
+                                Text("Searching for \"\(searchText)\"")
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundStyle(theme.secondary)
+                            }
+                        }
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(Color.clear)
+                        .listRowInsets(EdgeInsets(top: 16, leading: 16, bottom: 0, trailing: 16))
+                        
+                        let sections = groupedByMonthSorted(for: selectedTab)
+                        ForEach(sections, id: \.key) { section in
+                            let month = section.key
+                            let entries = section.value
+                            let title = monthTitle(month)
 
-                                    Text(title)
-                                        .font(.system(size: 14, weight: .semibold))
-                                        .foregroundStyle(theme.secondary)
-                                        .padding(.top, 8)
-                                        .padding(.bottom, 4)
-                                        .id(monthId(selectedTab, month))
+                            // Month header
+                            Text(title)
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(theme.secondary)
+                                .listRowSeparator(.hidden)
+                                .listRowBackground(Color.clear)
+                                .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 4, trailing: 16))
+                                .id(monthId(selectedTab, month))
 
-                                    ForEach(entries) { entry in
-                                        JournalListRow(entry: entry) {
-                                            selectedEntryForDetail = entry
-                                        }
-                                        .padding(.vertical, 4)
-                                        Divider()
+                            // Journal entries for this month
+                            ForEach(entries) { entry in
+                                JournalListRow(
+                                    entry: entry,
+                                    onTap: {
+                                        selectedEntryForDetail = entry
+                                    },
+                                    onOpenSermon: { sermon in
+                                        showingSermonDocument = sermon
+                                    }
+                                )
+                                .listRowSeparator(.hidden)
+                                .listRowBackground(Color.clear)
+                                .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+                                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                    Button(role: .destructive) {
+                                        onRemoveEntry(entry.id)
+                                    } label: {
+                                        Label("Delete", systemImage: "trash")
                                     }
                                 }
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.top, 8)
-                            .padding(.bottom, 0)
-                        }
-                        .onChange(of: selectedMonthKey) { old, new in
-                            if let key = new {
-                                withAnimation(.easeInOut(duration: 0.25)) {
-                                    proxy.scrollTo(monthId(selectedTab, key), anchor: .top)
-                                }
+                                
+                                // Custom divider
+                                Rectangle()
+                                    .fill(Color(.separator))
+                                    .frame(height: 0.5)
+                                    .listRowSeparator(.hidden)
+                                    .listRowBackground(Color.clear)
+                                    .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
                             }
                         }
-                        .safeAreaPadding(.bottom, 60)
                     }
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
                 }
                 .navigationTitle("Journal")
                 .toolbar {
                     #if os(iOS)
-                    // Scrollable horizontal picker only - remove search button
+                    // Non-scrollable horizontal picker with evenly distributed icons
                     ToolbarItem(placement: .bottomBar) {
-                        ScrollViewReader { proxy in
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: 8) {
-                                    ForEach(JournalFeedTab.allCases, id: \.self) { tab in
-                                        Button(action: { 
-                                            selectedTab = tab
-                                            // Scroll to show selected item at leading edge
-                                            withAnimation(.easeInOut(duration: 0.3)) {
-                                                proxy.scrollTo(tab, anchor: .leading)
-                                            }
-                                        }) {
-                                            Text(tab.title)
-                                                .font(.system(size: 14, weight: .medium))
-                                                .foregroundStyle(selectedTab == tab ? .white : .primary)
-                                                .padding(.horizontal, 16)
-                                                .padding(.vertical, 16)
-                                                .background(
-                                                    Capsule().fill(selectedTab == tab ? .blue : Color(.systemGray6))
-                                                )
-                                        }
-                                        .buttonStyle(.plain)
-                                        .id(tab)
-                                    }
+                        HStack(spacing: 0) {
+                            ForEach(JournalFeedTab.allCases, id: \.self) { tab in
+                                Button(action: { 
+                                    selectedTab = tab
+                                }) {
+                                    Image(systemName: tabIcon(tab))
+                                        .font(.system(size: 18, weight: .medium))
+                                        .foregroundStyle(selectedTab == tab ? .white : .primary)
+                                        .frame(width: 50, height: 50)
+                                        .background(
+                                            Circle().fill(selectedTab == tab ? .blue : Color(.systemGray6))
+                                        )
                                 }
-                                .padding(.horizontal, 16)
+                                .buttonStyle(.plain)
+                                .frame(maxWidth: .infinity)
                             }
-                            .frame(maxWidth: .infinity)
                         }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
                     }
 
                     ToolbarItem(placement: .navigationBarLeading) {
@@ -537,7 +588,7 @@ struct JournalFeedView: View {
                     }
                     ToolbarItem(placement: .navigationBarTrailing) {
                         Button(action: {
-                            NotificationCenter.default.post(name: NSNotification.Name("StartJournalCustomEntry"), object: nil)
+                            showingJournalForm = true
                         }) {
                             Image(systemName: "plus.circle.fill").font(.title3)
                         }
@@ -575,7 +626,7 @@ struct JournalFeedView: View {
                     }
                     ToolbarItem(placement: .automatic) {
                         Button(action: {
-                            NotificationCenter.default.post(name: NSNotification.Name("StartJournalCustomEntry"), object: nil)
+                            showingJournalForm = true
                         }) {
                             Image(systemName: "plus.circle.fill").font(.title3)
                         }
@@ -590,18 +641,17 @@ struct JournalFeedView: View {
                 }
             }
         }
-        .sheet(isPresented: $showPicker) {
-            ReflectionSelectionView(
-                documents: loadAllDocuments(),
-                onSelectDocument: { doc in
-                    showPicker = false
-                    NotificationCenter.default.post(name: NSNotification.Name("StartJournalForDocument"), object: doc)
-                },
-                onDismiss: { showPicker = false },
-                allowCustom: true,
-                onSelectNone: {
-                    showPicker = false
-                    NotificationCenter.default.post(name: NSNotification.Name("StartJournalCustomEntry"), object: nil)
+        .sheet(isPresented: $showingJournalForm) {
+            // Create a default document for new journal entries
+            let defaultDoc = Letterspace_CanvasDocument(
+                title: "New Journal Entry",
+                id: ""
+            )
+            SermonJournalView(
+                document: defaultDoc,
+                allDocuments: loadAllDocuments(),
+                onDismiss: {
+                    showingJournalForm = false
                 }
             )
         }
@@ -616,6 +666,21 @@ struct JournalFeedView: View {
             .presentationDragIndicator(.visible)
             .presentationBackground(.ultraThinMaterial)
         }
+        .sheet(item: $showingSermonDocument) { sermon in
+            SermonDocumentView(document: sermon) {
+                showingSermonDocument = nil
+            }
+            #if os(macOS)
+            .frame(width: 900, height: 700)
+            #endif
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+        }
+    }
+
+    // MARK: - Helper Functions for List Management
+    private func onRemoveEntry(_ entryId: String) {
+        service.deleteEntry(id: entryId)
     }
 
     private func monthId(_ tab: JournalFeedTab, _ key: String) -> String {
@@ -645,9 +710,9 @@ struct JournalFeedView: View {
         switch tab {
         case .all: return "list.bullet"
         case .sermon: return "book.pages"
-        case .personal: return "person.circle"
+        case .personal: return "face.smiling"
         case .prayer: return "hands.sparkles"
-        case .study: return "graduationcap"
+        case .study: return "book"
         }
     }
 
@@ -679,6 +744,7 @@ struct JournalFeedView: View {
 struct JournalListRow: View {
     let entry: SermonJournalEntry
     let onTap: () -> Void
+    let onOpenSermon: ((Letterspace_CanvasDocument) -> Void)?
     @Environment(\.themeColors) var theme
 
     private var kindColor: Color {
@@ -714,44 +780,196 @@ struct JournalListRow: View {
 
     var body: some View {
         Button(action: onTap) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(entry.kind.title.uppercased())
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(kindColor)
-                    .tracking(0.6)
+            HStack(spacing: 0) {
+                // Colored left accent bar with rounded corners
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(kindColor)
+                    .frame(width: 4)
+                
+                HStack(spacing: 12) {
+                    // Icon for entry type - CHANGE: Use consistent icons
+                    Image(systemName: kindIcon)
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(kindColor)
+                        .frame(width: 24, height: 24)
+                    
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: 8) {
+                            Text(entry.kind.title.uppercased())
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(kindColor)
+                                .tracking(0.6)
+                            
+                            // Show sermon link pill for sermon entries
+                            if entry.kind == .sermon, !entry.sermonId.isEmpty,
+                               let sermon = Letterspace_CanvasDocument.load(id: entry.sermonId) {
+                                Button(action: {
+                                    onOpenSermon?(sermon)
+                                }) {
+                                    Text(sermon.title)
+                                        .font(.system(size: 9, weight: .medium))
+                                        .foregroundStyle(.blue)
+                                        .lineLimit(1)
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 2)
+                                        .background(
+                                            Capsule().fill(Color.blue.opacity(0.1))
+                                        )
+                                        .overlay(
+                                            Capsule().stroke(Color.blue.opacity(0.3), lineWidth: 0.5)
+                                        )
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            
+                            // Show scripture pills for study note entries
+                            if entry.kind == .study, let scriptures = entry.attachedScriptures, !scriptures.isEmpty {
+                                HStack(spacing: 4) {
+                                    ForEach(Array(scriptures.prefix(2)), id: \.id) { scripture in
+                                        Text(formatScriptureReference(scripture))
+                                            .font(.system(size: 9, weight: .medium))
+                                            .foregroundStyle(.teal)
+                                            .lineLimit(1)
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 2)
+                                            .background(
+                                                Capsule().fill(Color.teal.opacity(0.1))
+                                            )
+                                            .overlay(
+                                                Capsule().stroke(Color.teal.opacity(0.3), lineWidth: 0.5)
+                                            )
+                                    }
+                                    
+                                    // Show "+X more" if there are more than 2 scriptures
+                                    if scriptures.count > 2 {
+                                        Text("+\(scriptures.count - 2)")
+                                            .font(.system(size: 9, weight: .medium))
+                                            .foregroundStyle(.teal)
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 2)
+                                            .background(
+                                                Capsule().fill(Color.teal.opacity(0.1))
+                                            )
+                                            .overlay(
+                                                Capsule().stroke(Color.teal.opacity(0.3), lineWidth: 0.5)
+                                            )
+                                    }
+                                }
+                            }
+                            
+                            Spacer()
+                        }
 
-                Text(summaryLine)
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(theme.primary)
-                    .lineLimit(5)
-                    .truncationMode(.tail)
-                    .multilineTextAlignment(.leading)
+                        Text(summaryLine)
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(theme.primary)
+                            .lineLimit(7)
+                            .truncationMode(.tail)
+                            .multilineTextAlignment(.leading)
 
-                HStack(spacing: 8) {
-                    Text(timeString)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(theme.secondary)
+                        HStack(spacing: 8) {
+                            Text(timeString)
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(theme.secondary)
+                                .tracking(0.4)
 
-                    Spacer(minLength: 8)
+                            // Voice memo indicator
+                            if entry.voiceNoteURL != nil {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "waveform")
+                                        .font(.system(size: 11, weight: .medium))
+                                        .foregroundStyle(.blue)
+                                    Text("Voice")
+                                        .font(.system(size: 10, weight: .medium))
+                                        .foregroundStyle(.blue)
+                                }
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(
+                                    Capsule().fill(Color.blue.opacity(0.1))
+                                )
+                                .overlay(
+                                    Capsule().stroke(Color.blue.opacity(0.3), lineWidth: 0.5)
+                                )
+                            }
 
-                    HStack(spacing: 6) {
-                        Text(entry.emotionalState.emoji)
-                            .font(.system(size: 12))
-                        Text(entry.emotionalState.rawValue)
-                            .font(.system(size: 11, weight: .medium))
+                            Spacer(minLength: 8)
+
+                            // Only show emotional state for non-study entries
+                            if entry.kind != .study {
+                                HStack(spacing: 6) {
+                                    Text(entry.emotionalState.emoji)
+                                        .font(.system(size: 12))
+                                    Text(entry.emotionalState.rawValue)
+                                        .font(.system(size: 11, weight: .medium))
+                                }
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(
+                                    Capsule().fill(entry.emotionalState.color.opacity(0.15))
+                                )
+                                .foregroundStyle(entry.emotionalState.color)
+                            }
+                        }
+                        .padding(.top, 2)
                     }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(
-                        Capsule().fill(entry.emotionalState.color.opacity(0.15))
-                    )
-                    .foregroundStyle(entry.emotionalState.color)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .padding(.top, 2)
+                .padding(.leading, 16)
+                .padding(.trailing, 16)
+                .padding(.vertical, 12)
             }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+    
+    private var kindIcon: String {
+        switch entry.kind {
+        case .sermon: return "book.pages"
+        case .personal: return "face.smiling"
+        case .prayer: return "hands.sparkles"
+        case .study: return "book"
+        }
+    }
+    
+    private func formatScriptureReference(_ scripture: String) -> String {
+        // Simple formatting to keep scripture references concise
+        let components = scripture.components(separatedBy: " ")
+        if components.count >= 2 {
+            let book = components[0]
+            let reference = components[1]
+            return "\(book) \(reference)"
+        }
+        return scripture
+    }
+
+    private func formatScriptureReference(_ scripture: ScriptureReference) -> String {
+        // Use the existing fullReference property for concise display
+        let fullRef = scripture.fullReference
+        
+        // For very long book names, abbreviate them
+        if fullRef.hasPrefix("1 Chronicles") {
+            return fullRef.replacingOccurrences(of: "1 Chronicles", with: "1 Chr")
+        } else if fullRef.hasPrefix("2 Chronicles") {
+            return fullRef.replacingOccurrences(of: "2 Chronicles", with: "2 Chr")
+        } else if fullRef.hasPrefix("1 Corinthians") {
+            return fullRef.replacingOccurrences(of: "1 Corinthians", with: "1 Cor")
+        } else if fullRef.hasPrefix("2 Corinthians") {
+            return fullRef.replacingOccurrences(of: "2 Corinthians", with: "2 Cor")
+        } else if fullRef.hasPrefix("1 Thessalonians") {
+            return fullRef.replacingOccurrences(of: "1 Thessalonians", with: "1 Thes")
+        } else if fullRef.hasPrefix("2 Thessalonians") {
+            return fullRef.replacingOccurrences(of: "2 Thessalonians", with: "2 Thes")
+        } else if fullRef.hasPrefix("Philippians") {
+            return fullRef.replacingOccurrences(of: "Philippians", with: "Phil")
+        } else if fullRef.hasPrefix("Colossians") {
+            return fullRef.replacingOccurrences(of: "Colossians", with: "Col")
+        } else if fullRef.hasPrefix("Revelation") {
+            return fullRef.replacingOccurrences(of: "Revelation", with: "Rev")
+        }
+        
+        return fullRef
     }
 }
 
@@ -856,4 +1074,5 @@ private extension View {
     }
 }
 #endif
+
 #endif

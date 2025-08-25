@@ -18,6 +18,8 @@ struct SermonJournalEntry: Identifiable, Codable {
     // Optional attached sermon when kind != .sermon
     var attachedSermonId: String? = nil
     
+    var attachedScriptures: [ScriptureReference]? = nil
+
     // Core reflection fields
     var feelings: String  // How did you feel after preaching?
     var spiritualAtmosphere: String  // What was the spiritual atmosphere like?

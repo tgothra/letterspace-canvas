@@ -1,7 +1,8 @@
 import SwiftUI
 import AVFoundation
 
-struct SermonJournalView: View {
+struct SermonJournalEditView: View {
+    let originalEntry: SermonJournalEntry
     let document: Letterspace_CanvasDocument
     let allDocuments: [Letterspace_CanvasDocument]
     let onDismiss: () -> Void
@@ -9,18 +10,19 @@ struct SermonJournalView: View {
     @State private var journalEntry: SermonJournalEntry
     @State private var showSermonPicker = false
     @State private var showScripturePicker = false
-    @State private var isRecording = false
-    @State private var audioRecorder: AVAudioRecorder?
     @State private var showingSermonDocument: Letterspace_CanvasDocument? = nil
     
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.themeColors) var theme
     
-    init(document: Letterspace_CanvasDocument, allDocuments: [Letterspace_CanvasDocument], onDismiss: @escaping () -> Void) {
+    init(entry: SermonJournalEntry, document: Letterspace_CanvasDocument, allDocuments: [Letterspace_CanvasDocument], onDismiss: @escaping () -> Void) {
+        self.originalEntry = entry
         self.document = document
         self.allDocuments = allDocuments
         self.onDismiss = onDismiss
-        self._journalEntry = State(initialValue: SermonJournalEntry(sermonId: document.id))
+        
+        // Initialize with existing entry data
+        self._journalEntry = State(initialValue: entry)
     }
     
     var body: some View {
@@ -40,8 +42,8 @@ struct SermonJournalView: View {
                     
                     // Reflection prompts (includes What are you studying?)
                     reflectionSection
-
-                    // Energy and wellness tracking (hide for study notes)
+                    
+                    // Energy and wellness tracking - hide for study notes
                     if journalEntry.kind != .study {
                         wellnessSection
                     }
@@ -60,7 +62,7 @@ struct SermonJournalView: View {
                 UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
             }
             #endif
-            .navigationTitle("Journal")
+            .navigationTitle("Edit Journal Entry")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
@@ -71,8 +73,8 @@ struct SermonJournalView: View {
                 }
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Save") {
-                        saveJournalEntry()
+                    Button("Update") {
+                        updateJournalEntry()
                         onDismiss()
                     }
                     .fontWeight(.semibold)
@@ -87,8 +89,8 @@ struct SermonJournalView: View {
                 }
                 
                 ToolbarItem(placement: .automatic) {
-                    Button("Save") {
-                        saveJournalEntry()
+                    Button("Update") {
+                        updateJournalEntry()
                         onDismiss()
                     }
                     .fontWeight(.semibold)
@@ -103,7 +105,7 @@ struct SermonJournalView: View {
                     // Create a new journal entry with the selected sermon
                     var newEntry = SermonJournalEntry(sermonId: selected.id)
                     
-                    // Copy over any existing data to the new entry
+                    // Copy over existing data to the new entry
                     newEntry.kind = journalEntry.kind
                     newEntry.entryDate = journalEntry.entryDate
                     newEntry.feelings = journalEntry.feelings
@@ -117,6 +119,7 @@ struct SermonJournalView: View {
                     newEntry.physicalEnergy = journalEntry.physicalEnergy
                     newEntry.emotionalState = journalEntry.emotionalState
                     newEntry.title = journalEntry.title
+                    newEntry.aiSuggestions = journalEntry.aiSuggestions
                     
                     // Replace the current journal entry
                     journalEntry = newEntry
@@ -161,6 +164,7 @@ struct SermonJournalView: View {
         }
     }
     
+    // Copy all the UI sections from SermonJournalView
     private var headerSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             // Date row
@@ -182,7 +186,6 @@ struct SermonJournalView: View {
                 .background(RoundedRectangle(cornerRadius: 10).fill(Color.gray.opacity(0.08)))
             }
             
-            // Entry type + attach buttons
             HStack {
                 Menu {
                     ForEach(ReflectionKind.allCases) { kind in
@@ -248,6 +251,7 @@ struct SermonJournalView: View {
                                 newEntry.physicalEnergy = journalEntry.physicalEnergy
                                 newEntry.emotionalState = journalEntry.emotionalState
                                 newEntry.title = journalEntry.title
+                                newEntry.aiSuggestions = journalEntry.aiSuggestions
                                 journalEntry = newEntry
                             }) {
                                 Image(systemName: "xmark")
@@ -342,7 +346,7 @@ struct SermonJournalView: View {
             }
         }
     }
-    
+
     private var scriptureCardsSection: some View {
         Group {
             if journalEntry.kind == .study, let scriptures = journalEntry.attachedScriptures, !scriptures.isEmpty {
@@ -357,7 +361,7 @@ struct SermonJournalView: View {
             }
         }
     }
-    
+
     private var emotionalStateSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("How are you feeling after preaching?")
@@ -602,7 +606,6 @@ struct SermonJournalView: View {
         )
     }
     
-    
     // MARK: - Helper Functions
     
     private func bindingForPrompt(_ prompt: JournalPrompt) -> Binding<String> {
@@ -624,31 +627,15 @@ struct SermonJournalView: View {
         }
     }
     
-    private func toggleVoiceRecording() {
-        if isRecording {
-            stopRecording()
-        } else {
-            startRecording()
-        }
-    }
-    
-    private func startRecording() {
-        // Implementation for voice recording
-        isRecording = true
-        // TODO: Implement actual recording logic
-    }
-    
-    private func stopRecording() {
-        // Implementation for stopping recording
-        isRecording = false
-        // TODO: Implement actual stop recording logic
-    }
-    
-    private func saveJournalEntry() {
+    private func updateJournalEntry() {
         journalEntry.updatedAt = Date()
         if journalEntry.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             if journalEntry.kind == .sermon {
-                journalEntry.title = "Reflection • \(document.title)"
+                if let attachedDoc = allDocuments.first(where: { $0.id == journalEntry.sermonId }) {
+                    journalEntry.title = "Reflection • \(attachedDoc.title)"
+                } else {
+                    journalEntry.title = "Reflection • Custom Entry"
+                }
             } else {
                 let df = DateFormatter()
                 df.dateStyle = .medium
@@ -657,8 +644,6 @@ struct SermonJournalView: View {
         }
         SermonJournalService.shared.save(entry: journalEntry)
     }
-    
-    // MARK: - Helper Functions
     
     private func formattedDateWithDay(_ date: Date) -> String {
         let formatter = DateFormatter()
@@ -674,219 +659,4 @@ struct SermonJournalView: View {
         case .study: return "book"
         }
     }
-}
-
-// MARK: - Supporting Views
-
-struct SermonHealthMeterView: View {
-    let onDismiss: () -> Void
-    
-    @State private var healthMetrics = SermonHealthMetrics(pastorId: "current_pastor")
-    @Environment(\.themeColors) var theme
-    
-    var body: some View {
-        NavigationView {
-            ScrollView {
-                VStack(spacing: 24) {
-                    // Burnout risk indicator
-                    burnoutRiskSection
-                    
-                    // Weekly trends
-                    weeklyTrendsSection
-                    
-                    // Recommendations
-                    recommendationsSection
-                }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 16)
-            }
-            .navigationTitle("Sermon Health Meter")
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
-                        onDismiss()
-                    }
-                }
-            }
-            #else
-            .toolbar {
-                ToolbarItem(placement: .automatic) {
-                    Button("Done") {
-                        onDismiss()
-                    }
-                }
-            }
-            #endif
-        }
-    }
-    
-    private var burnoutRiskSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Image(systemName: "heart.text.square.fill")
-                    .font(.title2)
-                    .foregroundColor(.pink)
-                
-                Text("Current Health Status")
-                    .font(.headline)
-                    .fontWeight(.medium)
-                    .foregroundColor(theme.primary)
-            }
-            
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Burnout Risk Level")
-                        .font(.subheadline)
-                        .foregroundColor(theme.secondary)
-                    
-                    Text(healthMetrics.burnoutRiskLevel.rawValue)
-                        .font(.title2)
-                        .fontWeight(.bold)
-                        .foregroundColor(healthMetrics.burnoutRiskLevel.color)
-                }
-                
-                Spacer()
-                
-                Circle()
-                    .fill(healthMetrics.burnoutRiskLevel.color)
-                    .frame(width: 60, height: 60)
-                    .overlay(
-                        Image(systemName: "heart.fill")
-                            .font(.title2)
-                            .foregroundColor(.white)
-                    )
-            }
-            
-            Text(healthMetrics.burnoutRiskLevel.description)
-                .font(.subheadline)
-                .foregroundColor(theme.secondary)
-                .padding(.top, 8)
-        }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(healthMetrics.burnoutRiskLevel.color.opacity(0.1))
-                .stroke(healthMetrics.burnoutRiskLevel.color.opacity(0.3), lineWidth: 1)
-        )
-    }
-    
-    private var weeklyTrendsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Image(systemName: "chart.line.uptrend.xyaxis")
-                    .font(.title2)
-                    .foregroundColor(.blue)
-                
-                Text("Weekly Trends")
-                    .font(.headline)
-                    .fontWeight(.medium)
-                    .foregroundColor(theme.primary)
-            }
-            
-            Text("Track your energy and fulfillment patterns over time")
-                .font(.subheadline)
-                .foregroundColor(theme.secondary)
-            
-            // Placeholder for chart
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color.gray.opacity(0.1))
-                .frame(height: 120)
-                .overlay(
-                    Text("Weekly trends chart would appear here")
-                        .font(.caption)
-                        .foregroundColor(theme.secondary)
-                )
-        }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.blue.opacity(0.05))
-                .stroke(Color.blue.opacity(0.2), lineWidth: 1)
-        )
-    }
-    
-    private var recommendationsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Image(systemName: "lightbulb.fill")
-                    .font(.title2)
-                    .foregroundColor(.orange)
-                
-                Text("Health Recommendations")
-                    .font(.headline)
-                    .fontWeight(.medium)
-                    .foregroundColor(theme.primary)
-            }
-            
-            if healthMetrics.recommendations.isEmpty {
-                Text("Great job! No immediate recommendations. Keep maintaining your current wellness practices.")
-                    .font(.subheadline)
-                    .foregroundColor(theme.secondary)
-            } else {
-                ForEach(healthMetrics.recommendations) { recommendation in
-                    recommendationCard(recommendation)
-                }
-            }
-        }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.orange.opacity(0.05))
-                .stroke(Color.orange.opacity(0.2), lineWidth: 1)
-        )
-    }
-    
-    private func recommendationCard(_ recommendation: HealthRecommendation) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            Circle()
-                .fill(priorityColor(recommendation.priority))
-                .frame(width: 8, height: 8)
-                .padding(.top, 6)
-            
-            VStack(alignment: .leading, spacing: 4) {
-                Text(recommendation.title)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                    .foregroundColor(theme.primary)
-                
-                Text(recommendation.description)
-                    .font(.caption)
-                    .foregroundColor(theme.secondary)
-            }
-            
-            Spacer()
-        }
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(priorityColor(recommendation.priority).opacity(0.1))
-        )
-    }
-    
-    private func priorityColor(_ priority: Int) -> Color {
-        switch priority {
-        case 5: return .red
-        case 4: return .orange
-        case 3: return .yellow
-        case 2: return .blue
-        default: return .green
-        }
-    }
-}
-
-#Preview {
-    SermonJournalView(
-        document: Letterspace_CanvasDocument(
-            title: "The Power of Faith",
-            subtitle: "Finding Strength in Uncertain Times",
-            elements: [],
-            id: "preview",
-            createdAt: Date(),
-            modifiedAt: Date()
-        ),
-        allDocuments: [],
-        onDismiss: {}
-    )
 }

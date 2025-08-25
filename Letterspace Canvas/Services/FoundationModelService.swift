@@ -66,7 +66,7 @@ extension FoundationModelService {
             
             guard case .available = model.availability else { 
                 print("🤖 Apple Intelligence not available, using local summary")
-                return createLocalSummary(feelings: feelings, atmosphere: atmosphere, insights: insights, testimonies: testimonies, improvements: improvements, followUp: followUp, mood: mood, energyLevel: energyLevel)
+                return createLocalSummary(feelings: feelings, atmosphere: atmosphere, insights: insights, testimonies: testimonies, improvements: improvements, followUp: followUp, mood: mood, energyLevel: energyLevel, kind: kind)
             }
 
             let instructions = """
@@ -80,18 +80,45 @@ extension FoundationModelService {
             - Write a flowing summary, not a list
             - Use only what was written, add nothing
             - Be respectful of the religious context
+            - For study notes: Focus on personal insights and reflections rather than service details
+            - For sermons: Include worship atmosphere and congregation responses
+            - For personal/prayer entries: Emphasize spiritual growth and personal experience
             """
 
-            // Build a more natural context
+            // Build context based on entry type
             var parts: [String] = []
-            if !feelings.isEmpty { parts.append(feelings) }
-            if !atmosphere.isEmpty { parts.append("Worship atmosphere: \(atmosphere)") }
-            if !insights.isEmpty { parts.append("Ministry insight: \(insights)") }
-            if !testimonies.isEmpty { parts.append("Congregation responses: \(testimonies)") }
-            if !improvements.isEmpty { parts.append("Ministry notes: \(improvements)") }
-            if !followUp.isEmpty { parts.append("Pastoral follow-up: \(followUp)") }
+            let contextPrefix: String
             
-            let context = "Pastoral journal entry: " + parts.joined(separator: ". ") + ". Pastor's mood: \(mood), energy: \(energyLevel)/10."
+            switch kind {
+            case .study:
+                contextPrefix = "Personal Bible study reflection: "
+                if !insights.isEmpty { parts.append("Key insight: \(insights)") }
+                if !feelings.isEmpty { parts.append("Personal reflection: \(feelings)") }
+                if !followUp.isEmpty { parts.append("Application: \(followUp)") }
+                if !improvements.isEmpty { parts.append("Learning: \(improvements)") }
+            case .sermon:
+                contextPrefix = "Pastoral journal entry: "
+                if !feelings.isEmpty { parts.append(feelings) }
+                if !atmosphere.isEmpty { parts.append("Worship atmosphere: \(atmosphere)") }
+                if !insights.isEmpty { parts.append("Ministry insight: \(insights)") }
+                if !testimonies.isEmpty { parts.append("Congregation responses: \(testimonies)") }
+                if !improvements.isEmpty { parts.append("Ministry notes: \(improvements)") }
+                if !followUp.isEmpty { parts.append("Pastoral follow-up: \(followUp)") }
+            case .personal:
+                contextPrefix = "Personal spiritual reflection: "
+                if !feelings.isEmpty { parts.append("Personal experience: \(feelings)") }
+                if !insights.isEmpty { parts.append("Spiritual insight: \(insights)") }
+                if !followUp.isEmpty { parts.append("Personal application: \(followUp)") }
+                if !improvements.isEmpty { parts.append("Growth area: \(improvements)") }
+            case .prayer:
+                contextPrefix = "Prayer journal entry: "
+                if !feelings.isEmpty { parts.append("Prayer experience: \(feelings)") }
+                if !atmosphere.isEmpty { parts.append("Spiritual atmosphere: \(atmosphere)") }
+                if !insights.isEmpty { parts.append("Prayer insight: \(insights)") }
+                if !followUp.isEmpty { parts.append("Prayer focus: \(followUp)") }
+            }
+            
+            let context = contextPrefix + parts.joined(separator: ". ") + ". Mood: \(mood), energy: \(energyLevel)/10."
             print("🤖 Sending to AI: \(context)")
 
             let session = LanguageModelSession(instructions: instructions)
@@ -105,28 +132,28 @@ extension FoundationModelService {
                 let refusalPhrases = ["I'm sorry", "I cannot", "I can't", "I'm unable", "I cannot fulfill", "sensitive topics", "responsible AI"]
                 if refusalPhrases.contains(where: { summary.lowercased().contains($0.lowercased()) }) {
                     print("🤖 AI refused request, using local summary")
-                    return createLocalSummary(feelings: feelings, atmosphere: atmosphere, insights: insights, testimonies: testimonies, improvements: improvements, followUp: followUp, mood: mood, energyLevel: energyLevel)
+                    return createLocalSummary(feelings: feelings, atmosphere: atmosphere, insights: insights, testimonies: testimonies, improvements: improvements, followUp: followUp, mood: mood, energyLevel: energyLevel, kind: kind)
                 }
                 
                 // Sanity check for length
                 let totalInputLength = feelings.count + atmosphere.count + insights.count + testimonies.count + improvements.count + followUp.count
                 if summary.count > totalInputLength * 3 {
                     print("🤖 AI response too long (\(summary.count) vs \(totalInputLength)), using local summary")
-                    return createLocalSummary(feelings: feelings, atmosphere: atmosphere, insights: insights, testimonies: testimonies, improvements: improvements, followUp: followUp, mood: mood, energyLevel: energyLevel)
+                    return createLocalSummary(feelings: feelings, atmosphere: atmosphere, insights: insights, testimonies: testimonies, improvements: improvements, followUp: followUp, mood: mood, energyLevel: energyLevel, kind: kind)
                 }
                 
                 return summary
             } catch {
                 print("🤖 AI error: \(error), using local summary")
-                return createLocalSummary(feelings: feelings, atmosphere: atmosphere, insights: insights, testimonies: testimonies, improvements: improvements, followUp: followUp, mood: mood, energyLevel: energyLevel)
+                return createLocalSummary(feelings: feelings, atmosphere: atmosphere, insights: insights, testimonies: testimonies, improvements: improvements, followUp: followUp, mood: mood, energyLevel: energyLevel, kind: kind)
             }
         } else {
             print("🤖 iOS version too old for Apple Intelligence, using local summary")
-            return createLocalSummary(feelings: feelings, atmosphere: atmosphere, insights: insights, testimonies: testimonies, improvements: improvements, followUp: followUp, mood: mood, energyLevel: energyLevel)
+            return createLocalSummary(feelings: feelings, atmosphere: atmosphere, insights: insights, testimonies: testimonies, improvements: improvements, followUp: followUp, mood: mood, energyLevel: energyLevel, kind: kind)
         }
         #else
         print("🤖 FoundationModels not available, using local summary")
-        return createLocalSummary(feelings: feelings, atmosphere: atmosphere, insights: insights, testimonies: testimonies, improvements: improvements, followUp: followUp, mood: mood, energyLevel: energyLevel)
+        return createLocalSummary(feelings: feelings, atmosphere: atmosphere, insights: insights, testimonies: testimonies, improvements: improvements, followUp: followUp, mood: mood, energyLevel: energyLevel, kind: kind)
         #endif
     }
     
@@ -138,36 +165,79 @@ extension FoundationModelService {
         improvements: String,
         followUp: String,
         mood: String,
-        energyLevel: Int
+        energyLevel: Int,
+        kind: ReflectionKind
     ) -> String {
         var parts: [String] = []
         
-        if !feelings.isEmpty {
-            parts.append(feelings.hasSuffix(".") ? feelings : feelings + ".")
-        }
-        
-        if !atmosphere.isEmpty {
-            parts.append("The worship atmosphere was \(atmosphere.lowercased())\(atmosphere.hasSuffix(".") ? "" : ".")")
-        }
-        
-        if !insights.isEmpty {
-            parts.append(insights.hasSuffix(".") ? insights : insights + ".")
-        }
-        
-        if !testimonies.isEmpty {
-            parts.append("Congregation responses included: \(testimonies.lowercased())\(testimonies.hasSuffix(".") ? "" : ".")")
-        }
-        
-        if !improvements.isEmpty {
-            parts.append("Ministry improvements noted: \(improvements.lowercased())\(improvements.hasSuffix(".") ? "" : ".")")
-        }
-        
-        if !followUp.isEmpty {
-            parts.append("Pastoral follow-up: \(followUp.lowercased())\(followUp.hasSuffix(".") ? "" : ".")")
+        switch kind {
+        case .study:
+            // Focus on personal insights and learning for study notes
+            if !insights.isEmpty {
+                parts.append("Key insight: \(insights.hasSuffix(".") ? insights : insights + ".")")
+            }
+            if !feelings.isEmpty {
+                parts.append("Personal reflection: \(feelings.hasSuffix(".") ? feelings : feelings + ".")")
+            }
+            if !followUp.isEmpty {
+                parts.append("Application: \(followUp.hasSuffix(".") ? followUp : followUp + ".")")
+            }
+            if !improvements.isEmpty {
+                parts.append("Learning: \(improvements.hasSuffix(".") ? improvements : improvements + ".")")
+            }
+        case .sermon:
+            // Include service-related details for sermons
+            if !feelings.isEmpty {
+                parts.append(feelings.hasSuffix(".") ? feelings : feelings + ".")
+            }
+            if !atmosphere.isEmpty {
+                parts.append("The worship atmosphere was \(atmosphere.lowercased())\(atmosphere.hasSuffix(".") ? "" : ".")")
+            }
+            if !insights.isEmpty {
+                parts.append(insights.hasSuffix(".") ? insights : insights + ".")
+            }
+            if !testimonies.isEmpty {
+                parts.append("Congregation responses included: \(testimonies.lowercased())\(testimonies.hasSuffix(".") ? "" : ".")")
+            }
+            if !improvements.isEmpty {
+                parts.append("Ministry improvements noted: \(improvements.lowercased())\(improvements.hasSuffix(".") ? "" : ".")")
+            }
+            if !followUp.isEmpty {
+                parts.append("Pastoral follow-up: \(followUp.lowercased())\(followUp.hasSuffix(".") ? "" : ".")")
+            }
+        case .personal:
+            // Focus on personal spiritual growth
+            if !feelings.isEmpty {
+                parts.append("Personal experience: \(feelings.hasSuffix(".") ? feelings : feelings + ".")")
+            }
+            if !insights.isEmpty {
+                parts.append("Spiritual insight: \(insights.hasSuffix(".") ? insights : insights + ".")")
+            }
+            if !followUp.isEmpty {
+                parts.append("Personal application: \(followUp.hasSuffix(".") ? followUp : followUp + ".")")
+            }
+            if !improvements.isEmpty {
+                parts.append("Growth area: \(improvements.hasSuffix(".") ? improvements : improvements + ".")")
+            }
+        case .prayer:
+            // Focus on prayer experience
+            if !feelings.isEmpty {
+                parts.append("Prayer experience: \(feelings.hasSuffix(".") ? feelings : feelings + ".")")
+            }
+            if !atmosphere.isEmpty {
+                parts.append("Spiritual atmosphere: \(atmosphere.hasSuffix(".") ? atmosphere : atmosphere + ".")")
+            }
+            if !insights.isEmpty {
+                parts.append("Prayer insight: \(insights.hasSuffix(".") ? insights : insights + ".")")
+            }
+            if !followUp.isEmpty {
+                parts.append("Prayer focus: \(followUp.hasSuffix(".") ? followUp : followUp + ".")")
+            }
         }
         
         if parts.isEmpty {
-            return "Pastoral reflection completed. Mood: \(mood), Energy: \(energyLevel)/10."
+            let typeDescription = kind == .study ? "Bible study" : kind == .prayer ? "Prayer" : kind == .personal ? "Personal" : "Pastoral"
+            return "\(typeDescription) reflection completed. Mood: \(mood), Energy: \(energyLevel)/10."
         }
         
         let summary = parts.joined(separator: " ")

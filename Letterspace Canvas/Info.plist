@@ -21,6 +21,10 @@
 			</array>
 		</dict>
 	</array>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Voice memos are used to quickly capture your thoughts and reflections in journal entries. Your voice recordings are processed entirely on-device for privacy.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Speech recognition converts your voice memos to text for easy editing and searching. All processing happens on your device to protect your privacy.</string>
 	<key>NSUbiquitousContainers</key>
 	<dict>
 		<key>iCloud.com.timothygothra.letterspacecanvas</key>
